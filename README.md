@@ -9,4 +9,4 @@ M5Cardputer based multi-purpose software designed to push the ESP chip to its ab
 - keyboard input system
 
 # Bugs
-"There are none - yet :)"
+There are none - yet :)
