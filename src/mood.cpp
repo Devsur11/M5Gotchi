@@ -29,9 +29,9 @@ const String palnagotchi_moods[] = {
 const String palnagotchi_moods_desc[] = {
     "Zzzz...",                               // 0 - sleeping
     "...",                                   // 1 - awakening
-    "Let's MAKE FRIENDS!",                   // 2 - awake
-    "WANTED: FRIENDS",                       // 3 - observing (neutral) right
-    "WANTED: FRIENDS",                       // 4 - observig (neutral) left
+    "Ready for action!",                   // 2 - awake
+    "Hello there!",                       // 3 - observing (neutral) right
+    "I see you :)",                       // 4 - observig (neutral) left
     "Can we have even more friends?",        // 5 - observing (happy) right
     "Can we have even more friends?",        // 6 - observing (happy) left
     "YEAH! So many pwnagotchis!",            // 7 - intense
@@ -45,7 +45,7 @@ const String palnagotchi_moods_desc[] = {
     "Why my life sucks? WHY",                // 15 - demotivated
     "Seriously, let's go for a walk...",     // 16 - bored
     "Get your hands off me...",              // 17 - sad
-    "Where are all the Pwnagotchis?",        // 18 - lonely
+    "Lonely, I am so lonely...",        // 18 - lonely
     "It works on my end.",                   // 19 - broken
     "Wtf? I didn't even touch it...",        // 20 - debugging,
     "What?",                                 // 21 - ultra random easter egg

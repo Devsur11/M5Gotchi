@@ -129,29 +129,10 @@ void drawTopCanvas() {
   canvas_top.setTextDatum(top_left);
   canvas_top.drawString("CH *", 0, 3);
   canvas_top.setTextDatum(top_right);
-  char right_str[50] = "UPS 0%  UP 00:00:00";
-  sprintf(right_str, "", M5.Power.getBatteryLevel(),
-          "", "", "");
+  char right_str[50] = "UPS 0%";
+  sprintf(right_str, "UPS", M5.Power.getBatteryLevel());
   canvas_top.drawString(right_str, display_w, 3);
   canvas_top.drawLine(0, canvas_top_h - 1, display_w, canvas_top_h - 1);
-}
-
-String getRssiBars(signed int rssi) {
-  String rssi_bars = "";
-
-  if (rssi != -1000) {
-    if (rssi >= -67) {
-      rssi_bars = "||||";
-    } else if (rssi >= -70) {
-      rssi_bars = "|||";
-    } else if (rssi >= -80) {
-      rssi_bars = "||";
-    } else {
-      rssi_bars = "|";
-    }
-  }
-
-  return rssi_bars;
 }
 
 void drawBottomCanvas(uint8_t friends_run, uint8_t friends_tot,
@@ -162,16 +143,17 @@ void drawBottomCanvas(uint8_t friends_run, uint8_t friends_tot,
   canvas_bot.setColor(GREEN);
   canvas_bot.setTextDatum(top_left);
 
-
+/*
   char stats[25] = "FRND 0 (0)";
   if (friends_run > 0) {
     sprintf(stats, "FRND %d (%d) [%s] %s", friends_run, friends_tot,
             last_friend_name, "");
   }
+*/
 
-  canvas_bot.drawString(stats, 0, 5);
+  //canvas_bot.drawString(stats, 0, 5);
   canvas_bot.setTextDatum(top_right);
-  canvas_bot.drawString("NOT AI", display_w, 5);
+  canvas_bot.drawString("READY", display_w, 5);
   canvas_bot.drawLine(0, 0, display_w, 0);
 }
 
@@ -220,7 +202,7 @@ void drawNearbyMenu() {
   
     canvas_main.setTextColor(TFT_DARKGRAY);
     canvas_main.setCursor(0, PADDING);
-    canvas_main.println("Hacked :)");
+    canvas_main.println("not yet");
   
 }
 
