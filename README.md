@@ -3,10 +3,11 @@
 M5Cardputer based multi-purpose software designed to push the ESP chip to its absolute limits 
 
 # TODO:
-- basic ui
+- basic ui - done :)
 - bad usb
 - pwngotchi-like functions
 - keyboard input system
 
 # Bugs
-- Cursor can go off menu option in menu
+- Face and mood are not changing
+- after pressing go button everything lags
