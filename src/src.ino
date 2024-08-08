@@ -8,6 +8,7 @@
 
 uint8_t state;
 
+
 void initM5() {
   auto cfg = M5.config();
   M5.begin();

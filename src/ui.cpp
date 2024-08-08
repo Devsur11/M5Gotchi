@@ -13,6 +13,7 @@ int32_t canvas_top_h;
 int32_t canvas_bot_h;
 int32_t canvas_peers_menu_h;
 int32_t canvas_peers_menu_w;
+String hostname = "mpc"; //TODO: add support for sd card here
 
 struct menu {
   char name[25];
@@ -127,13 +128,13 @@ void drawTopCanvas() {
   canvas_top.setTextColor(GREEN);
   canvas_top.setColor(GREEN);
   canvas_top.setTextDatum(top_left);
-  canvas_top.drawString("CH *", 0, 3);
+  canvas_top.drawString("ESPBlaster v0.1", 0, 3);
   canvas_top.setTextDatum(top_right);
   /*            part of original code 
   char right_str[50] = "UPS 0%";
   sprintf(right_str, "UPS", M5.Power.getBatteryLevel());
   */
-  canvas_top.drawString("UPS " + String(M5.Power.getBatteryLevel()), display_w, 3);
+  canvas_top.drawString("UPS " + String(M5.Power.getBatteryLevel()) + "%" , display_w, 3);
   canvas_top.drawLine(0, canvas_top_h - 1, display_w, canvas_top_h - 1);
 }
 
@@ -169,10 +170,10 @@ void drawMood(String face, String phrase, bool broken) {
   canvas_main.setTextSize(4);
   canvas_main.setTextDatum(middle_center);
   canvas_main.fillSprite(BLACK);
-  canvas_main.drawString(face, canvas_center_x, canvas_h / 2);
-  canvas_main.setTextDatum(bottom_center);
-  canvas_main.setTextSize(1);
-  canvas_main.drawString(phrase, canvas_center_x, canvas_h - 23);
+  canvas_main.drawString(face, canvas_center_x / 1.5, canvas_h / 3);
+  //canvas_main.setTextDatum(bottom_right);
+  canvas_main.setTextSize(1.5);
+  canvas_main.drawString(hostname + "> " + phrase, canvas_center_x - 10, canvas_h - 35);
 }
 
 #define ROW_SIZE 40
