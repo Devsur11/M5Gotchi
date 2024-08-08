@@ -97,8 +97,7 @@ void initUi() {
 
 
 bool toggleMenuBtnPressed() {
-  return M5Cardputer.BtnA.isPressed() ||
-         (keyboard_changed && (M5Cardputer.Keyboard.isKeyPressed('`')));
+  return (keyboard_changed && (M5Cardputer.Keyboard.isKeyPressed('`')));
 }
 
 bool isOkPressed() {
@@ -305,7 +304,7 @@ void drawMenu() {
     }
   }
 
-  if(menu_current_opt <      5 && menu_current_page != 1){
+  if(menu_current_opt < 5 && menu_current_page != 1){
       menu_current_page= 1;
       //menu_current_opt--;
   } else if(menu_current_opt >= 5 && menu_current_page != 2){
