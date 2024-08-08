@@ -12,16 +12,32 @@ struct menu {
 };
 
 menu main_menu[] = {
-    {"Nearby Pwnagotchis", 2},
-    {"Settings", 4},
-    {"About", 8}
-    // {"Friend spam", 16},
+    {"Wifi", 1},
+    {"Bluetooth", 2},
+    {"IR", 3},
+    {"Pwngotchi", 4},
+    {"Bad USB", 5},
+    {"Setthings", 6},
+    
+};
+
+menu wifi_menu[] = {
+    {"Select Networks", 20},
+    {"Clone & Details", 21},
+    {"Evil portal", 22},
+    {"Deauth", 23},
+    {"Sniffing", 24},
+    {"Turn off wifi", 25},
 };
 
 menu settings_menu[] = {
-    {"Change name", 40},
+    {"Change Hostname", 40},
     {"Display brightness", 41},
     {"Sound", 42},
+    {"Connect to wifi", 43},
+    {"Update system", 44},
+    {"About", 45},
+    {"Power off", 46},
 };
 
 
@@ -228,7 +244,7 @@ void drawAboutMenu() {
 
 void drawMenu() {
   if (isNextPressed()) {
-    if (menu_current_opt < main_menu_len -1) {
+    if (menu_current_opt < main_menu_len - 1 ) {
       menu_current_opt++;
     } else {
       menu_current_opt = 0;
@@ -239,9 +255,12 @@ void drawMenu() {
     if (menu_current_opt > 0) {
       menu_current_opt--;
     }
+    else {
+      menu_current_opt = (main_menu_len - 1);
+    }
   }
 
-  // Change menu
+  // Change menu    
 
   switch (menu_current_cmd) {
     case 0:
