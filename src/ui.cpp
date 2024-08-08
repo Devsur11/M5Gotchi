@@ -4,6 +4,7 @@ M5Canvas canvas_top(&M5.Display);
 M5Canvas canvas_main(&M5.Display);
 M5Canvas canvas_bot(&M5.Display);
 // M5Canvas canvas_peers_menu(&M5.Display);
+// M5Cardputer.BtnA.isPressed() - go button
 
 int32_t display_w;
 int32_t display_h;
@@ -13,7 +14,13 @@ int32_t canvas_top_h;
 int32_t canvas_bot_h;
 int32_t canvas_peers_menu_h;
 int32_t canvas_peers_menu_w;
-String hostname = "mpc"; //TODO: add support for sd card here
+String hostname = "dfku"; //TODO: add support for sd card here
+bool keyboard_changed = false;
+int main_menu_len = sizeof(main_menu) / sizeof(menu);
+int settings_menu_len = sizeof(settings_menu) / sizeof(menu);
+bool menu_open = false;
+uint8_t menu_current_cmd = 0;
+uint8_t menu_current_opt = 0;
 
 struct menu {
   char name[25];
@@ -33,12 +40,6 @@ menu settings_menu[] = {
     {"Sound", 42},
 };
 
-int main_menu_len = sizeof(main_menu) / sizeof(menu);
-int settings_menu_len = sizeof(settings_menu) / sizeof(menu);
-
-bool menu_open = false;
-uint8_t menu_current_cmd = 0;
-uint8_t menu_current_opt = 0;
 
 void initUi() {
   M5.Display.setRotation(1);
@@ -62,27 +63,22 @@ void initUi() {
   canvas_main.createSprite(display_w, canvas_h);
 }
 
-bool keyboard_changed = false;
+
 
 bool toggleMenuBtnPressed() {
   return M5Cardputer.BtnA.isPressed() ||
-         (keyboard_changed && (M5Cardputer.Keyboard.isKeyPressed('m') ||
-                               M5Cardputer.Keyboard.isKeyPressed('`')));
+         (keyboard_changed && (M5Cardputer.Keyboard.isKeyPressed('`')));
 }
 
 bool isOkPressed() {
-  return M5Cardputer.BtnA.isPressed() ||
-         (keyboard_changed && M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER));
+  return (keyboard_changed && M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER));
 }
 
 bool isNextPressed() {
-  return keyboard_changed && (M5Cardputer.Keyboard.isKeyPressed('.') ||
-                              M5Cardputer.Keyboard.isKeyPressed('/') ||
-                              M5Cardputer.Keyboard.isKeyPressed(KEY_TAB));
+  return keyboard_changed && (M5Cardputer.Keyboard.isKeyPressed('.') );
 }
 bool isPrevPressed() {
-  return keyboard_changed && (M5Cardputer.Keyboard.isKeyPressed(',') ||
-                              M5Cardputer.Keyboard.isKeyPressed(';'));
+  return keyboard_changed && (M5Cardputer.Keyboard.isKeyPressed(';'));
 }
 
 void updateUi(bool show_toolbars) {
@@ -180,7 +176,7 @@ void drawMood(String face, String phrase, bool broken) {
 #define PADDING 10
 
 void drawMainMenu() {
-  canvas_main.fillSprite(BLACK);
+  canvas_main.fillSprite(BLACK); //Clears main display
   canvas_main.setTextSize(2);
   canvas_main.setTextColor(GREEN);
   canvas_main.setColor(GREEN);
@@ -227,18 +223,15 @@ void drawSettingsMenu() {
 
 void drawAboutMenu() {
   canvas_main.clear(BLACK);
-  canvas_main.qrcode("https://github.com/viniciusbo/m5-palnagotchi",
-                     (display_w / 2) - (display_h * 0.3), PADDING,
-                     display_h * 0.65);
 }
 
 void drawMenu() {
   if (isNextPressed()) {
-    // if (menu_current_opt < menu_current_size - 1) {
-    menu_current_opt++;
-    // } else {
-    //   menu_current_opt = 0;
-    // }
+    if (menu_current_opt < menu_current_size - 1) {
+      menu_current_opt++;
+    } else {
+      menu_current_opt = 0;
+    }
   }
 
   if (isPrevPressed()) {
