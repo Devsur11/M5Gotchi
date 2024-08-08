@@ -6,22 +6,6 @@ M5Canvas canvas_bot(&M5.Display);
 // M5Canvas canvas_peers_menu(&M5.Display);
 // M5Cardputer.BtnA.isPressed() - go button
 
-int32_t display_w;
-int32_t display_h;
-int32_t canvas_h;
-int32_t canvas_center_x;
-int32_t canvas_top_h;
-int32_t canvas_bot_h;
-int32_t canvas_peers_menu_h;
-int32_t canvas_peers_menu_w;
-String hostname = "dfku"; //TODO: add support for sd card here
-bool keyboard_changed = false;
-int main_menu_len = sizeof(main_menu) / sizeof(menu);
-int settings_menu_len = sizeof(settings_menu) / sizeof(menu);
-bool menu_open = false;
-uint8_t menu_current_cmd = 0;
-uint8_t menu_current_opt = 0;
-
 struct menu {
   char name[25];
   int command;
@@ -40,6 +24,23 @@ menu settings_menu[] = {
     {"Sound", 42},
 };
 
+
+
+int32_t display_w;
+int32_t display_h;
+int32_t canvas_h;
+int32_t canvas_center_x;
+int32_t canvas_top_h;
+int32_t canvas_bot_h;
+int32_t canvas_peers_menu_h;
+int32_t canvas_peers_menu_w;
+String hostname = "dfku"; //TODO: add support for sd card here
+bool keyboard_changed = false;
+int main_menu_len = sizeof(main_menu) / sizeof(menu);
+int settings_menu_len = sizeof(settings_menu) / sizeof(menu);
+bool menu_open = false;
+uint8_t menu_current_cmd = 0;
+uint8_t menu_current_opt = 0;
 
 void initUi() {
   M5.Display.setRotation(1);
@@ -227,7 +228,7 @@ void drawAboutMenu() {
 
 void drawMenu() {
   if (isNextPressed()) {
-    if (menu_current_opt < menu_current_size - 1) {
+    if (menu_current_opt < main_menu_len -1) {
       menu_current_opt++;
     } else {
       menu_current_opt = 0;
