@@ -54,9 +54,23 @@ String hostname = "dfku"; //TODO: add support for sd card here
 bool keyboard_changed = false;
 int main_menu_len = sizeof(main_menu) / sizeof(menu);
 int settings_menu_len = sizeof(settings_menu) / sizeof(menu);
-bool menu_open = false;
+
+
+
 uint8_t menu_current_cmd = 0;
 uint8_t menu_current_opt = 0;
+uint8_t menu_current_page = 1;
+
+
+bool menu_open = false;
+bool main_menu_ = false;
+bool wifi_menu_ = false;
+bool bluetooth_menu_ = false;
+bool ir_menu_ = false;
+bool pwngotchi_menu_ = false;
+bool badusb_menu_ = false;
+bool settings_menu_ = false;
+
 
 void initUi() {
   M5.Display.setRotation(1);
@@ -104,11 +118,21 @@ void updateUi(bool show_toolbars) {
   if (toggleMenuBtnPressed()) {
     // If menu is open, return to main menu
     // If not, toggle menu
-    if (menu_open == true && menu_current_cmd != 0) {
+    if (menu_open == true) {
       menu_current_cmd = 0;
       menu_current_opt = 0;
+      main_menu_ = false;
+      wifi_menu_ = false;
+      bluetooth_menu_ = false;
+      ir_menu_ = false;
+      pwngotchi_menu_ = false;
+      badusb_menu_ = false;
+      settings_menu_ = false;
+      menu_current_page = 1;
+      menu_open = 0;
     } else {
-      menu_open = !menu_open;
+      menu_open = 1; 
+      main_menu_ = 1;
     }
   }
 
@@ -167,7 +191,7 @@ void drawBottomCanvas(uint8_t friends_run, uint8_t friends_tot,
   }
 */
 
-  //canvas_bot.drawString(stats, 0, 5);
+  canvas_bot.drawString(String(menu_current_page) + "  " + String(menu_current_opt), 0, 5);
   canvas_bot.setTextDatum(top_right);
   canvas_bot.drawString("READY", display_w, 5);
   canvas_bot.drawLine(0, 0, display_w, 0);
@@ -198,16 +222,26 @@ void drawMainMenu() {
   canvas_main.setTextColor(GREEN);
   canvas_main.setColor(GREEN);
   canvas_main.setTextDatum(top_left);
-
   char display_str[50] = "";
-  for (uint8_t i = 0; i < main_menu_len; i++) {
-    sprintf(display_str, "%s %s", (menu_current_opt == i) ? ">" : " ",
-            main_menu[i].name);
-    int y = PADDING + (i * ROW_SIZE / 2);
-    canvas_main.drawString(display_str, 0, y);
+  if(menu_current_page == 1){
+   
+  for (uint8_t i = 0; i < 5; i++) {
+     sprintf(display_str, "%s %s", (menu_current_opt == i) ? ">" : " ",
+             main_menu[i].name);
+     int y = PADDING + (i * ROW_SIZE / 2);
+     canvas_main.drawString(display_str, 0, y);
+    }
+  }
+  else if(menu_current_page == 2){
+    for (uint8_t j = 0; j < (main_menu_len - 5) ; j++) {
+     sprintf(display_str, "%s %s", (menu_current_opt == j+5) ? ">" : " ",
+             main_menu[j+5].name);
+     int y = PADDING + (j * ROW_SIZE / 2);
+     canvas_main.drawString(display_str, 0, y);
+    }
   }
 }
-
+/*
 void drawNearbyMenu() {
   canvas_main.clear(BLACK);
   canvas_main.setTextSize(2);
@@ -220,7 +254,7 @@ void drawNearbyMenu() {
     canvas_main.setCursor(0, PADDING);
     canvas_main.println("not yet");
   
-}
+}*/
 
 void drawSettingsMenu() {
   canvas_main.fillSprite(BLACK);
@@ -230,11 +264,22 @@ void drawSettingsMenu() {
   canvas_main.setTextDatum(top_left);
 
   char display_str[50] = "";
-  for (uint8_t i = 0; i < settings_menu_len; i++) {
-    sprintf(display_str, "%s %s", (menu_current_opt == i) ? ">" : " ",
-            settings_menu[i].name);
-    int y = PADDING + (i * ROW_SIZE / 2);
-    canvas_main.drawString(display_str, 0, y);
+  if(menu_current_page == 1){
+   
+   for (uint8_t i = 0; i < 5; i++) {
+     sprintf(display_str, "%s %s", (menu_current_opt == i) ? ">" : " ",
+             settings_menu[i].name);
+     int y = PADDING + (i * ROW_SIZE / 2);
+     canvas_main.drawString(display_str, 0, y);
+    }
+  }
+  else if(menu_current_page == 2){
+    for (uint8_t i = 5; i < settings_menu_len ; i++) {
+     sprintf(display_str, "%s %s", (menu_current_opt == i) ? ">" : " ",
+             settings_menu[i].name);
+     int y = PADDING + (i * ROW_SIZE / 2);
+     canvas_main.drawString(display_str, 0, y);
+    }
   }
 }
 
@@ -260,32 +305,17 @@ void drawMenu() {
     }
   }
 
-  // Change menu    
+  if(menu_current_opt <      5 && menu_current_page != 1){
+      menu_current_page= 1;
+      //menu_current_opt--;
+  } else if(menu_current_opt >= 5 && menu_current_page != 2){
+      menu_current_page = 2;
+      //menu_current_opt++;
+  }
 
-  switch (menu_current_cmd) {
-    case 0:
-      if (isOkPressed()) {
-        menu_current_cmd = main_menu[menu_current_opt].command;
-        menu_current_opt = 0;
-      }
-      drawMainMenu();
-      break;
-    case 2:
-      drawNearbyMenu();
-      break;
-    case 4:
-      if (isOkPressed()) {
-        menu_current_cmd = settings_menu[menu_current_opt].command;
-        menu_current_opt = 0;
-      }
-      drawSettingsMenu();
-      break;
-    case 8:
-      drawAboutMenu();
-      break;
-    default:
-      drawMainMenu();
-      break;
+  if(menu_open == true && main_menu_ == true){
+    
+    drawMainMenu();
   }
 }
 
