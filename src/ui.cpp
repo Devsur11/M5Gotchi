@@ -129,9 +129,11 @@ void drawTopCanvas() {
   canvas_top.setTextDatum(top_left);
   canvas_top.drawString("CH *", 0, 3);
   canvas_top.setTextDatum(top_right);
+  /*            part of original code 
   char right_str[50] = "UPS 0%";
   sprintf(right_str, "UPS", M5.Power.getBatteryLevel());
-  canvas_top.drawString(right_str, display_w, 3);
+  */
+  canvas_top.drawString("UPS " + String(M5.Power.getBatteryLevel()), display_w, 3);
   canvas_top.drawLine(0, canvas_top_h - 1, display_w, canvas_top_h - 1);
 }
 
