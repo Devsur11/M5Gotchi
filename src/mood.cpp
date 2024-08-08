@@ -23,31 +23,31 @@ const String palnagotchi_moods[] = {
     "(;__;)",  // 18 - lonely
     "(X__X)",  // 19 - broken
     "(#__#)",  // 20 - debugging,
-    "8====D",  // 21 - ultra random easter egg
+    "9====9",  // 21 - ultra random easter egg
 };
 
 const String palnagotchi_moods_desc[] = {
-    "Zzzz...",                               // 0 - sleeping
-    "...",                                   // 1 - awakening
-    "Ready for action!",                   // 2 - awake
-    "Hello there!",                       // 3 - observing (neutral) right
-    "I see you :)",                       // 4 - observig (neutral) left
-    "Can we have even more friends?",        // 5 - observing (happy) right
-    "Can we have even more friends?",        // 6 - observing (happy) left
-    "YEAH! So many pwnagotchis!",            // 7 - intense
-    "The coolest pal in the neighbourhood",  // 8 - cool
-    "Can we have even more friends?",        // 9 - happy
-    "I LOVE PWNAGOTCHIS!",                   // 10 - grateful
-    "That's how I like it.",                 // 11 - excited
-    "3.1415926535897932384626433832795",     // 12 - smart
+    "Zzzz...          ",                     // 0 - sleeping
+    "...              ",                     // 1 - awakening
+    "Ready for action!",                     // 2 - awake
+    "Hello there!     ",                     // 3 - observing (neutral) right
+    "I see you :)     ",                     // 4 - observig (neutral) left
+    "Wanna meet?      ",                     // 5 - observing (happy) right
+    "Oh, hello        ",                     // 6 - observing (happy) left
+    "Working...       ",                     // 7 - intense
+    "I am so cool!    ",                     // 8 - cool
+    "I like this      ",                     // 9 - happy
+    "I LOVE PWNAGOTCHI",                     // 10 - grateful
+    "So much to explore",                    // 11 - excited
+    "3.1415926535897932",                    // 12 - smart
     "HEY YOU! LETS BE FRIENDS!",             // 13 - friendly
-    "IT RUNS! SUCK MA BALLZ!",               // 14 - motivated
-    "Why my life sucks? WHY",                // 15 - demotivated
-    "Seriously, let's go for a walk...",     // 16 - bored
-    "Get your hands off me...",              // 17 - sad
-    "Lonely, I am so lonely...",        // 18 - lonely
+    "IT RUNS!          ",                    // 14 - motivated
+    "Why my life sucks?",                    // 15 - demotivated
+    "Let's go for a walk!",                  // 16 - bored
+    "Get your hands off me",                 // 17 - sad
+    "Lonely, I am so lonely",                // 18 - lonely
     "It works on my end.",                   // 19 - broken
-    "Wtf? I didn't even touch it...",        // 20 - debugging,
+    "I didn't even touch it...",             // 20 - debugging,
     "What?",                                 // 21 - ultra random easter egg
 };
 
