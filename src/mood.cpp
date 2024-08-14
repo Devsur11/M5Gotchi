@@ -1,6 +1,17 @@
 #include "mood.h"
 
 // ASCII equivalent
+struct splash {
+  String Face[5];
+  String Splash;
+};
+
+splash mainFaces[] = {
+  {"(v__v)", "Zzzz...          "},
+  {"(=__=)", "...              "},
+  {"(O__O)"}
+};
+
 const String palnagotchi_moods[] = {
     "(v__v)",  // 0 - sleeping
     "(=__=)",  // 1 - awakening
@@ -23,9 +34,7 @@ const String palnagotchi_moods[] = {
     "(;__;)",  // 18 - lonely
     "(X__X)",  // 19 - broken
     "(#__#)",  // 20 - debugging,
-    "9====9",  // 21 - ultra random easter egg
 };
-
 const String palnagotchi_moods_desc[] = {
     "Zzzz...          ",                     // 0 - sleeping
     "...              ",                     // 1 - awakening
@@ -48,7 +57,6 @@ const String palnagotchi_moods_desc[] = {
     "Lonely, I am so lonely",                // 18 - lonely
     "It works on my end.",                   // 19 - broken
     "I didn't even touch it...",             // 20 - debugging,
-    "What?",                                 // 21 - ultra random easter egg
 };
 
 uint8_t current_mood = 0;
@@ -77,3 +85,13 @@ void setMood(uint8_t mood, String face, String phrase, bool broken) {
     current_phrase = palnagotchi_moods_desc[current_mood];
   }
 }
+/* rewrite this whole section
+
+add "activity" variable for activity level & displaying moods
+merge mood and phrase to 1 wariable with struct() 
+rewrite enterelly :
+uint8_t getCurrentMoodId() { return current_mood; }
+String getCurrentMoodFace() { return current_face; }
+String getCurrentMoodPhrase() { return current_phrase; }
+bool isCurrentMoodBroken() { return current_broken; }
+amen */

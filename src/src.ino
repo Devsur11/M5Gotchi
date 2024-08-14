@@ -47,6 +47,5 @@ void loop() {
     wakeUp();
     state = STATE_WAKE;
   }
-  
   updateUi(true);
 }

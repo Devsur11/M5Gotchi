@@ -76,9 +76,9 @@ void initUi() {
   M5.Display.setRotation(1);
   M5.Display.setTextFont(&fonts::Font0);
   M5.Display.setTextSize(1);
-  M5.Display.fillScreen(TFT_BLACK);
-  M5.Display.setTextColor(GREEN);
-  M5.Display.setColor(GREEN);
+  M5.Display.fillScreen(TFT_WHITE);
+  M5.Display.setTextColor(BLACK);
+  M5.Display.setColor(BLACK);
 
   display_w = M5.Display.width();
   display_h = M5.Display.height();
@@ -159,10 +159,10 @@ void updateUi(bool show_toolbars) {
 }
 
 void drawTopCanvas() {
-  canvas_top.fillSprite(BLACK);
+  canvas_top.fillSprite(WHITE);
   canvas_top.setTextSize(1);
-  canvas_top.setTextColor(GREEN);
-  canvas_top.setColor(GREEN);
+  canvas_top.setTextColor(BLACK);
+  canvas_top.setColor(BLACK);
   canvas_top.setTextDatum(top_left);
   canvas_top.drawString("ESPBlaster v0.1", 0, 3);
   canvas_top.setTextDatum(top_right);
@@ -176,10 +176,10 @@ void drawTopCanvas() {
 
 void drawBottomCanvas(uint8_t friends_run, uint8_t friends_tot,
                       String last_friend_name, signed int rssi) {
-  canvas_bot.fillSprite(BLACK);
+  canvas_bot.fillSprite(WHITE);
   canvas_bot.setTextSize(1);
-  canvas_bot.setTextColor(GREEN);
-  canvas_bot.setColor(GREEN);
+  canvas_bot.setTextColor(BLACK);
+  canvas_bot.setColor(BLACK);
   canvas_bot.setTextDatum(top_left);
 
 /*
@@ -200,12 +200,12 @@ void drawMood(String face, String phrase, bool broken) {
   if (broken == true) {
     canvas_main.setTextColor(RED);
   } else {
-    canvas_main.setTextColor(GREEN);
+    canvas_main.setTextColor(BLACK);
   }
 
   canvas_main.setTextSize(4);
   canvas_main.setTextDatum(middle_center);
-  canvas_main.fillSprite(BLACK);
+  canvas_main.fillSprite(WHITE);
   canvas_main.drawString(face, canvas_center_x / 1.5, canvas_h / 3);
   //canvas_main.setTextDatum(bottom_right);
   canvas_main.setTextSize(1.5);
@@ -216,10 +216,10 @@ void drawMood(String face, String phrase, bool broken) {
 #define PADDING 10
 
 void drawMainMenu() {
-  canvas_main.fillSprite(BLACK); //Clears main display
+  canvas_main.fillSprite(WHITE); //Clears main display
   canvas_main.setTextSize(2);
-  canvas_main.setTextColor(GREEN);
-  canvas_main.setColor(GREEN);
+  canvas_main.setTextColor(BLACK);
+  canvas_main.setColor(BLACK);
   canvas_main.setTextDatum(top_left);
   char display_str[50] = "";
   if(menu_current_page == 1){
@@ -256,10 +256,10 @@ void drawNearbyMenu() {
 }*/
 
 void drawSettingsMenu() {
-  canvas_main.fillSprite(BLACK);
+  canvas_main.fillSprite(WHITE);
   canvas_main.setTextSize(2);
-  canvas_main.setTextColor(GREEN);
-  canvas_main.setColor(GREEN);
+  canvas_main.setTextColor(BLACK);
+  canvas_main.setColor(BLACK);
   canvas_main.setTextDatum(top_left);
 
   char display_str[50] = "";
@@ -283,7 +283,7 @@ void drawSettingsMenu() {
 }
 
 void drawAboutMenu() {
-  canvas_main.clear(BLACK);
+  canvas_main.clear(WHITE);
 }
 
 void drawMenu() {
@@ -307,17 +307,22 @@ void drawMenu() {
   if(menu_current_opt < 5 && menu_current_page != 1){
       menu_current_page= 1;
       //menu_current_opt--;
+//   return false;
   } else if(menu_current_opt >= 5 && menu_current_page != 2){
       menu_current_page = 2;
       //menu_current_opt++;
+//   return false;
   }
 
   if(menu_open == true && main_menu_ == true){
-    
     drawMainMenu();
   }
+  //uint8_t test = main_menu[1].command; - how to acces 2`nd column - for me
 }
 
+void runApp(uint8_t appID){
+
+}
 // bool check_prev_press() {
 //   if (M5.Keyboard.isKeyPressed(ARROW_UP)) {
 //     return true;
