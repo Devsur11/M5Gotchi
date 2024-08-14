@@ -10,4 +10,3 @@ M5Cardputer based multi-purpose software designed to push the ESP chip to its ab
 
 # Bugs
 - Face and mood are not changing
-- after pressing go button everything lags
