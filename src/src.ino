@@ -8,6 +8,8 @@
 
 uint8_t state;
 uint8_t activity = 4;
+long time_passed;
+double time_;
 
 uint8_t activity_level[] = {
   17,
@@ -62,6 +64,7 @@ void wakeUp() {
 
 
 void loop() {
+  updateActivity();
   M5.update();
   M5Cardputer.update();
 
@@ -76,3 +79,12 @@ void loop() {
   updateUi(true);
 }
 
+void updateActivity() {
+  time_passed = millis();
+  time_ = (time_passed / 1000) / 60;
+  if (time_==2) {
+    time_ = 0;
+    activity--;
+    setMood(activity_level[activity]);
+  }
+}
