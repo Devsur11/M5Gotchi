@@ -10,6 +10,7 @@ uint8_t state;
 uint8_t activity = 4;
 long time_passed;
 double time_;
+int time_elapsed;
 
 uint8_t activity_level[] = {
   17,
@@ -81,10 +82,17 @@ void loop() {
 
 void updateActivity() {
   time_passed = millis();
-  time_ = (time_passed / 1000) / 60;
+  //time_ = ((time_passed / 1000) / 60) - time_elapsed;
+  if (time_>2){
+    time_ = ((time_passed / 1000) / 60) - time_elapsed;
+  }
+  else {
+    time_ = (time_passed / 1000) / 60;
+  }  
   if (time_==2) {
     time_ = 0;
     activity--;
+    time_elapsed = time_elapsed + 2;
     setMood(activity_level[activity]);
   }
 }
