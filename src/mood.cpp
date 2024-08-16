@@ -56,13 +56,3 @@ void setMood(uint8_t mood, String face, String phrase, bool broken) {
     current_phrase = mainFaces[current_mood].splash;
   }
 }
-/* rewrite this whole section
-
-add "activity" variable for activity level & displaying moods
-merge mood and phrase to 1 wariable with struct() 
-rewrite enterelly :
-uint8_t getCurrentMoodId() { return current_mood; }
-String getCurrentMoodFace() { return current_face; }
-String getCurrentMoodPhrase() { return current_phrase; }
-bool isCurrentMoodBroken() { return current_broken; }
-amen */

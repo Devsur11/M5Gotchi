@@ -7,7 +7,33 @@
 #define STATE_HALT 255
 
 uint8_t state;
+uint8_t activity = 4;
 
+uint8_t activity_level[] = {
+  17,
+  18,
+  16,
+  15,
+  0,
+  1,
+  2,
+  3,
+  11,
+  13,
+  4,
+  5,
+  6,
+  7,
+  9,
+  8,
+  14,
+  19,
+  20,
+  10,
+  12,
+  21
+};
+//this decides what face/splash will be displayed based on acivity variable
 
 void initM5() {
   auto cfg = M5.config();
@@ -23,12 +49,12 @@ void setup() {
   state = STATE_INIT;
 }
 
-uint8_t current_channel = 1;
 uint32_t last_mood_switch = 10001;
 
 void wakeUp() {
   for (uint8_t i = 0; i < 3; i++) {
-    setMood(i);
+    setMood(activity_level[activity]);
+    activity ++;
     updateUi();
     delay(1250);
   }
@@ -49,3 +75,4 @@ void loop() {
   }
   updateUi(true);
 }
+
