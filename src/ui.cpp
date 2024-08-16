@@ -17,7 +17,7 @@ menu main_menu[] = {
     {"IR", 3},
     {"Pwngotchi", 4},
     {"Bad USB", 5},
-    {"Setthings", 6},
+    {"Settings", 6},
     
 };
 
