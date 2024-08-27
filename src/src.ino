@@ -7,10 +7,10 @@
 #define STATE_HALT 255
 
 uint8_t state;
-uint8_t activity = 4;
-long time_passed;
-double time_;
-int time_elapsed;
+uint8_t activity = 3;
+unsigned long previousMillis = 0;  // Zmienna do przechowywania ostatniego czasu wykonania funkcjami
+unsigned long interval = 120000;  // 2 minuty w milisekundach (2 * 60 * 1000)
+
 
 uint8_t activity_level[] = {
   17,
@@ -47,6 +47,7 @@ void initM5() {
 }
 
 void setup() {
+  Serial.begin(9600);
   initM5();
   initUi();
   state = STATE_INIT;
@@ -65,7 +66,8 @@ void wakeUp() {
 
 
 void loop() {
-  updateActivity();
+  unsigned long currentMillis = millis();
+  //updateActivity();
   M5.update();
   M5Cardputer.update();
 
@@ -78,21 +80,28 @@ void loop() {
     state = STATE_WAKE;
   }
   updateUi(true);
+  if (currentMillis >= interval) {
+    interval = interval + 120000;  // Zaktualizowanie czasu ostatniego wykonania funkcji
+    updateActivity();  // Wykonanie funkcji co 2 minuty
+    //Serial.print("if triggered");
+  }
+  
+  if(activity > 21){
+    activity = 5;
+  }
+  else
+  {
+    setMood(activity_level[activity]);
+  }
+  //Serial.println(String(currentMillis));
 }
 
 void updateActivity() {
-  time_passed = millis();
-  //time_ = ((time_passed / 1000) / 60) - time_elapsed;
-  if (time_>2){
-    time_ = ((time_passed / 1000) / 60) - time_elapsed;
-  }
-  else {
-    time_ = (time_passed / 1000) / 60;
-  }  
-  if (time_==2) {
-    time_ = 0;
-    activity--;
-    time_elapsed = time_elapsed + 2;
-    setMood(activity_level[activity]);
-  }
+  Serial.println("function triggered");
+    if(activity==0){
+      return ;
+    }
+    else{
+      activity = activity -1;
+    }
 }

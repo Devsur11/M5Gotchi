@@ -190,7 +190,7 @@ void drawBottomCanvas(uint8_t friends_run, uint8_t friends_tot,
   }
 */
 
-  canvas_bot.drawString(String(menu_current_page) + "  " + String(menu_current_opt), 0, 5);
+  canvas_bot.drawString(String(menu_current_page) + "  " + String(menu_current_opt) , 0, 5);
   canvas_bot.setTextDatum(top_right);
   canvas_bot.drawString("READY", display_w, 5);
   canvas_bot.drawLine(0, 0, display_w, 0);
