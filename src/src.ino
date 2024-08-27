@@ -97,7 +97,7 @@ void loop() {
 }
 
 void updateActivity() {
-  Serial.println("function triggered");
+  //Serial.println("function triggered");
     if(activity==0){
       return ;
     }

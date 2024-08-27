@@ -62,15 +62,17 @@ uint8_t menu_current_opt = 0;
 uint8_t menu_current_page = 1;
 
 
-bool menu_open = false;
+/*bool menu_open = false;
 bool main_menu_ = false;
 bool wifi_menu_ = false;
 bool bluetooth_menu_ = false;
 bool ir_menu_ = false;
 bool pwngotchi_menu_ = false;
 bool badusb_menu_ = false;
-bool settings_menu_ = false;
-
+bool settings_menu_ = false;*/
+uint8_t menuID = 0;/* 1 - main menu
+                      2 - wifi menu
+                      3 - settings menu */
 
 void initUi() {
   M5.Display.setRotation(1);
@@ -117,21 +119,13 @@ void updateUi(bool show_toolbars) {
   if (toggleMenuBtnPressed()) {
     // If menu is open, return to main menu
     // If not, toggle menu
-    if (menu_open == true) {
+    if (menuID == true) {
       menu_current_cmd = 0;
       menu_current_opt = 0;
-      main_menu_ = false;
-      wifi_menu_ = false;
-      bluetooth_menu_ = false;
-      ir_menu_ = false;
-      pwngotchi_menu_ = false;
-      badusb_menu_ = false;
-      settings_menu_ = false;
       menu_current_page = 1;
-      menu_open = 0;
+      menuID = 0;
     } else {
-      menu_open = 1; 
-      main_menu_ = 1;
+      menuID = 1;
     }
   }
 
@@ -143,9 +137,11 @@ void updateUi(bool show_toolbars) {
   drawTopCanvas();
   drawBottomCanvas();
 
-  if (menu_open) {
+  if (menuID == 1) {
     drawMenu();
-  } else {
+  } 
+  else if (menuID == 0)
+  {
     drawMood(mood_face, mood_phrase, mood_broken);
   }
 
@@ -286,6 +282,29 @@ void drawAboutMenu() {
   canvas_main.clear(WHITE);
 }
 
+void runApp(uint8_t appID){
+  menuID = 0; 
+  if(appID){
+    if(appID == 1){}
+    if(appID == 2){}
+    if(appID == 3){}
+    if(appID == 4){}
+    if(appID == 5){}
+    if(appID == 6){}
+    if(appID == 7){}
+    if(appID == 8){}
+    if(appID == 9){}
+    if(appID == 10){}
+    if(appID == 11){}
+    if(appID == 12){}
+    if(appID == 13){}
+    if(appID == 14){}
+    if(appID == 15){}
+    if(appID == 16){}
+  }
+  return;
+}
+
 void drawMenu() {
   if (isNextPressed()) {
     if (menu_current_opt < main_menu_len - 1 ) {
@@ -304,6 +323,12 @@ void drawMenu() {
     }
   }
 
+  if(isOkPressed()){
+    if(menuID == 1){
+      runApp(main_menu[menu_current_opt].command);
+    }
+  }
+
   if(menu_current_opt < 5 && menu_current_page != 1){
       menu_current_page= 1;
       //menu_current_opt--;
@@ -314,15 +339,13 @@ void drawMenu() {
 //   return false;
   }
 
-  if(menu_open == true && main_menu_ == true){
+  if(menuID == 1){
     drawMainMenu();
   }
   //uint8_t test = main_menu[1].command; - how to acces 2`nd column - for me
 }
 
-void runApp(uint8_t appID){
 
-}
 // bool check_prev_press() {
 //   if (M5.Keyboard.isKeyPressed(ARROW_UP)) {
 //     return true;
