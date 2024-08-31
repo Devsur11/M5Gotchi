@@ -7,7 +7,7 @@
 #define STATE_HALT 255
 
 uint8_t state;
-uint8_t activity = 3;
+uint8_t activity = 4;
 unsigned long previousMillis = 0;  // Zmienna do przechowywania ostatniego czasu wykonania funkcjami
 unsigned long interval = 120000;  // 2 minuty w milisekundach (2 * 60 * 1000)
 
