@@ -9,6 +9,9 @@ M5Canvas canvas_top(&M5.Display);
 M5Canvas canvas_main(&M5.Display);
 M5Canvas canvas_bot(&M5.Display);
 M5Canvas bar_right(&M5.Display);
+M5Canvas bar_right2(&M5.Display);
+M5Canvas bar_right3(&M5.Display);
+M5Canvas bar_right4(&M5.Display);
 
 menu main_menu[] = {
     {"Wifi", 1},
@@ -100,7 +103,9 @@ void initUi() {
   canvas_bot.createSprite(display_w, canvas_bot_h);
   canvas_main.createSprite(display_w - (display_w * 0.02), canvas_h);
   bar_right.createSprite((display_w * 0.02) / 2, (canvas_h - 6) / 4 );
-
+  bar_right2.createSprite((display_w * 0.02) / 2, (canvas_h - 6) / 4 );
+  bar_right3.createSprite((display_w * 0.02) / 2, (canvas_h - 6) / 4 );
+  bar_right4.createSprite((display_w * 0.02) / 2, (canvas_h - 6) / 4 );
 }
 
 
@@ -136,7 +141,7 @@ void updateUi(bool show_toolbars) {
       menu_current_page = 1;
     }
   }
-
+  Serial.println(menu_current_pages);
   uint8_t mood_id = getCurrentMoodId();
   String mood_face = getCurrentMoodFace();
   String mood_phrase = getCurrentMoodPhrase();
@@ -147,6 +152,7 @@ void updateUi(bool show_toolbars) {
   
 
   if (menuID == 1) {
+    menu_current_pages = 2;
     menu_len = 6;
     drawMultiplePages(main_menu, 1, 6);
     drawMenu();
@@ -185,24 +191,121 @@ void updateUi(bool show_toolbars) {
     
     //bar_right1.pushSprite(display_w * 0.98, 2*(canvas_top_h + 3));
   }
-  if (menu_current_pages = 1 ){
+  bar_right.pushSprite(display_w * 0.98, canvas_top_h + 5);
+  bar_right2.pushSprite(display_w * 0.98, ( canvas_top_h + 5 ) + (1 * ((canvas_h - 6)/4)) - 1 );
+  bar_right3.pushSprite(display_w * 0.98, ( canvas_top_h + 5 ) + (2 * ((canvas_h - 6)/4)) - 1 );
+  bar_right4.pushSprite(display_w * 0.98, ( canvas_top_h + 5 ) + (3 * ((canvas_h - 6)/4)) - 1 );
+  /*if (menu_current_pages == 1 ){ ------------------------------hours spend to make this code work: 5 --------------------
+    //bar_right.deleteSprite();
+    //resetSprite();
     bar_right.pushSprite(display_w * 0.98, canvas_top_h + 5);
+    bar_right2.pushSprite(display_w * 0.98, ( canvas_top_h + 5 ) + (1 * ((canvas_h - 6)/4)) - 1 );
+    bar_right3.pushSprite(display_w * 0.98, ( canvas_top_h + 5 ) + (2 * ((canvas_h - 6)/4)) - 1 );
+    bar_right4.pushSprite(display_w * 0.98, ( canvas_top_h + 5 ) + (3 * ((canvas_h - 6)/4)) - 1 );
+  }
     for(uint8_t m = 0; m <= 3 ; m++){
       Serial.println("trigger");
       bar_right.pushSprite(display_w * 0.98, ( canvas_top_h + 5 ) + (m * ((canvas_h - 6)/4)) - 1 );
     }
   }
+  else if (menu_current_pages == 2){
+    if (menu_current_page == 1){
+      bar_right3.fillSprite(WHITE);
+      bar_right4.fillSprite(WHITE);
+      //resetSprite();
+      bar_right.pushSprite(display_w * 0.98, canvas_top_h + 5);
+      bar_right2.pushSprite(display_w * 0.98, ( canvas_top_h + 5 ) + (1 * ((canvas_h - 6)/4)) - 1 );
+    }
+    else if (menu_current_page == 2){
+      bar_right.fillSprite(WHITE);
+      bar_right2.fillSprite(WHITE);
+      //resetSprite();
+      bar_right3.pushSprite(display_w * 0.98, ( canvas_top_h + 5 ) + (2 * ((canvas_h - 6)/4)) - 1 );
+      bar_right4.pushSprite(display_w * 0.98, ( canvas_top_h + 5 ) + (3 * ((canvas_h - 6)/4)) - 1 );
+    }
+  }*/
   canvas_main.pushSprite(0, canvas_top_h);
   M5.Display.endWrite();
 }
 
 void drawRightBar() {
   if(menuID){
-    bar_right.fillSprite(BLACK);}  
+    if(menu_current_pages == 1){
+      bar_right.fillSprite(BLACK);
+      bar_right2.fillSprite(BLACK);
+      bar_right3.fillSprite(BLACK);
+      bar_right4.fillSprite(BLACK);
+    }
+    else if(menu_current_pages == 2){
+      if(menu_current_page ==1){
+        bar_right.fillSprite(BLACK);
+        bar_right2.fillSprite(BLACK);
+        bar_right3.fillSprite(WHITE);
+        bar_right4.fillSprite(WHITE);
+      }
+      else if(menu_current_page ==2){
+        bar_right.fillSprite(WHITE);
+        bar_right2.fillSprite(WHITE);
+        bar_right3.fillSprite(BLACK);
+        bar_right4.fillSprite(BLACK);
+      }
+    }
+    else if(menu_current_pages == 3){
+      if (menu_current_page == 1){
+        bar_right.fillSprite(BLACK);
+        bar_right2.fillSprite(BLACK);
+        bar_right3.fillSprite(WHITE);
+        bar_right4.fillSprite(WHITE);
+      }
+      else if(menu_current_page ==2){
+        bar_right.fillSprite(WHITE);
+        bar_right2.fillSprite(BLACK);
+        bar_right3.fillSprite(BLACK);
+        bar_right4.fillSprite(WHITE);
+      }
+      else if(menu_current_page ==3){
+        bar_right.fillSprite(WHITE);
+        bar_right2.fillSprite(WHITE);
+        bar_right3.fillSprite(BLACK);
+        bar_right4.fillSprite(BLACK);
+      }
+    }
+    else if(menu_current_pages == 4){
+      if (menu_current_page == 1){
+        bar_right.fillSprite(BLACK);
+        bar_right2.fillSprite(WHITE);
+        bar_right3.fillSprite(WHITE);
+        bar_right4.fillSprite(WHITE);
+      }
+      else if(menu_current_page == 2){
+        bar_right.fillSprite(WHITE);
+        bar_right2.fillSprite(BLACK);
+        bar_right3.fillSprite(WHITE);
+        bar_right4.fillSprite(WHITE);
+      }
+      else if(menu_current_page == 3){
+        bar_right.fillSprite(WHITE);
+        bar_right2.fillSprite(WHITE);
+        bar_right3.fillSprite(BLACK);
+        bar_right4.fillSprite(WHITE);
+      }
+      else if(menu_current_page == 4){
+        bar_right.fillSprite(WHITE);
+        bar_right2.fillSprite(WHITE);
+        bar_right3.fillSprite(WHITE);
+        bar_right4.fillSprite(BLACK);
+      }
+    }
+  }  
   else { 
     bar_right.fillSprite(WHITE);
+    bar_right2.fillSprite(WHITE);
+    bar_right3.fillSprite(WHITE);
+    bar_right4.fillSprite(WHITE);
   }
 }
+
+inline void resetSprite(){bar_right.fillSprite(WHITE);}
 
 void drawTopCanvas() {
   canvas_top.fillSprite(WHITE);
@@ -283,6 +386,7 @@ void drawSinglePage(menu toDraw[], uint8_t menuIDPriv, uint8_t menuSize ) {
 void drawMultiplePages(menu toDraw[], uint8_t menuIDPriv, uint8_t menuSize) {
   menuID = menuIDPriv;
   menu_len = menuSize;
+  
   singlePage = false;
   canvas_main.fillSprite(WHITE); //Clears main display
   canvas_main.setTextSize(2);

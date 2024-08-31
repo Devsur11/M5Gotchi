@@ -19,3 +19,4 @@ void runApp(uint8_t appID = 0);
 void drawSinglePage(menu toDraw[], uint8_t menuIDPriv, uint8_t uiSize);
 void drawMultiplePages(menu toDraw[], uint8_t menuIDPriv, uint8_t menuSize);
 void drawMainMenu();
+inline void resetSprite();
