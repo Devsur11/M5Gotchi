@@ -1,11 +1,16 @@
 #include "M5Cardputer.h"
 #include "mood.h"
+#include <Update.h>
+#include <FS.h>
+#include <SD.h>
 
 struct menu {
   char name[25];
   int command;
 };
 
+
+bool activityRewarded();
 void initUi();
 void wakeUp();
 void drawMood(String face, String phrase, bool broken = false);
@@ -20,3 +25,4 @@ void drawSinglePage(menu toDraw[], uint8_t menuIDPriv, uint8_t uiSize);
 void drawMultiplePages(menu toDraw[], uint8_t menuIDPriv, uint8_t menuSize);
 void drawMainMenu();
 inline void resetSprite();
+String userInput();

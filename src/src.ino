@@ -93,7 +93,9 @@ void loop() {
   {
     setMood(activity_level[activity]);
   }
+  if(activityRewarded()){activity++;}
   //Serial.println(String(currentMillis));
+  
 }
 
 void updateActivity() {

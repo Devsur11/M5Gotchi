@@ -1,4 +1,9 @@
 #include "ui.h"
+#include "updater.h"
+#include <Update.h>
+#include <FS.h>
+#include <SD.h>
+
 #define ROW_SIZE 40
 #define PADDING 10
 
@@ -64,7 +69,7 @@ menu settings_menu[] = {
     {"Power off", 46}
 };
 
-
+bool userInputVar;
 uint8_t menu_current_pages = 1;
 int32_t display_w;
 int32_t display_h;
@@ -81,6 +86,9 @@ uint8_t menu_current_opt = 0;
 uint8_t menu_current_page = 1;
 bool singlePage;
 uint8_t menuID = 0;
+bool activityReward;
+
+bool activityRewarded(){return activityReward;}
 
 void initUi() {
   M5.Display.setRotation(1);
@@ -141,7 +149,7 @@ void updateUi(bool show_toolbars) {
       menu_current_page = 1;
     }
   }
-  Serial.println(menu_current_pages);
+  
   uint8_t mood_id = getCurrentMoodId();
   String mood_face = getCurrentMoodFace();
   String mood_phrase = getCurrentMoodPhrase();
@@ -149,7 +157,9 @@ void updateUi(bool show_toolbars) {
 
   drawTopCanvas();
   drawBottomCanvas();
-  
+  if (userInputVar){
+    userInput();
+  }
 
   if (menuID == 1) {
     menu_current_pages = 2;
@@ -172,6 +182,7 @@ void updateUi(bool show_toolbars) {
   else if (menuID == 5){
     drawMultiplePages( pwngotchi_menu , 5, 4);
     drawMenu();
+    
   }
   else if (menuID == 6){
     drawMultiplePages( settings_menu , 6, 7);
@@ -449,6 +460,7 @@ void drawAboutMenu() {
 }
 
 void runApp(uint8_t appID){
+  Serial.println("App started running, ID:"+ String(appID));
   menu_current_opt = 0;
   menu_current_page = 1;
   menuID = 0; 
@@ -493,6 +505,13 @@ void runApp(uint8_t appID){
     if(appID == 38){}
     if(appID == 39){}
     if(appID == 40){}
+    if(appID == 41){}
+    if(appID == 42){}
+    if(appID == 43){}
+    if(appID == 44){updateFromSd();}
+    if(appID == 45){}
+    if(appID == 46){}
+    if(appID == 47){}
   }
   return;
 }
@@ -520,6 +539,26 @@ void drawMenu() {
       //Serial.println(main_menu[menu_current_opt].command); - for debugging purposses
       runApp(main_menu[menu_current_opt].command);
     }
+    else if(menuID == 2){
+      //Serial.println(main_menu[menu_current_opt].command); - for debugging purposses
+      runApp(wifi_menu[menu_current_opt].command);
+    }
+    else if(menuID == 3){
+      //Serial.println(main_menu[menu_current_opt].command); - for debugging purposses
+      runApp(bluetooth_menu[menu_current_opt].command);
+    }
+    else if(menuID == 4){
+      //Serial.println(main_menu[menu_current_opt].command); - for debugging purposses
+      runApp(IR_menu[menu_current_opt].command);
+    }
+    else if(menuID == 5){
+      //Serial.println(main_menu[menu_current_opt].command); - for debugging purposses
+      runApp(pwngotchi_menu[menu_current_opt].command);
+    }
+    else if(menuID == 6){
+      //Serial.println(main_menu[menu_current_opt].command); - for debugging purposses
+      runApp(settings_menu[menu_current_opt].command);
+    }
   }
   if(!singlePage){
     if(menu_current_opt < 5 && menu_current_page != 1){
@@ -533,6 +572,9 @@ void drawMenu() {
   //uint8_t test = main_menu[1].command; - how to acces 2`nd column - for me
 }
 
+String userInput(){
+  return "0";
+}
 
 // bool check_prev_press() {
 //   if (M5.Keyboard.isKeyPressed(ARROW_UP)) {

@@ -7,7 +7,7 @@ struct splash {
 };
 
 splash mainFaces[] = {
-  {"(v__v)", "Zzzz...          "},
+  {"(v__v)", "Zzzz....               "},
   {"(=__=)", "...              "},
   {"(O__O)", "Ready for action!"},
   {"( O_O)", "Hello there!     "},
