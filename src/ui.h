@@ -8,12 +8,13 @@ struct menu {
   char name[25];
   int command;
 };
-
-
+String multiplyChar(char toMultiply, uint8_t literations);
+void trigger(uint8_t trigID);
+void drawInfoBox(String tittle, String info, bool canBeQuit, bool isCritical);
 bool activityRewarded();
 void initUi();
 void wakeUp();
-void drawMood(String face, String phrase, bool broken = false);
+void drawMood(String face, String phrase, String part2,  bool broken = false);
 void drawTopCanvas();
 void drawRightBar();
 void drawBottomCanvas(uint8_t friends_run = 0, uint8_t friends_tot = 0,

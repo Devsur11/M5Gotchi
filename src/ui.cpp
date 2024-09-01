@@ -1,3 +1,4 @@
+#include <string>
 #include "ui.h"
 #include "updater.h"
 #include <Update.h>
@@ -69,6 +70,7 @@ menu settings_menu[] = {
     {"Power off", 46}
 };
 
+bool appRunning;
 bool userInputVar;
 uint8_t menu_current_pages = 1;
 int32_t display_w;
@@ -153,8 +155,9 @@ void updateUi(bool show_toolbars) {
   uint8_t mood_id = getCurrentMoodId();
   String mood_face = getCurrentMoodFace();
   String mood_phrase = getCurrentMoodPhrase();
+  String part2 = getCurrentMoodPart2();
   bool mood_broken = isCurrentMoodBroken();
-
+  trigger(sizeof(hostname) / 4);
   drawTopCanvas();
   drawBottomCanvas();
   if (userInputVar){
@@ -190,8 +193,9 @@ void updateUi(bool show_toolbars) {
   }  
   else if (menuID == 0)
   {
-    drawMood(mood_face, mood_phrase, mood_broken);
+    drawMood(mood_face, mood_phrase, part2, mood_broken);
   }
+  else if(appRunning){}
 
   drawRightBar();
 
@@ -356,7 +360,7 @@ void drawBottomCanvas(uint8_t friends_run, uint8_t friends_tot,
   canvas_bot.drawLine(0, 0, display_w, 0);
 }
 
-void drawMood(String face, String phrase, bool broken) {
+void drawMood(String face, String phrase, String part2, bool broken) {
   if (broken == true) {
     canvas_main.setTextColor(RED);
   } else {
@@ -369,7 +373,10 @@ void drawMood(String face, String phrase, bool broken) {
   canvas_main.drawString(face, canvas_center_x / 1.5, canvas_h / 3);
   //canvas_main.setTextDatum(bottom_right);
   canvas_main.setTextSize(1.5);
+  //String hostname_blank = std::string(" ", 4, 0);
+  String hostname_blank = multiplyChar(' ', sizeof(hostname) / 4);
   canvas_main.drawString(hostname + "> " + phrase, canvas_center_x - 10, canvas_h - 35);
+  canvas_main.drawString(hostname_blank + "      " + part2, canvas_center_x - 10, canvas_h - 20);
 }
 
 
@@ -439,21 +446,57 @@ void drawMultiplePages(menu toDraw[], uint8_t menuIDPriv, uint8_t menuSize) {
     }
   }
 }
-/*
-void drawNearbyMenu() {
-  canvas_main.clear(BLACK);
-  canvas_main.setTextSize(2);
-  canvas_main.setTextColor(GREEN);
-  canvas_main.setColor(GREEN);
-  canvas_main.setTextDatum(top_left);
 
+void drawInfoBox(String tittle, String info, bool canBeQuit, bool isCritical) {
+  appRunning = true;
+  delay(500);
+  //bool loop = 1;
+  canvas_main.clear(TFT_WHITE);
+  canvas_main.setTextSize(3);
+  if(isCritical){canvas_main.setColor(RED);}
+  else {canvas_main.setColor(BLACK);}
+  //canvas_main.setTextDatum(9);
+  canvas_main.setCursor(display_w / 2, PADDING);
+  canvas_main.setTextDatum(middle_center);
+  canvas_main.drawString(tittle, canvas_center_x, canvas_h / 4);
+  //canvas_main.println(tittle);
+  canvas_main.setTextSize(1.5);
+  canvas_main.setTextDatum(middle_center);
+  canvas_main.drawString(info, canvas_center_x, canvas_h / 2);
   
-    canvas_main.setTextColor(TFT_DARKGRAY);
-    canvas_main.setCursor(0, PADDING);
-    canvas_main.println("not yet");
-  
-}*/
-
+  //delay(2000);
+  if(canBeQuit){
+    trigger(1);
+    canvas_main.setTextSize(1);
+    //canvas_main.setTextDatum(17);
+    //canvas_main.setCursor(0, PADDING);
+    canvas_main.drawString("To exit press ENTER", canvas_center_x, canvas_h * 0.9);
+    while(true){
+      M5.Display.startWrite();
+      canvas_top.pushSprite(0, 0);
+      canvas_bot.pushSprite(0, canvas_top_h + canvas_h);
+      canvas_main.pushSprite(0, canvas_top_h);
+      M5.Display.endWrite();
+      trigger(2);
+      M5.update();
+      M5Cardputer.update();
+      if(M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER)){return ;}
+    }
+  }
+  else{
+    M5.Display.startWrite();
+    canvas_top.pushSprite(0, 0);
+    canvas_bot.pushSprite(0, canvas_top_h + canvas_h);
+    canvas_main.pushSprite(0, canvas_top_h);
+    M5.Display.endWrite();
+    while(true){
+      
+    }
+  }
+  appRunning = false;
+  trigger(3);
+}
+inline void trigger(uint8_t trigID){Serial.println("Trigger" + String(trigID));}
 
 void drawAboutMenu() {
   canvas_main.clear(WHITE);
@@ -469,7 +512,7 @@ void runApp(uint8_t appID){
     if(appID == 2){drawMultiplePages(bluetooth_menu, 3, 6);}
     if(appID == 3){drawSinglePage(IR_menu, 4, 5 );}
     if(appID == 4){drawSinglePage(pwngotchi_menu, 5 , 3 );}
-    if(appID == 5){}
+    if(appID == 5){drawInfoBox("ERROR", "not implemented", true, true);}
     if(appID == 6){drawMultiplePages( settings_menu , 6, 7);}
     if(appID == 7){}
     if(appID == 8){}
@@ -576,6 +619,14 @@ String userInput(){
   return "0";
 }
 
+String multiplyChar(char toMultiply, uint8_t literations){
+  String toReturn;
+  char temp = toMultiply;
+  for(uint8_t i = 1; i>=literations; i++){
+    toReturn = toReturn + temp;
+  }
+  return toReturn;
+}
 // bool check_prev_press() {
 //   if (M5.Keyboard.isKeyPressed(ARROW_UP)) {
 //     return true;

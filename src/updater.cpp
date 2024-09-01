@@ -1,4 +1,5 @@
 #include "updater.h"
+#include "ui.h"
 #include <Update.h>
 #include <FS.h>
 #include <SD.h>
@@ -36,9 +37,11 @@ void performUpdate(Stream &updateSource, size_t updateSize) {
          Serial.println("OTA done!");
          if (Update.isFinished()) {
             Serial.println("Update successfully completed. Rebooting.");
+            drawInfoBox("Info", "Update succesful, please reset device", false, false);
          }
          else {
             Serial.println("Update not finished? Something went wrong!");
+            drawInfoBox("Error!", "Update failed. system may be corrupt", false, true);
          }
       }
       else {
@@ -79,6 +82,7 @@ void updateFromFS(fs::FS &fs) {
    }
    else {
       Serial.println("Could not load update.bin from sd root");
+      drawInfoBox("ERROR", "update.bin not found", true, false);
    }
 }
 
