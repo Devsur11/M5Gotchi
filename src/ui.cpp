@@ -163,7 +163,7 @@ void updateUi(bool show_toolbars) {
   if (userInputVar){
     //userInput();
   }
-  hostname = userInput("New value", "Change Hostname to:", 5);
+  
   if (menuID == 1) {
     menu_current_pages = 2;
     menu_len = 6;
@@ -547,7 +547,7 @@ void runApp(uint8_t appID){
     if(appID == 37){}
     if(appID == 38){}
     if(appID == 39){}
-    if(appID == 40){}
+    if(appID == 40){hostname = userInput("New value", "Change Hostname to:", 5);  }
     if(appID == 41){}
     if(appID == 42){}
     if(appID == 43){}
@@ -633,7 +633,7 @@ String userInput(String tittle, String desc, uint8_t maxLenght){
   canvas_main.drawString(desc, canvas_center_x, canvas_h * 0.9);
   //delay(2000);
   while (temp < maxLenght){
-    canvas_main.fillSprite(WHITE);
+    //canvas_main.fillSprite(WHITE);
     M5.update();
     M5Cardputer.update();
     Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
@@ -651,6 +651,7 @@ String userInput(String tittle, String desc, uint8_t maxLenght){
       break;
     }
     canvas_main.setTextSize(1.5);
+    canvas_main.setTextDatum(middle_left);
     canvas_main.drawString(textTyped, 5 , canvas_h /2);
     M5.Display.startWrite();
     canvas_top.pushSprite(0, 0);
