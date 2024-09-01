@@ -161,9 +161,9 @@ void updateUi(bool show_toolbars) {
   drawTopCanvas();
   drawBottomCanvas();
   if (userInputVar){
-    userInput();
+    //userInput();
   }
-
+  hostname = userInput("New value", "Change Hostname to:", 5);
   if (menuID == 1) {
     menu_current_pages = 2;
     menu_len = 6;
@@ -615,8 +615,53 @@ void drawMenu() {
   //uint8_t test = main_menu[1].command; - how to acces 2`nd column - for me
 }
 
-String userInput(){
-  return "0";
+String userInput(String tittle, String desc, uint8_t maxLenght){
+  uint8_t temp = 1;
+  String textTyped;
+  appRunning = true;
+  delay(500);
+  //bool loop = 1;
+  canvas_main.clear(TFT_WHITE);
+  canvas_main.setTextSize(3);
+  canvas_main.setTextColor(BLACK);
+  //canvas_main.setTextDatum(9);
+  canvas_main.setCursor(display_w / 2, PADDING);
+  canvas_main.setTextDatum(middle_center);
+  canvas_main.drawString(tittle, canvas_center_x, canvas_h / 4);
+  //canvas_main.println(tittle);
+  canvas_main.setTextSize(1);
+  canvas_main.drawString(desc, canvas_center_x, canvas_h * 0.9);
+  //delay(2000);
+  while (temp < maxLenght){
+    canvas_main.fillSprite(WHITE);
+    M5.update();
+    M5Cardputer.update();
+    Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
+    for(auto i : status.word){
+      textTyped = textTyped + i;
+      temp ++;
+      delay(250);
+    }
+    if (status.del) {
+      textTyped.remove(textTyped.length() - 1);
+      temp --;
+      delay(250);
+    }
+    if (status.enter) {
+      break;
+    }
+    canvas_main.setTextSize(1.5);
+    canvas_main.drawString(textTyped, 5 , canvas_h /2);
+    M5.Display.startWrite();
+    canvas_top.pushSprite(0, 0);
+    canvas_bot.pushSprite(0, canvas_top_h + canvas_h);
+    canvas_main.pushSprite(0, canvas_top_h);
+    M5.Display.endWrite();
+  }
+  drawInfoBox("text:", textTyped, true, false);
+  appRunning = false;
+  trigger(3);
+  return textTyped;
 }
 
 String multiplyChar(char toMultiply, uint8_t literations){

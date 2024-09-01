@@ -13,7 +13,9 @@ void updateFromSd(){
 
    //first init and check SD card
    if (!SD.begin()) {
-      rebootEspWithReason("Card Mount Failed");
+      drawInfoBox("ERROR", "SD card not found", true, true);
+      return;
+      //rebootEspWithReason("Card Mount Failed");
    }
 
    cardType = SD.cardType();
@@ -37,7 +39,9 @@ void performUpdate(Stream &updateSource, size_t updateSize) {
          Serial.println("OTA done!");
          if (Update.isFinished()) {
             Serial.println("Update successfully completed. Rebooting.");
+            
             drawInfoBox("Info", "Update succesful, please reset device", false, false);
+
          }
          else {
             Serial.println("Update not finished? Something went wrong!");
