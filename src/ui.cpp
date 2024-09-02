@@ -632,7 +632,7 @@ String userInput(String tittle, String desc, uint8_t maxLenght){
   canvas_main.setTextSize(1);
   canvas_main.drawString(desc, canvas_center_x, canvas_h * 0.9);
   //delay(2000);
-  while (temp < maxLenght){
+  while (true){
     //canvas_main.fillSprite(WHITE);
     M5.update();
     M5Cardputer.update();
@@ -650,6 +650,23 @@ String userInput(String tittle, String desc, uint8_t maxLenght){
     if (status.enter) {
       break;
     }
+    if(temp > maxLenght){
+      drawInfoBox("Error", "Can't type more than " + String(maxLenght) + " char", true, false);
+      textTyped.remove(textTyped.length() - 1);
+      temp --;
+      delay(250);
+    }
+    canvas_main.clear(TFT_WHITE);
+    canvas_main.setTextSize(3);
+    canvas_main.setTextColor(BLACK);
+    //canvas_main.setTextDatum(9);
+    canvas_main.fillRect();
+    canvas_main.setCursor(display_w / 2, PADDING);
+    canvas_main.setTextDatum(middle_center);
+    canvas_main.drawString(tittle, canvas_center_x, canvas_h / 4);
+    //canvas_main.println(tittle);
+    canvas_main.setTextSize(1);
+    canvas_main.drawString(desc, canvas_center_x, canvas_h * 0.9);
     canvas_main.setTextSize(1.5);
     canvas_main.setTextDatum(middle_left);
     canvas_main.drawString(textTyped, 5 , canvas_h /2);
@@ -659,7 +676,7 @@ String userInput(String tittle, String desc, uint8_t maxLenght){
     canvas_main.pushSprite(0, canvas_top_h);
     M5.Display.endWrite();
   }
-  drawInfoBox("text:", textTyped, true, false);
+  drawInfoBox("Confirm value:", textTyped, true, false);
   appRunning = false;
   trigger(3);
   return textTyped;
