@@ -5,7 +5,6 @@
 struct splash {
   String face;
   String splash;
-  String part2;
 };
 
 void setMood(uint8_t mood, String face = "", String phrase = "",
@@ -14,4 +13,4 @@ uint8_t getCurrentMoodId();
 String getCurrentMoodFace();
 String getCurrentMoodPhrase();
 bool isCurrentMoodBroken();
-String getCurrentMoodPart2();
+//String getCurrentMoodPart2();

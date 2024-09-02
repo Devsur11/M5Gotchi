@@ -39,7 +39,7 @@ menu wifi_menu[] = {
 menu bluetooth_menu[] = {
     {"BLE Spam", 25},
     {"Connect to phone", 26},
-    {"Emulate BT Speaker", 27},
+    {"Emulate BT Keyboard", 27},
     {"Chat", 28}, 
     {"Scan", 29},
     {"Turn off", 30}
@@ -155,7 +155,6 @@ void updateUi(bool show_toolbars) {
   uint8_t mood_id = getCurrentMoodId();
   String mood_face = getCurrentMoodFace();
   String mood_phrase = getCurrentMoodPhrase();
-  String part2 = getCurrentMoodPart2();
   bool mood_broken = isCurrentMoodBroken();
   trigger(sizeof(hostname) / 4);
   drawTopCanvas();
@@ -193,7 +192,7 @@ void updateUi(bool show_toolbars) {
   }  
   else if (menuID == 0)
   {
-    drawMood(mood_face, mood_phrase, part2, mood_broken);
+    drawMood(mood_face, mood_phrase, mood_broken);
   }
   else if(appRunning){}
 
@@ -360,7 +359,7 @@ void drawBottomCanvas(uint8_t friends_run, uint8_t friends_tot,
   canvas_bot.drawLine(0, 0, display_w, 0);
 }
 
-void drawMood(String face, String phrase, String part2, bool broken) {
+void drawMood(String face, String phrase, bool broken) {
   if (broken == true) {
     canvas_main.setTextColor(RED);
   } else {
@@ -375,8 +374,12 @@ void drawMood(String face, String phrase, String part2, bool broken) {
   canvas_main.setTextSize(1.5);
   //String hostname_blank = std::string(" ", 4, 0);
   String hostname_blank = multiplyChar(' ', sizeof(hostname) / 4);
-  canvas_main.drawString(hostname + "> " + phrase, canvas_center_x - 10, canvas_h - 35);
-  canvas_main.drawString(hostname_blank + "      " + part2, canvas_center_x - 10, canvas_h - 20);
+  canvas_main.setCursor(10, canvas_h - 35);
+  canvas_main.println(hostname + "> " + phrase);
+  //canvas_main.drawString(hostname + "> " + phrase, canvas_center_x - 10, canvas_h - 35);
+  //canvas_main.setCursor(10, canvas_h - 20);
+  //canvas_main.println(hostname_blank + "      " + part2);
+  //canvas_main.drawString(hostname_blank + "      " + part2, canvas_center_x - 10, canvas_h - 20);
 }
 
 
@@ -447,7 +450,7 @@ void drawMultiplePages(menu toDraw[], uint8_t menuIDPriv, uint8_t menuSize) {
   }
 }
 
-void drawInfoBox(String tittle, String info, bool canBeQuit, bool isCritical) {
+void drawInfoBox(String tittle, String info, String info2, bool canBeQuit, bool isCritical) {
   appRunning = true;
   delay(500);
   //bool loop = 1;
@@ -463,7 +466,7 @@ void drawInfoBox(String tittle, String info, bool canBeQuit, bool isCritical) {
   canvas_main.setTextSize(1.5);
   canvas_main.setTextDatum(middle_center);
   canvas_main.drawString(info, canvas_center_x, canvas_h / 2);
-  
+  canvas_main.drawString(info2, canvas_center_x, (canvas_h / 2) + 20);
   //delay(2000);
   if(canBeQuit){
     trigger(1);
@@ -512,7 +515,7 @@ void runApp(uint8_t appID){
     if(appID == 2){drawMultiplePages(bluetooth_menu, 3, 6);}
     if(appID == 3){drawSinglePage(IR_menu, 4, 5 );}
     if(appID == 4){drawSinglePage(pwngotchi_menu, 5 , 3 );}
-    if(appID == 5){drawInfoBox("ERROR", "not implemented", true, true);}
+    if(appID == 5){drawInfoBox("ERROR", "not implemented", "" ,  true, true);}
     if(appID == 6){drawMultiplePages( settings_menu , 6, 7);}
     if(appID == 7){}
     if(appID == 8){}
@@ -547,7 +550,14 @@ void runApp(uint8_t appID){
     if(appID == 37){}
     if(appID == 38){}
     if(appID == 39){}
-    if(appID == 40){hostname = userInput("New value", "Change Hostname to:", 5);  }
+    if(appID == 40){
+      String name = userInput("New value", "Change Hostname to:", 5);
+      if(name != ""){
+        hostname = name;
+        return;
+      }
+      drawInfoBox("Name invalid", "Null inputed,", "operation abort", true, false);
+    }
     if(appID == 41){}
     if(appID == 42){}
     if(appID == 43){}
@@ -636,13 +646,17 @@ String userInput(String tittle, String desc, uint8_t maxLenght){
     //canvas_main.fillSprite(WHITE);
     M5.update();
     M5Cardputer.update();
+    //auto i;
     Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
     for(auto i : status.word){
+      if(i=='`' && status.fn){
+        return  "";
+      }
       textTyped = textTyped + i;
       temp ++;
       delay(250);
     }
-    if (status.del) {
+    if (status.del && temp >=1) {
       textTyped.remove(textTyped.length() - 1);
       temp --;
       delay(250);
@@ -650,8 +664,9 @@ String userInput(String tittle, String desc, uint8_t maxLenght){
     if (status.enter) {
       break;
     }
+    
     if(temp > maxLenght){
-      drawInfoBox("Error", "Can't type more than " + String(maxLenght) + " char", true, false);
+      drawInfoBox("Error", "Can't type more than " + String(maxLenght), " char" , true, false);
       textTyped.remove(textTyped.length() - 1);
       temp --;
       delay(250);
@@ -660,7 +675,7 @@ String userInput(String tittle, String desc, uint8_t maxLenght){
     canvas_main.setTextSize(3);
     canvas_main.setTextColor(BLACK);
     //canvas_main.setTextDatum(9);
-    canvas_main.fillRect();
+    //canvas_main.fillRect();
     canvas_main.setCursor(display_w / 2, PADDING);
     canvas_main.setTextDatum(middle_center);
     canvas_main.drawString(tittle, canvas_center_x, canvas_h / 4);
@@ -676,7 +691,7 @@ String userInput(String tittle, String desc, uint8_t maxLenght){
     canvas_main.pushSprite(0, canvas_top_h);
     M5.Display.endWrite();
   }
-  drawInfoBox("Confirm value:", textTyped, true, false);
+  //drawInfoBox("Confirm value:", textTyped, true, false);
   appRunning = false;
   trigger(3);
   return textTyped;
