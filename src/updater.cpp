@@ -23,7 +23,10 @@ void updateFromSd(){
    if (cardType == CARD_NONE) {
       rebootEspWithReason("No SD_MMC card attached");
    }else{
+    if(drawQuestionBox("Are you sure?", "Are want to update?", "This can not be undone!")){
       updateFromFS(SD);
+      }
+    else{return;}
   }
 }
 void performUpdate(Stream &updateSource, size_t updateSize) {

@@ -156,7 +156,6 @@ void updateUi(bool show_toolbars) {
   String mood_face = getCurrentMoodFace();
   String mood_phrase = getCurrentMoodPhrase();
   bool mood_broken = isCurrentMoodBroken();
-  trigger(sizeof(hostname) / 4);
   drawTopCanvas();
   drawBottomCanvas();
   if (userInputVar){
@@ -374,7 +373,7 @@ void drawMood(String face, String phrase, bool broken) {
   canvas_main.setTextSize(1.5);
   //String hostname_blank = std::string(" ", 4, 0);
   String hostname_blank = multiplyChar(' ', sizeof(hostname) / 4);
-  canvas_main.setCursor(10, canvas_h - 35);
+  canvas_main.setCursor(0, canvas_h - 35);
   canvas_main.println(hostname + "> " + phrase);
   //canvas_main.drawString(hostname + "> " + phrase, canvas_center_x - 10, canvas_h - 35);
   //canvas_main.setCursor(10, canvas_h - 20);
@@ -473,7 +472,7 @@ void drawInfoBox(String tittle, String info, String info2, bool canBeQuit, bool 
     canvas_main.setTextSize(1);
     //canvas_main.setTextDatum(17);
     //canvas_main.setCursor(0, PADDING);
-    canvas_main.drawString("To exit press ENTER", canvas_center_x, canvas_h * 0.9);
+    canvas_main.drawString("To exit press OK", canvas_center_x, canvas_h * 0.9);
     while(true){
       M5.Display.startWrite();
       canvas_top.pushSprite(0, 0);
@@ -558,12 +557,22 @@ void runApp(uint8_t appID){
       }
       drawInfoBox("Name invalid", "Null inputed,", "operation abort", true, false);
     }
-    if(appID == 41){}
+    if(appID == 41){
+      String name = userInput("Brightness", "Change Brightness to (max 255):", 3);
+      if(int(name)<=255 && int(name)!=0){
+        M5.Lcd.setBrightness(int(name));
+      }
+      else
+      drawInfoBox("Error", "Invalid Value", "", true, false);
+    }
     if(appID == 42){}
     if(appID == 43){}
     if(appID == 44){updateFromSd();}
     if(appID == 45){}
-    if(appID == 46){}
+    if(appID == 46){
+      M5.Display.fillScreen(TFT_BLACK);
+      esp_deep_sleep_start(); 
+      }
     if(appID == 47){}
   }
   return;
@@ -626,7 +635,7 @@ void drawMenu() {
 }
 
 String userInput(String tittle, String desc, uint8_t maxLenght){
-  uint8_t temp = 1;
+  uint8_t temp = 0;
   String textTyped;
   appRunning = true;
   delay(500);
@@ -666,7 +675,7 @@ String userInput(String tittle, String desc, uint8_t maxLenght){
     }
     
     if(temp > maxLenght){
-      drawInfoBox("Error", "Can't type more than " + String(maxLenght), " char" , true, false);
+      drawInfoBox("Error", "Can't type more than " + String(maxLenght), " characters" , true, false);
       textTyped.remove(textTyped.length() - 1);
       temp --;
       delay(250);
@@ -683,8 +692,9 @@ String userInput(String tittle, String desc, uint8_t maxLenght){
     canvas_main.setTextSize(1);
     canvas_main.drawString(desc, canvas_center_x, canvas_h * 0.9);
     canvas_main.setTextSize(1.5);
-    canvas_main.setTextDatum(middle_left);
-    canvas_main.drawString(textTyped, 5 , canvas_h /2);
+    //canvas_main.setTextDatum(middle_left);
+    canvas_main.setCursor(0 , canvas_h /2);
+    canvas_main.println(textTyped);
     M5.Display.startWrite();
     canvas_top.pushSprite(0, 0);
     canvas_bot.pushSprite(0, canvas_top_h + canvas_h);
@@ -704,6 +714,49 @@ String multiplyChar(char toMultiply, uint8_t literations){
     toReturn = toReturn + temp;
   }
   return toReturn;
+}
+
+bool drawQuestionBox(String tittle, String info, String info2) {
+  appRunning = true;
+  
+  delay(500);
+  //bool loop = 1;
+  canvas_main.clear(TFT_WHITE);
+  canvas_main.setTextSize(3);
+  canvas_main.setColor(BLACK);
+  canvas_main.setCursor(display_w / 2, PADDING);
+  canvas_main.setTextDatum(middle_center);
+  canvas_main.drawString(tittle, canvas_center_x, canvas_h / 4);
+  canvas_main.setTextSize(1.5);
+  canvas_main.setTextDatum(middle_center);
+  canvas_main.drawString(info, canvas_center_x, canvas_h / 2);
+  canvas_main.drawString(info2, canvas_center_x, (canvas_h / 2) + 20);
+  trigger(1);
+  canvas_main.setTextSize(1);
+  canvas_main.drawString("To confirm press OK, to abort press ESC", canvas_center_x, canvas_h * 0.9);
+  while(true){
+    M5.Display.startWrite();
+    canvas_top.pushSprite(0, 0);
+    canvas_bot.pushSprite(0, canvas_top_h + canvas_h);
+    canvas_main.pushSprite(0, canvas_top_h);
+    M5.Display.endWrite();
+    trigger(2);
+    M5.update();
+    M5Cardputer.update();
+    Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
+    if(M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER)){
+      appRunning = false;
+      return true;
+    }
+    
+    for(auto i : status.word){
+      if(i=='`' && status.fn){
+        appRunning = false;
+        return  false;
+      }
+    }
+  }
+  appRunning = false;
 }
 // bool check_prev_press() {
 //   if (M5.Keyboard.isKeyPressed(ARROW_UP)) {

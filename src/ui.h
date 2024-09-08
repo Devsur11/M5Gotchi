@@ -26,4 +26,5 @@ void drawSinglePage(menu toDraw[], uint8_t menuIDPriv, uint8_t uiSize);
 void drawMultiplePages(menu toDraw[], uint8_t menuIDPriv, uint8_t menuSize);
 void drawMainMenu();
 inline void resetSprite();
-String userInput(String tittle, String desc, uint8_t maxLenght      );
+String userInput(String tittle, String desc, uint8_t maxLenght);
+bool drawQuestionBox(String tittle, String info, String info2);

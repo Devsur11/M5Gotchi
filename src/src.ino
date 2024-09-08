@@ -70,7 +70,17 @@ void loop() {
   //updateActivity();
   M5.update();
   M5Cardputer.update();
-
+  if(M5Cardputer.BtnA.isPressed()){
+    M5.Display.fillScreen(TFT_BLACK);
+    delay(500);
+    while(true){
+      M5.update();
+      M5Cardputer.update();
+      if(M5Cardputer.BtnA.isPressed()){break;}
+    }
+    initUi();
+    delay(500);
+  }
   if (state == STATE_HALT) {
     return;
   }
