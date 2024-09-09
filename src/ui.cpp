@@ -560,9 +560,9 @@ void runApp(uint8_t appID){
     if(appID == 41){
       String value = userInput("Brightness", "Change Brightness to (max 255):", 3);
       //char setTo = value.toInt();
-      uint8_t digit1 = value.charAt(0);
-      uint8_t digit2 = value.charAt(1);
-      uint8_t digit3 = value.charAt(2);
+      uint8_t digit1 = value.charAt(0) - 48;
+      uint8_t digit2 = value.charAt(1) - 48;
+      uint8_t digit3 = value.charAt(2) - 48;
       uint16_t name = (digit1 * 100) + (digit2 * 10) + digit3;
       if(name<=255 && name!=0){
         M5.Lcd.setBrightness(int(name));
