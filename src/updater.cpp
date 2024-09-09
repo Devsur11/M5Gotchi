@@ -52,7 +52,7 @@ void performUpdate(Stream &updateSource, size_t updateSize) {
          }
       }
       else {
-         drawInfoBox("Error", " Error #: " + String(Update.getError()), false, true);
+         drawInfoBox("Error", " Error #: " + String(Update.getError()), "" , false, true);
       }
 
    }
@@ -68,7 +68,7 @@ void updateFromFS(fs::FS &fs) {
    if (updateBin) {
       if(updateBin.isDirectory()){
          Serial.println("Error, update.bin is not a file");
-	drawInfoBox("Error!", "update.bin is a", "directory", true, false);
+	      drawInfoBox("Error!", "update.bin is a", "directory", true, false);
          updateBin.close();
          return;
       }

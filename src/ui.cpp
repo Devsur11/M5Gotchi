@@ -558,12 +558,17 @@ void runApp(uint8_t appID){
       drawInfoBox("Name invalid", "Null inputed,", "operation abort", true, false);
     }
     if(appID == 41){
-      uint8_t name = userInput("Brightness", "Change Brightness to (max 255):", 3);
+      String value = userInput("Brightness", "Change Brightness to (max 255):", 3);
+      //char setTo = value.toInt();
+      uint8_t digit1 = value.charAt(0);
+      uint8_t digit2 = value.charAt(1);
+      uint8_t digit3 = value.charAt(2);
+      uint16_t name = (digit1 * 100) + (digit2 * 10) + digit3;
       if(name<=255 && name!=0){
         M5.Lcd.setBrightness(int(name));
       }
       else
-      drawInfoBox("Error", "Invalid Value", name, true, false);
+      drawInfoBox("Error", "Invalid Value", String(name) , true, false);
     }
     if(appID == 42){}
     if(appID == 43){}
