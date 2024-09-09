@@ -52,7 +52,7 @@ void performUpdate(Stream &updateSource, size_t updateSize) {
          }
       }
       else {
-         Serial.println("Error Occurred. Error #: " + String(Update.getError()));
+         drawInfoBox("Error", " Error #: " + String(Update.getError()), false, true);
       }
 
    }
@@ -68,6 +68,7 @@ void updateFromFS(fs::FS &fs) {
    if (updateBin) {
       if(updateBin.isDirectory()){
          Serial.println("Error, update.bin is not a file");
+	drawInfoBox("Error!", "update.bin is a", "directory", true, false);
          updateBin.close();
          return;
       }
@@ -75,17 +76,18 @@ void updateFromFS(fs::FS &fs) {
       size_t updateSize = updateBin.size();
 
       if (updateSize > 0) {
+	drawInfoBox("Updating..." , "", "", false, false);
          Serial.println("Try to start update");
          performUpdate(updateBin, updateSize);
       }
       else {
+	drawInfoBox("Error", "File is empty" , "", true , false);
          Serial.println("Error, file is empty");
       }
 
       updateBin.close();
-    
       // whe finished remove the binary from sd card to indicate end of the process
-      fs.remove("/update.bin");      
+      // fs.remove("/update.bin");
    }
    else {
       Serial.println("Could not load update.bin from sd root");

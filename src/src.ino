@@ -71,6 +71,7 @@ void loop() {
   M5.update();
   M5Cardputer.update();
   if(M5Cardputer.BtnA.isPressed()){
+    M5.Lcd.setBrightness(0);
     M5.Display.fillScreen(TFT_BLACK);
     delay(500);
     while(true){
@@ -78,6 +79,7 @@ void loop() {
       M5Cardputer.update();
       if(M5Cardputer.BtnA.isPressed()){break;}
     }
+    M5.Lcd.setBrightness(255);
     initUi();
     delay(500);
   }
