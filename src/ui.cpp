@@ -20,56 +20,6 @@ M5Canvas bar_right2(&M5.Display);
 M5Canvas bar_right3(&M5.Display);
 M5Canvas bar_right4(&M5.Display);
 
-menu main_menu[] = {
-    {"Wifi", 1},
-    {"Bluetooth", 2},
-    {"IR", 3},
-    {"Pwngotchi", 4},
-    {"Bad USB", 5},
-    {"Settings", 6}
-};
-
-menu wifi_menu[] = {
-    {"Select Networks", 20},
-    {"Clone & Details", 21},
-    {"Evil portal", 22},
-    {"Deauth", 23},
-    {"Sniffing", 24}
-};
-
-menu bluetooth_menu[] = {
-    {"BLE Spam", 25},
-    {"Connect to phone", 26},
-    {"Emulate BT Keyboard", 27},
-    {"Chat", 28}, 
-    {"Scan", 29},
-    {"Turn off", 30}
-};
-
-menu IR_menu[] = {
-    {"Saved remotes", 31},
-    {"Send IR", 32},
-    {"Recerve IR", 33},
-    {"Learn new Remote", 34},
-    {"Import from SD", 35}
-};
-
-menu pwngotchi_menu[] = {
-    {"Turn on", 36},
-    {"Turn off", 37},
-    {"Whitelist", 38},
-    {"Handshakes", 39}
-};
-
-menu settings_menu[] = {
-    {"Change Hostname", 40},
-    {"Display brightness", 41},
-    {"Sound", 42},
-    {"Connect to wifi", 43},
-    {"Update system", 44},
-    {"About", 45},
-    {"Power off", 46}
-};
 
 bool appRunning;
 bool userInputVar;
@@ -90,6 +40,7 @@ uint8_t menu_current_page = 1;
 bool singlePage;
 uint8_t menuID = 0;
 bool activityReward;
+bool sound;
 
 bool activityRewarded(){return activityReward;}
 
@@ -582,7 +533,10 @@ void runApp(uint8_t appID){
       else
       drawInfoBox("Error", "Invalid Value", String(name) , true, false);
     }
-    if(appID == 42){}
+    if(appID == 42){
+      String selection[] = {"On", "Off", "Test"};
+      sound = drawMultiChoice(selection, 2);
+    }
     if(appID == 43){}
     if(appID == 44){updateFromSd();}
     if(appID == 45){}
@@ -774,6 +728,71 @@ bool drawQuestionBox(String tittle, String info, String info2) {
     }
   }
   appRunning = false;
+}
+
+int drawMultiChoice(String toDraw[], uint8_t menuSize ) {
+  
+  delay(100);
+  menu_current_opt = 0;
+  menu_current_pages = 1;
+  menu_len = menuSize;
+  singlePage = true;
+  trigger(1);
+  while(true){
+    M5.update();
+    M5Cardputer.update();
+    keyboard_changed = M5Cardputer.Keyboard.isChange();
+    canvas_main.clear(TFT_WHITE);
+    canvas_main.fillSprite(WHITE); //Clears main display
+    canvas_main.setTextSize(2);
+    canvas_main.setTextColor(BLACK);
+    canvas_main.setColor(BLACK);
+    canvas_main.setTextDatum(top_left);
+    char display_str[50] = "";
+    for (uint8_t i = 0; i < menuSize; i++) {
+      sprintf(display_str, "%s %s", (menu_current_opt == i) ? ">" : " ",
+               toDraw[i]);
+      int y = PADDING + (i * ROW_SIZE / 2);
+      //trigger(5);
+      canvas_main.drawString(display_str, 0, y);
+      trigger(6);
+    }
+    //for this to work i need to push sprite whitch i did 
+    M5.Display.startWrite();
+    canvas_top.pushSprite(0, 0);
+    canvas_bot.pushSprite(0, canvas_top_h + canvas_h);
+    canvas_main.pushSprite(0, canvas_top_h);
+    M5.Display.endWrite();
+    if (isNextPressed()) {
+      if (menu_current_opt < menu_len - 1 ) {
+        menu_current_opt++;
+      } else {
+        menu_current_opt = 0;
+      }
+    }
+    //trigger(4);
+    if (isPrevPressed()) {
+      if (menu_current_opt > 0) {
+        menu_current_opt--;
+      }
+      else {
+        menu_current_opt = (menu_len - 1);
+      }
+    }
+    //trigger(5);
+    if(!singlePage){
+      if(menu_current_opt < 5 && menu_current_page != 1){
+          menu_current_page= 1;
+      } 
+      else if(menu_current_opt >= 5 && menu_current_page != 2){
+        menu_current_page = 2;
+      }
+    }
+    //trigger(6);
+    if(isOkPressed()){
+      return menu_current_opt;
+    }
+  }
 }
 // bool check_prev_press() {
 //   if (M5.Keyboard.isKeyPressed(ARROW_UP)) {
