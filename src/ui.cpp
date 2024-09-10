@@ -1,3 +1,4 @@
+#include "HWCDC.h"
 #include <string>
 #include "ui.h"
 #include "updater.h"
@@ -560,11 +561,22 @@ void runApp(uint8_t appID){
     if(appID == 41){
       String value = userInput("Brightness", "Change Brightness to (max 255):", 3);
       //char setTo = value.toInt();
+      uint8_t digit2;
+      uint8_t digit3;
+      uint16_t name;
       uint8_t digit1 = value.charAt(0) - 48;
-      uint8_t digit2 = value.charAt(1) - 48;
-      uint8_t digit3 = value.charAt(2) - 48;
-      uint16_t name = (digit1 * 100) + (digit2 * 10) + digit3;
+      name =  digit1;
+      if(value.charAt(1) >= 48){
+        uint8_t digit2 = value.charAt(1) - 48;
+        name = (digit1 * 10) + digit2;
+      }
+      if(value.charAt(2) >= 48){
+        uint8_t digit3 = value.charAt(2) - 48;
+        name = (digit1 * 100) + (digit2 * 10) + digit3;
+      }
+      
       if(name<=255 && name!=0){
+        Serial.println(String(name));
         M5.Lcd.setBrightness(int(name));
       }
       else
