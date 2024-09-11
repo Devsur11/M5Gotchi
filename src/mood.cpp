@@ -24,6 +24,12 @@ splash mainFaces[] = {
   {"(;__;)", "Lonely, I am so lonely..."},
   {"(X__X)", "It works on my end. On your it don't need to :)."},
   {"(#__#)", "WTF! I didn't even touch it!"},
+  {"(σ__σ)", "Agent 007 ready for action!"}
+  {"(0__0)", "Watching your every move" },
+  {"(^__^)", "Lights out and away we go!" },
+  {"(>__<)", "Give me your attention!" },
+  {"(ಠ__ಠ)", "Get back to work!" },
+  {"(o__o)", "Don't mind me, I'm just lurking around" },
 };
 
 uint8_t current_mood = 0;
