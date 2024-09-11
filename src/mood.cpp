@@ -30,6 +30,15 @@ splash mainFaces[] = {
   {"(>__<)", "Give me your attention!" },
   {"(ಠ__ಠ)", "Get back to work!" },
   {"(o__o)", "Don't mind me, I'm just lurking around" },
+  {"(.__.)", "Why did you left me?" }
+  {"(@__@)", "file mood.cpp has stopped working" }
+  {"(✞__✞)", "Blue Screen of Death incoming..." }
+  {"(@__@)", "Too much 0s and 1s to understand" } //(˶˃⤙˂˶)(｡>﹏<)
+  {"(≧ヮ≦)", "I'm so happy to see you!" }
+  {"(˶˃⤙˂˶)", "It's taking you so long!" }
+  {"(O__O)", "It's snapshot day my dudes" }
+  {"(O__O)", "Welcome to another day of using my system!" } //(⸝⸝ᵕᴗᵕ⸝⸝)
+  {"(⸝⸝ᵕᴗᵕ⸝⸝)", "Such a nice day for having fun!" }
 };
 
 uint8_t current_mood = 0;
