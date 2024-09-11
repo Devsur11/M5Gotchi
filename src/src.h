@@ -21,3 +21,4 @@ const String pwnagotchi_moods[] = {
     "(☓‿‿☓)",  // 19 - broken
     "(#__#)"   // 20 - debugging
 };
+void Sound(int frequency, int duration, bool sound);

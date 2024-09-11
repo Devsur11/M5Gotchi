@@ -40,7 +40,7 @@ uint8_t activity_level[] = {
 
 void initM5() {
   auto cfg = M5.config();
-  M5.begin();
+  M5.begin(cfg  );
   M5.Display.begin();
   M5Cardputer.begin(cfg);
   M5Cardputer.Keyboard.begin();
@@ -79,7 +79,7 @@ void loop() {
       M5Cardputer.update();
       if(M5Cardputer.BtnA.isPressed()){break;}
     }
-    M5.Lcd.setBrightness(255);
+    M5.Lcd.setBrightness(returnBrightness());
     initUi();
     delay(500);
   }
@@ -118,4 +118,14 @@ void updateActivity() {
     else{
       activity = activity -1;
     }
+}
+bool isSoundPlayed = true;
+void Sound(int frequency, int duration, bool sound){
+  if(sound && isSoundPlayed==false){
+    M5Cardputer.Speaker.tone(frequency, duration);
+    isSoundPlayed = true;
+  }
+  else if (isSoundPlayed == true){
+    isSoundPlayed = false;
+  }
 }

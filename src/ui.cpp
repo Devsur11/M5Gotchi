@@ -1,6 +1,7 @@
 #include "HWCDC.h"
 #include <string>
 #include "ui.h"
+#include "src.h"
 #include "updater.h"
 #include <Update.h>
 #include <FS.h>
@@ -19,6 +20,57 @@ M5Canvas bar_right(&M5.Display);
 M5Canvas bar_right2(&M5.Display);
 M5Canvas bar_right3(&M5.Display);
 M5Canvas bar_right4(&M5.Display);
+
+menu main_menu[] = {
+    {"Wifi", 1},
+    {"Bluetooth", 2},
+    {"IR", 3},
+    {"Pwngotchi", 4},
+    {"Bad USB", 5},
+    {"Settings", 6}
+};
+
+menu wifi_menu[] = {
+    {"Select Networks", 20},
+    {"Clone & Details", 21},
+    {"Evil portal", 22},
+    {"Deauth", 23},
+    {"Sniffing", 24}
+};
+
+menu bluetooth_menu[] = {
+    {"BLE Spam", 25},
+    {"Connect to phone", 26},
+    {"Emulate BT Keyboard", 27},
+    {"Chat", 28}, 
+    {"Scan", 29},
+    {"Turn off", 30}
+};
+
+menu IR_menu[] = {
+    {"Saved remotes", 31},
+    {"Send IR", 32},
+    {"Recerve IR", 33},
+    {"Learn new Remote", 34},
+    {"Import from SD", 35}
+};
+
+menu pwngotchi_menu[] = {
+    {"Turn on", 36},
+    {"Turn off", 37},
+    {"Whitelist", 38},
+    {"Handshakes", 39}
+};
+
+menu settings_menu[] = {
+    {"Change Hostname", 40},
+    {"Display brightness", 41},
+    {"Sound", 42},
+    {"Connect to wifi", 43},
+    {"Update system", 44},
+    {"About", 45},
+    {"Power off", 46}
+};
 
 
 bool appRunning;
@@ -41,6 +93,7 @@ bool singlePage;
 uint8_t menuID = 0;
 bool activityReward;
 bool sound;
+uint8_t currentBrightness = 100;
 
 bool activityRewarded(){return activityReward;}
 
@@ -70,7 +123,7 @@ void initUi() {
   bar_right4.createSprite((display_w * 0.02) / 2, (canvas_h - 6) / 4 );
 }
 
-
+uint8_t returnBrightness(){return currentBrightness;}
 
 bool toggleMenuBtnPressed() {
   return (keyboard_changed && (M5Cardputer.Keyboard.isKeyPressed('`')));
@@ -89,7 +142,7 @@ bool isPrevPressed() {
 
 void updateUi(bool show_toolbars) {
   keyboard_changed = M5Cardputer.Keyboard.isChange();
-
+  if(keyboard_changed){Sound(10000, 100, sound);}               
   if (toggleMenuBtnPressed()) {
     // If menu is open, return to main menu
     // If not, toggle menu
@@ -179,7 +232,8 @@ void updateUi(bool show_toolbars) {
       bar_right4.fillSprite(WHITE);
       //resetSprite();
       bar_right.pushSprite(display_w * 0.98, canvas_top_h + 5);
-      bar_right2.pushSprite(display_w * 0.98, ( canvas_top_h + 5 ) + (1 * ((canvas_h - 6)/4)) - 1 );
+      bar_right2.pushSprite(tting, needs implementation
+display_w * 0.98, ( canvas_top_h + 5 ) + (1 * ((canvas_h - 6)/4)) - 1 );
     }
     else if (menu_current_page == 2){
       bar_right.fillSprite(WHITE);
@@ -529,13 +583,14 @@ void runApp(uint8_t appID){
       if(name<=255 && name!=0){
         Serial.println(String(name));
         M5.Lcd.setBrightness(int(name));
+        currentBrightness = int(name);
       }
       else
       drawInfoBox("Error", "Invalid Value", String(name) , true, false);
     }
     if(appID == 42){
-      String selection[] = {"On", "Off", "Test"};
-      sound = drawMultiChoice(selection, 2);
+      String selection[] = {"Off", "On"};
+      sound = drawMultiChoice(selection, 2, 6, 2);
     }
     if(appID == 43){}
     if(appID == 44){updateFromSd();}
@@ -627,6 +682,8 @@ String userInput(String tittle, String desc, uint8_t maxLenght){
     M5.update();
     M5Cardputer.update();
     //auto i;
+    keyboard_changed = M5Cardputer.Keyboard.isChange();
+    if(keyboard_changed){Sound(10000, 100, sound);}    
     Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
     for(auto i : status.word){
       if(i=='`' && status.fn){
@@ -714,6 +771,8 @@ bool drawQuestionBox(String tittle, String info, String info2) {
     trigger(2);
     M5.update();
     M5Cardputer.update();
+    keyboard_changed = M5Cardputer.Keyboard.isChange();
+    if(keyboard_changed){Sound(10000, 100, sound);}    
     Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
     if(M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER)){
       appRunning = false;
@@ -730,8 +789,8 @@ bool drawQuestionBox(String tittle, String info, String info2) {
   appRunning = false;
 }
 
-int drawMultiChoice(String toDraw[], uint8_t menuSize ) {
-  
+int drawMultiChoice(String toDraw[], uint8_t menuSize , uint8_t prevMenuID, uint8_t prevOpt) {
+  uint8_t tempOpt = 0;
   delay(100);
   menu_current_opt = 0;
   menu_current_pages = 1;
@@ -742,6 +801,7 @@ int drawMultiChoice(String toDraw[], uint8_t menuSize ) {
     M5.update();
     M5Cardputer.update();
     keyboard_changed = M5Cardputer.Keyboard.isChange();
+    if(keyboard_changed){Sound(10000, 100, sound);}    
     canvas_main.clear(TFT_WHITE);
     canvas_main.fillSprite(WHITE); //Clears main display
     canvas_main.setTextSize(2);
@@ -766,17 +826,21 @@ int drawMultiChoice(String toDraw[], uint8_t menuSize ) {
     if (isNextPressed()) {
       if (menu_current_opt < menu_len - 1 ) {
         menu_current_opt++;
+        tempOpt++;
       } else {
         menu_current_opt = 0;
+        tempOpt = 1;
       }
     }
     //trigger(4);
     if (isPrevPressed()) {
       if (menu_current_opt > 0) {
         menu_current_opt--;
+        tempOpt--;
       }
       else {
         menu_current_opt = (menu_len - 1);
+        tempOpt = (menu_len - 1);
       }
     }
     //trigger(5);
@@ -790,10 +854,13 @@ int drawMultiChoice(String toDraw[], uint8_t menuSize ) {
     }
     //trigger(6);
     if(isOkPressed()){
-      return menu_current_opt;
+      menuID = prevMenuID;
+      menu_current_opt = prevOpt;
+      return tempOpt;
     }
   }
 }
+
 // bool check_prev_press() {
 //   if (M5.Keyboard.isKeyPressed(ARROW_UP)) {
 //     return true;
