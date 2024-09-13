@@ -6,7 +6,7 @@ M5Cardputer based multi-purpose software designed to push the ESP chip to its ab
 - basic ui - done :)
 - bad usb
 - pwngotchi-like functions
-- keyboard input system
+- keyboard input system - done :)
 
 # Bugs
 - 
