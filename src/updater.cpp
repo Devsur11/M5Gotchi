@@ -4,6 +4,58 @@
 #include <FS.h>
 #include <SD.h>
 
+WebServer server(80);
+
+// Strona HTML do przesyłania pliku
+const char* upload_form = R"(
+  <html>
+    <body>
+      <center><h1>M5Blaster WIFI update</h1>
+      <form method='POST' action='/update' enctype='multipart/form-data'>
+        <input type='file' name='firmware'>
+        <input type='submit' value='Update! '>
+      </form>
+    </body>
+  </html>
+)";
+
+// Funkcja obsługująca stronę główną (formularz)
+void handleRoot() {
+  server.send(200, "text/html", upload_form);
+}
+
+// Funkcja obsługująca przesyłanie pliku
+void handleUpdate() {
+  HTTPUpload& upload = server.upload();
+
+  if (upload.status == UPLOAD_FILE_START) {
+    drawInfoBox("Uploading...", "Please wait...", "",false, false);
+    if (!Update.begin()) {  // Inicjalizacja aktualizacji OTA
+      drawInfoBox("Init error", "Error with initialization", "Please contact developer.", true, false);
+    }
+  } else if (upload.status == UPLOAD_FILE_WRITE) {
+    // Zapis przesyłanych danych do pamięci
+    if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
+      drawInfoBox("Write error", "Error writing file", "to device", true, false);
+    }
+  } else if (upload.status == UPLOAD_FILE_END) {
+    if (Update.end(true)) {  // Zakończenie aktualizacji
+      drawInfoBox("All done!", "Please reboot device", "", false, false);
+      server.send(200, "text/html", "<center>Update succesful, please reboot device");
+      while(true){}
+    } else {
+      drawInfoBox("Update failed", "Unknown error", "", true, false);
+      server.send(500, "text/html", "<center>Update failed...");
+    }
+  } else {
+    drawInfoBox("Upload error", "Upload failed", "", true, false);
+  }
+}
+
+// Funkcja obsługująca nieprawidłowe żądania
+void handleNotFound() {
+  server.send(404, "text/plain", "<center>404 Not Found.");
+}
 
 void updateFromSd(){
   uint8_t cardType;
@@ -44,6 +96,7 @@ void performUpdate(Stream &updateSource, size_t updateSize) {
             Serial.println("Update successfully completed. Rebooting.");
             
             drawInfoBox("Info", "Update succesful, ","please reset device", false, false);
+            while(true){}
 
          }
          else {
@@ -99,4 +152,22 @@ void rebootEspWithReason(String reason){
     Serial.println(reason);
     delay(1000);
     ESP.restart();
+}
+void updateFromHTML(){
+  if(WiFi.status() == WL_CONNECTED){
+    server.on("/", HTTP_GET, handleRoot);  // Strona główna
+    server.on("/update", HTTP_POST, []() { server.send(200); }, handleUpdate);  // Aktualizacja
+    server.onNotFound(handleNotFound);  // Obsługa nieznanych stron
+    // Uruchomienie serwera
+    server.begin();
+    
+    while(true){
+      drawInfoBox("Ready", "Please send update to", WiFi.localIP().toString(), false, true);
+      server.handleClient();
+    }
+  }
+  else
+  {
+    drawInfoBox("Error", "No WIFI connected", "Please connect to it first", true, false);
+  }
 }

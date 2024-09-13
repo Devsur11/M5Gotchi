@@ -10,6 +10,7 @@ uint8_t state;
 uint8_t activity = 4;
 unsigned long previousMillis = 0;  // Zmienna do przechowywania ostatniego czasu wykonania funkcjami
 unsigned long interval = 120000;  // 2 minuty w milisekundach (2 * 60 * 1000)
+bool firstSoundEnable;
 
 
 uint8_t activity_level[] = {
@@ -119,7 +120,7 @@ void updateActivity() {
       activity = activity -1;
     }
 }
-bool isSoundPlayed = true;
+bool isSoundPlayed = false;
 void Sound(int frequency, int duration, bool sound){
   if(sound && isSoundPlayed==false){
     M5Cardputer.Speaker.tone(frequency, duration);

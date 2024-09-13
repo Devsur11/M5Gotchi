@@ -6,6 +6,7 @@
 #include <Update.h>
 #include <FS.h>
 #include <SD.h>
+#include <WiFi.h>
 
 #define ROW_SIZE 40
 #define PADDING 10
@@ -92,7 +93,7 @@ uint8_t menu_current_page = 1;
 bool singlePage;
 uint8_t menuID = 0;
 bool activityReward;
-bool sound;
+bool sound = 1;
 uint8_t currentBrightness = 100;
 
 bool activityRewarded(){return activityReward;}
@@ -126,17 +127,21 @@ void initUi() {
 uint8_t returnBrightness(){return currentBrightness;}
 
 bool toggleMenuBtnPressed() {
+  delay(10);
   return (keyboard_changed && (M5Cardputer.Keyboard.isKeyPressed('`')));
 }
 
 bool isOkPressed() {
+  delay(10);
   return (keyboard_changed && M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER));
 }
 
 bool isNextPressed() {
+  delay(10);
   return keyboard_changed && (M5Cardputer.Keyboard.isKeyPressed('.') );
 }
 bool isPrevPressed() {
+  delay(10);
   return keyboard_changed && (M5Cardputer.Keyboard.isKeyPressed(';'));
 }
 
@@ -213,36 +218,6 @@ void updateUi(bool show_toolbars) {
   bar_right2.pushSprite(display_w * 0.98, ( canvas_top_h + 5 ) + (1 * ((canvas_h - 6)/4)) - 1 );
   bar_right3.pushSprite(display_w * 0.98, ( canvas_top_h + 5 ) + (2 * ((canvas_h - 6)/4)) - 1 );
   bar_right4.pushSprite(display_w * 0.98, ( canvas_top_h + 5 ) + (3 * ((canvas_h - 6)/4)) - 1 );
-  /*if (menu_current_pages == 1 ){ ------------------------------hours spend to make this code work: 5 --------------------
-    //bar_right.deleteSprite();
-    //resetSprite();
-    bar_right.pushSprite(display_w * 0.98, canvas_top_h + 5);
-    bar_right2.pushSprite(display_w * 0.98, ( canvas_top_h + 5 ) + (1 * ((canvas_h - 6)/4)) - 1 );
-    bar_right3.pushSprite(display_w * 0.98, ( canvas_top_h + 5 ) + (2 * ((canvas_h - 6)/4)) - 1 );
-    bar_right4.pushSprite(display_w * 0.98, ( canvas_top_h + 5 ) + (3 * ((canvas_h - 6)/4)) - 1 );
-  }
-    for(uint8_t m = 0; m <= 3 ; m++){
-      Serial.println("trigger");
-      bar_right.pushSprite(display_w * 0.98, ( canvas_top_h + 5 ) + (m * ((canvas_h - 6)/4)) - 1 );
-    }
-  }
-  else if (menu_current_pages == 2){
-    if (menu_current_page == 1){
-      bar_right3.fillSprite(WHITE);
-      bar_right4.fillSprite(WHITE);
-      //resetSprite();
-      bar_right.pushSprite(display_w * 0.98, canvas_top_h + 5);
-      bar_right2.pushSprite(tting, needs implementation
-display_w * 0.98, ( canvas_top_h + 5 ) + (1 * ((canvas_h - 6)/4)) - 1 );
-    }
-    else if (menu_current_page == 2){
-      bar_right.fillSprite(WHITE);
-      bar_right2.fillSprite(WHITE);
-      //resetSprite();
-      bar_right3.pushSprite(display_w * 0.98, ( canvas_top_h + 5 ) + (2 * ((canvas_h - 6)/4)) - 1 );
-      bar_right4.pushSprite(display_w * 0.98, ( canvas_top_h + 5 ) + (3 * ((canvas_h - 6)/4)) - 1 );
-    }
-  }*/
   canvas_main.pushSprite(0, canvas_top_h);
   M5.Display.endWrite();
 }
@@ -349,16 +324,26 @@ void drawBottomCanvas(uint8_t friends_run, uint8_t friends_tot,
   canvas_bot.setTextColor(BLACK);
   canvas_bot.setColor(BLACK);
   canvas_bot.setTextDatum(top_left);
-
-/*
-  char stats[25] = "FRND 0 (0)";
-  if (friends_run > 0) {
-    sprintf(stats, "FRND %d (%d) [%s] %s", friends_run, friends_tot,
-            last_friend_name, "");
+  String wifiStatus;
+  if(WiFi.status() == WL_NO_SHIELD){
+    wifiStatus = "off";
   }
-*/
-
-  canvas_bot.drawString(String(menu_current_page) + "  " + String(menu_current_opt) , 0, 5);
+  else if(WiFi.status() == WL_CONNECTED){
+    wifiStatus = "connected";
+  }
+  else if(WiFi.status() ==  WL_IDLE_STATUS){
+    wifiStatus = "IDLE";
+  }
+  else if(WiFi.status() == WL_CONNECT_FAILED){
+    wifiStatus = "error";
+  }
+  else if(WiFi.status() ==  WL_CONNECTION_LOST){
+    wifiStatus = "lost";
+  }
+  else if(WiFi.status() ==  WL_DISCONNECTED){
+    wifiStatus = "disconnected";
+  }
+  canvas_bot.drawString("Wifi:" + wifiStatus + " (" + WiFi.localIP().toString() + ")", 0, 5);
   canvas_bot.setTextDatum(top_right);
   canvas_bot.drawString("READY", display_w, 5);
   canvas_bot.drawLine(0, 0, display_w, 0);
@@ -480,6 +465,7 @@ void drawInfoBox(String tittle, String info, String info2, bool canBeQuit, bool 
     //canvas_main.setCursor(0, PADDING);
     canvas_main.drawString("To exit press OK", canvas_center_x, canvas_h * 0.9);
     while(true){
+      drawBottomCanvas();
       M5.Display.startWrite();
       canvas_top.pushSprite(0, 0);
       canvas_bot.pushSprite(0, canvas_top_h + canvas_h);
@@ -492,14 +478,12 @@ void drawInfoBox(String tittle, String info, String info2, bool canBeQuit, bool 
     }
   }
   else{
+    drawBottomCanvas();
     M5.Display.startWrite();
     canvas_top.pushSprite(0, 0);
     canvas_bot.pushSprite(0, canvas_top_h + canvas_h);
     canvas_main.pushSprite(0, canvas_top_h);
     M5.Display.endWrite();
-    while(true){
-      
-    }
   }
   appRunning = false;
   trigger(3);
@@ -565,6 +549,10 @@ void runApp(uint8_t appID){
     }
     if(appID == 41){
       String value = userInput("Brightness", "Change Brightness to (max 255):", 3);
+      if(value == ""){
+        drawInfoBox("Error", "Invalid Value", value , true, false);
+        return;
+      }
       //char setTo = value.toInt();
       uint8_t digit2;
       uint8_t digit3;
@@ -590,11 +578,52 @@ void runApp(uint8_t appID){
     }
     if(appID == 42){
       String selection[] = {"Off", "On"};
+      delay(50);
       sound = drawMultiChoice(selection, 2, 6, 2);
     }
-    if(appID == 43){}
-    if(appID == 44){updateFromSd();}
-    if(appID == 45){}
+    if(appID == 43){
+      WiFi.mode(WIFI_STA);
+      int numNetworks = WiFi.scanNetworks();
+      String wifinets[20];
+      if (numNetworks == 0) {
+        drawInfoBox("Info", "No wifi nearby", "Abort.", true, false);
+        return;
+      } else {
+        // Przechodzimy przez wszystkie znalezione sieci i zapisujemy ich nazwy w liście
+        for (int i = 0; i < numNetworks; i++) {
+        String ssid = WiFi.SSID(i);
+        
+        wifinets[i] = String(ssid);
+        Serial.println(wifinets[i]);
+        }
+      }
+      uint8_t wifisel = drawMultiChoice(wifinets, numNetworks, 6, 3);
+      //String ssid = userInput("Wifi SSID", "Enter wifi name to connect.", 30);
+      String password = userInput("Password", "Enter wifi password" , 30);
+      WiFi.begin(WiFi.SSID(wifisel), password);
+      uint8_t counter;
+      while (counter<=10 && !WiFi.isConnected()) {
+        delay(1000);
+        drawInfoBox("Connecting", "Please wait...", "You will be soon redirected ", false, false);
+        counter++;
+      }
+      counter = 0;
+      if(WiFi.isConnected()){
+        drawInfoBox("Connected", "Connected succesfully to", String(WiFi.SSID()) , true, false);
+      }
+      else{
+        drawInfoBox("Error", "Connection failed", "Maybe wrong password...", true, false);
+      }
+    }
+    if(appID == 44){
+      String tempMenu[] = {"From SD", "From WIFI"};
+      uint8_t choice = drawMultiChoice(tempMenu, 2, 6, 4);
+      if(choice == 0){updateFromSd();}
+      else if(choice == 1){updateFromHTML();}
+      }
+    if(appID == 45){
+      drawInfoBox("ESPBlaster","v0.1 by Devsur11  ", "www.github.com/Devsur11 ", true, false);
+    }
     if(appID == 46){
       M5.Display.fillScreen(TFT_BLACK);
       esp_deep_sleep_start(); 
@@ -798,25 +827,22 @@ int drawMultiChoice(String toDraw[], uint8_t menuSize , uint8_t prevMenuID, uint
   singlePage = true;
   trigger(1);
   while(true){
-    M5.update();
-    M5Cardputer.update();
-    keyboard_changed = M5Cardputer.Keyboard.isChange();
-    if(keyboard_changed){Sound(10000, 100, sound);}    
-    canvas_main.clear(TFT_WHITE);
-    canvas_main.fillSprite(WHITE); //Clears main display
-    canvas_main.setTextSize(2);
-    canvas_main.setTextColor(BLACK);
-    canvas_main.setColor(BLACK);
-    canvas_main.setTextDatum(top_left);
-    char display_str[50] = "";
-    for (uint8_t i = 0; i < menuSize; i++) {
-      sprintf(display_str, "%s %s", (menu_current_opt == i) ? ">" : " ",
-               toDraw[i]);
-      int y = PADDING + (i * ROW_SIZE / 2);
-      //trigger(5);
-      canvas_main.drawString(display_str, 0, y);
-      trigger(6);
-    }
+      M5.update();
+      M5Cardputer.update();  
+      canvas_main.clear(TFT_WHITE);
+      canvas_main.fillSprite(WHITE); //Clears main display
+      canvas_main.setTextSize(2);
+      canvas_main.setTextColor(BLACK);
+      canvas_main.setColor(BLACK);
+      canvas_main.setTextDatum(top_left);
+      char display_str[50] = "";
+      for (uint8_t i = 0; i < menuSize; i++) {
+        sprintf(display_str, "%s %s", (menu_current_opt == i) ? ">" : " ", toDraw[i].c_str());
+        int y = PADDING + (i * ROW_SIZE / 2);
+        //trigger(5);
+        canvas_main.drawString(display_str, 0, y);
+        
+      }
     //for this to work i need to push sprite whitch i did 
     M5.Display.startWrite();
     canvas_top.pushSprite(0, 0);
@@ -854,25 +880,13 @@ int drawMultiChoice(String toDraw[], uint8_t menuSize , uint8_t prevMenuID, uint
     }
     //trigger(6);
     if(isOkPressed()){
+      keyboard_changed = M5Cardputer.Keyboard.isChange();
+      if(keyboard_changed){Sound(10000, 100, sound);}
       menuID = prevMenuID;
       menu_current_opt = prevOpt;
       return tempOpt;
     }
+    keyboard_changed = M5Cardputer.Keyboard.isChange();
+    if(keyboard_changed){Sound(10000, 100, sound);}
   }
 }
-
-// bool check_prev_press() {
-//   if (M5.Keyboard.isKeyPressed(ARROW_UP)) {
-//     return true;
-//   }
-//
-//   return false;
-// }
-//
-// bool check_next_press() {
-//   if (M5.Keyboard.isKeyPressed(ARROW_DOWN)) {
-//     return true;
-//   }
-//
-//   return false;
-// }
