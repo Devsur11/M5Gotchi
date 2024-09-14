@@ -1,6 +1,7 @@
 #include "M5Cardputer.h"
 #include "M5Unified.h"
 #include "ui.h"
+#include "customFont.h"
 
 #define STATE_INIT 0
 #define STATE_WAKE 1
@@ -12,37 +13,15 @@ unsigned long previousMillis = 0;  // Zmienna do przechowywania ostatniego czasu
 unsigned long interval = 120000;  // 2 minuty w milisekundach (2 * 60 * 1000)
 bool firstSoundEnable;
 
-
-uint8_t activity_level[] = {
-  17,
-  18,
-  16,
-  15,
-  0,
-  1,
-  2,
-  3,
-  11,
-  13,
-  4,
-  5,
-  6,
-  7,
-  9,
-  8,
-  14,
-  19,
-  20,
-  10,
-  12,
-  21
-};
 //this decides what face/splash will be displayed based on acivity variable
+uint8_t activity_level[] = {17,18,16,15,0,1,2,3,11,13,4,5,6,7,9,8,14,19,20,10,12,21};
 
 void initM5() {
   auto cfg = M5.config();
-  M5.begin(cfg  );
+  M5.begin(cfg);
   M5.Display.begin();
+  //M5.Display.loadFont(&customFont);
+  M5.Display.setFont(0);
   M5Cardputer.begin(cfg);
   M5Cardputer.Keyboard.begin();
 }
@@ -71,6 +50,11 @@ void loop() {
   //updateActivity();
   M5.update();
   M5Cardputer.update();
+  Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();//this is only for testinf, remove later
+  if(status.fn){
+    activity++;
+    delay(300);
+  }
   if(M5Cardputer.BtnA.isPressed()){
     M5.Lcd.setBrightness(0);
     M5.Display.fillScreen(TFT_BLACK);
@@ -99,12 +83,12 @@ void loop() {
     //Serial.print("if triggered");
   }
   
-  if(activity > 21){
+  if(activity > 100){//to change to normal value - only for testing
     activity = 5;
   }
   else
   {
-    setMood(activity_level[activity]);
+    setMood(activity);//setMood(activity_level[activity]); - revert after testing
   }
   if(activityRewarded()){activity++;}
   //Serial.println(String(currentMillis));
@@ -113,7 +97,7 @@ void loop() {
 
 void updateActivity() {
   //Serial.println("function triggered");
-    if(activity==0){
+    if(activity==0){  
       return ;
     }
     else{

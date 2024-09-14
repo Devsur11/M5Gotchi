@@ -1,3 +1,5 @@
+#include "lgfx/v1/misc/enum.hpp"
+#include "lgfx/v1/misc/DataWrapper.hpp"
 #include "HWCDC.h"
 #include <string>
 #include "ui.h"
@@ -7,10 +9,11 @@
 #include <FS.h>
 #include <SD.h>
 #include <WiFi.h>
+#include "customFont.h"
 
 #define ROW_SIZE 40
 #define PADDING 10
-
+#define TOMTHUMB_USE_EXTENDED true
 // M5Canvas canvas_peers_menu(&M5.Display);
 // M5Cardputer.BtnA.isPressed() - go button
 
@@ -73,6 +76,8 @@ menu settings_menu[] = {
     {"Power off", 46}
 };
 
+const uint8_t bitmap1[] = {0x60, 0xE0, 0xE0, 0xC0, 0x60};
+
 
 bool appRunning;
 bool userInputVar;
@@ -89,7 +94,7 @@ String hostname = "dfku"; //TODO: add support for sd card here
 bool keyboard_changed = false;
 uint8_t menu_len;
 uint8_t menu_current_opt = 0;
-uint8_t menu_current_page = 1;
+uint8_t menu_current_page = 1;  
 bool singlePage;
 uint8_t menuID = 0;
 bool activityReward;
@@ -100,7 +105,7 @@ bool activityRewarded(){return activityReward;}
 
 void initUi() {
   M5.Display.setRotation(1);
-  M5.Display.setTextFont(&fonts::Font0);
+  //M5.Display.setFont();
   M5.Display.setTextSize(1);
   M5.Display.fillScreen(TFT_WHITE);
   M5.Display.setTextColor(BLACK);
@@ -161,11 +166,10 @@ void updateUi(bool show_toolbars) {
       menu_current_page = 1;
     }
   }
-  
-  uint8_t mood_id = getCurrentMoodId();
+
   String mood_face = getCurrentMoodFace();
   String mood_phrase = getCurrentMoodPhrase();
-  bool mood_broken = isCurrentMoodBroken();
+
   drawTopCanvas();
   drawBottomCanvas();
   if (userInputVar){
@@ -201,7 +205,7 @@ void updateUi(bool show_toolbars) {
   }  
   else if (menuID == 0)
   {
-    drawMood(mood_face, mood_phrase, mood_broken);
+    drawMood(mood_face, mood_phrase);
   }
   else if(appRunning){}
 
@@ -349,27 +353,18 @@ void drawBottomCanvas(uint8_t friends_run, uint8_t friends_tot,
   canvas_bot.drawLine(0, 0, display_w, 0);
 }
 
-void drawMood(String face, String phrase, bool broken) {
-  if (broken == true) {
-    canvas_main.setTextColor(RED);
-  } else {
-    canvas_main.setTextColor(BLACK);
-  }
-
-  canvas_main.setTextSize(4);
-  canvas_main.setTextDatum(middle_center);
+void drawMood(String face, String phrase) {
   canvas_main.fillSprite(WHITE);
-  canvas_main.drawString(face, canvas_center_x / 1.5, canvas_h / 3);
-  //canvas_main.setTextDatum(bottom_right);
+  canvas_main.setTextSize(4);
+  canvas_main.setTextDatum(top_left);
+  canvas_main.setCursor(5, 10);
+  canvas_main.setTextColor(BLACK);
+  canvas_main.setColor(BLACK);
+  canvas_main.drawString(face, 5 , 20);
   canvas_main.setTextSize(1.5);
-  //String hostname_blank = std::string(" ", 4, 0);
   String hostname_blank = multiplyChar(' ', sizeof(hostname) / 4);
   canvas_main.setCursor(0, canvas_h - 35);
   canvas_main.println(hostname + "> " + phrase);
-  //canvas_main.drawString(hostname + "> " + phrase, canvas_center_x - 10, canvas_h - 35);
-  //canvas_main.setCursor(10, canvas_h - 20);
-  //canvas_main.println(hostname_blank + "      " + part2);
-  //canvas_main.drawString(hostname_blank + "      " + part2, canvas_center_x - 10, canvas_h - 20);
 }
 
 
@@ -442,27 +437,19 @@ void drawMultiplePages(menu toDraw[], uint8_t menuIDPriv, uint8_t menuSize) {
 
 void drawInfoBox(String tittle, String info, String info2, bool canBeQuit, bool isCritical) {
   appRunning = true;
-  delay(500);
-  //bool loop = 1;
+  delay(150);
   canvas_main.clear(TFT_WHITE);
   canvas_main.setTextSize(3);
   if(isCritical){canvas_main.setColor(RED);}
   else {canvas_main.setColor(BLACK);}
-  //canvas_main.setTextDatum(9);
-  canvas_main.setCursor(display_w / 2, PADDING);
   canvas_main.setTextDatum(middle_center);
   canvas_main.drawString(tittle, canvas_center_x, canvas_h / 4);
-  //canvas_main.println(tittle);
   canvas_main.setTextSize(1.5);
   canvas_main.setTextDatum(middle_center);
   canvas_main.drawString(info, canvas_center_x, canvas_h / 2);
   canvas_main.drawString(info2, canvas_center_x, (canvas_h / 2) + 20);
-  //delay(2000);
   if(canBeQuit){
-    trigger(1);
     canvas_main.setTextSize(1);
-    //canvas_main.setTextDatum(17);
-    //canvas_main.setCursor(0, PADDING);
     canvas_main.drawString("To exit press OK", canvas_center_x, canvas_h * 0.9);
     while(true){
       drawBottomCanvas();
@@ -471,7 +458,6 @@ void drawInfoBox(String tittle, String info, String info2, bool canBeQuit, bool 
       canvas_bot.pushSprite(0, canvas_top_h + canvas_h);
       canvas_main.pushSprite(0, canvas_top_h);
       M5.Display.endWrite();
-      trigger(2);
       M5.update();
       M5Cardputer.update();
       if(M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER)){return ;}
@@ -486,13 +472,9 @@ void drawInfoBox(String tittle, String info, String info2, bool canBeQuit, bool 
     M5.Display.endWrite();
   }
   appRunning = false;
-  trigger(3);
 }
-inline void trigger(uint8_t trigID){Serial.println("Trigger" + String(trigID));}
 
-void drawAboutMenu() {
-  canvas_main.clear(WHITE);
-}
+inline void trigger(uint8_t trigID){Serial.println("Trigger" + String(trigID));}
 
 void runApp(uint8_t appID){
   Serial.println("App started running, ID:"+ String(appID));
@@ -579,7 +561,7 @@ void runApp(uint8_t appID){
     if(appID == 42){
       String selection[] = {"Off", "On"};
       delay(50);
-      sound = drawMultiChoice(selection, 2, 6, 2);
+      sound = drawMultiChoice("Sound", selection, 2, 6, 2);
     }
     if(appID == 43){
       WiFi.mode(WIFI_STA);
@@ -597,7 +579,7 @@ void runApp(uint8_t appID){
         Serial.println(wifinets[i]);
         }
       }
-      uint8_t wifisel = drawMultiChoice(wifinets, numNetworks, 6, 3);
+      uint8_t wifisel = drawMultiChoice("Select WIFI network:", wifinets, numNetworks, 6, 3);
       //String ssid = userInput("Wifi SSID", "Enter wifi name to connect.", 30);
       String password = userInput("Password", "Enter wifi password" , 30);
       WiFi.begin(WiFi.SSID(wifisel), password);
@@ -617,7 +599,7 @@ void runApp(uint8_t appID){
     }
     if(appID == 44){
       String tempMenu[] = {"From SD", "From WIFI"};
-      uint8_t choice = drawMultiChoice(tempMenu, 2, 6, 4);
+      uint8_t choice = drawMultiChoice("Update type", tempMenu, 2, 6, 4);
       if(choice == 0){updateFromSd();}
       else if(choice == 1){updateFromHTML();}
       }
@@ -698,16 +680,11 @@ String userInput(String tittle, String desc, uint8_t maxLenght){
   canvas_main.clear(TFT_WHITE);
   canvas_main.setTextSize(3);
   canvas_main.setTextColor(BLACK);
-  //canvas_main.setTextDatum(9);
-  canvas_main.setCursor(display_w / 2, PADDING);
   canvas_main.setTextDatum(middle_center);
   canvas_main.drawString(tittle, canvas_center_x, canvas_h / 4);
-  //canvas_main.println(tittle);
   canvas_main.setTextSize(1);
   canvas_main.drawString(desc, canvas_center_x, canvas_h * 0.9);
-  //delay(2000);
   while (true){
-    //canvas_main.fillSprite(WHITE);
     M5.update();
     M5Cardputer.update();
     //auto i;
@@ -740,16 +717,11 @@ String userInput(String tittle, String desc, uint8_t maxLenght){
     canvas_main.clear(TFT_WHITE);
     canvas_main.setTextSize(3);
     canvas_main.setTextColor(BLACK);
-    //canvas_main.setTextDatum(9);
-    //canvas_main.fillRect();
-    canvas_main.setCursor(display_w / 2, PADDING);
     canvas_main.setTextDatum(middle_center);
     canvas_main.drawString(tittle, canvas_center_x, canvas_h / 4);
-    //canvas_main.println(tittle);
     canvas_main.setTextSize(1);
     canvas_main.drawString(desc, canvas_center_x, canvas_h * 0.9);
     canvas_main.setTextSize(1.5);
-    //canvas_main.setTextDatum(middle_left);
     canvas_main.setCursor(0 , canvas_h /2);
     canvas_main.println(textTyped);
     M5.Display.startWrite();
@@ -775,13 +747,10 @@ String multiplyChar(char toMultiply, uint8_t literations){
 
 bool drawQuestionBox(String tittle, String info, String info2) {
   appRunning = true;
-  
-  delay(500);
-  //bool loop = 1;
+  delay(150);
   canvas_main.clear(TFT_WHITE);
   canvas_main.setTextSize(3);
   canvas_main.setColor(BLACK);
-  canvas_main.setCursor(display_w / 2, PADDING);
   canvas_main.setTextDatum(middle_center);
   canvas_main.drawString(tittle, canvas_center_x, canvas_h / 4);
   canvas_main.setTextSize(1.5);
@@ -818,7 +787,7 @@ bool drawQuestionBox(String tittle, String info, String info2) {
   appRunning = false;
 }
 
-int drawMultiChoice(String toDraw[], uint8_t menuSize , uint8_t prevMenuID, uint8_t prevOpt) {
+int drawMultiChoice(String tittle, String toDraw[], uint8_t menuSize , uint8_t prevMenuID, uint8_t prevOpt) {
   uint8_t tempOpt = 0;
   delay(100);
   menu_current_opt = 0;
@@ -827,22 +796,24 @@ int drawMultiChoice(String toDraw[], uint8_t menuSize , uint8_t prevMenuID, uint
   singlePage = true;
   trigger(1);
   while(true){
-      M5.update();
-      M5Cardputer.update();  
-      canvas_main.clear(TFT_WHITE);
-      canvas_main.fillSprite(WHITE); //Clears main display
-      canvas_main.setTextSize(2);
-      canvas_main.setTextColor(BLACK);
-      canvas_main.setColor(BLACK);
-      canvas_main.setTextDatum(top_left);
-      char display_str[50] = "";
-      for (uint8_t i = 0; i < menuSize; i++) {
-        sprintf(display_str, "%s %s", (menu_current_opt == i) ? ">" : " ", toDraw[i].c_str());
-        int y = PADDING + (i * ROW_SIZE / 2);
-        //trigger(5);
-        canvas_main.drawString(display_str, 0, y);
-        
-      }
+    M5.update();
+    M5Cardputer.update();  
+    canvas_main.clear(TFT_WHITE);
+    canvas_main.fillSprite(WHITE); //Clears main display
+    canvas_main.setTextSize(1.5);
+    canvas_main.setTextColor(BLACK);
+    canvas_main.setColor(BLACK);
+    canvas_main.setTextDatum(top_left);
+    canvas_main.setCursor(1, PADDING + 1);
+    canvas_main.println(tittle);
+    canvas_main.setTextSize(2);
+    char display_str[50] = "";
+    for (uint8_t i = 0; i < menuSize; i++) {
+      sprintf(display_str, "%s %s", (menu_current_opt == i) ? ">" : " ", toDraw[i].c_str());
+      int y = PADDING + (i * ROW_SIZE / 2) + 30;
+      //trigger(5);
+      canvas_main.drawString(display_str, 0, y);
+    }
     //for this to work i need to push sprite whitch i did 
     M5.Display.startWrite();
     canvas_top.pushSprite(0, 0);

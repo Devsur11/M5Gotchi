@@ -15,7 +15,7 @@ splash mainFaces[] = {
   {"(0__0)", "Give me more of that!" },
   {"(^__^)", "I LOVE PWNAGOTCHI" },
   {"(a__a)", "So much to explore" },
-  {"(+__+)", "Fixing bugs..." },
+  {"(+__+)", "Fixing bugs..." },            
   {"(*__*)", "Hell yeah" },
   {"(@__@)", "IT RUNS! Suck my balz!" },
   {"(>__<)", "Why my life sucks?" },
@@ -24,30 +24,30 @@ splash mainFaces[] = {
   {"(;__;)", "Lonely, I am so lonely..."},
   {"(X__X)", "It works on my end. On your it don't need to :)."},
   {"(#__#)", "WTF! I didn't even touch it!"},
-  {"(σ__σ)", "Agent 007 ready for action!"}
+  {"(o__o)", "Agent 007 ready for action!"},
   {"(0__0)", "Watching your every move" },
   {"(^__^)", "Lights out and away we go!" },
   {"(>__<)", "Give me your attention!" },
-  {"(ಠ__ಠ)", "Get back to work!" },
+  {"(ಠ__ಠ)", "Get back to work!" },//broken
   {"(o__o)", "Don't mind me, I'm just lurking around" },
-  {"(.__.)", "Why did you left me?" }
-  {"(@__@)", "file mood.cpp has stopped working" }
-  {"(✞__✞)", "Blue Screen of Death incoming..." }
-  {"(@__@)", "Too much 0s and 1s to understand" } //(˶˃⤙˂˶)(｡>﹏<)
-  {"(≧ヮ≦)", "I'm so happy to see you!" }
-  {"(˶˃⤙˂˶)", "It's taking you so long!" }
-  {"(O__O)", "It's snapshot day my dudes" }
-  {"(O__O)", "Welcome to another day of using my system!" } //(⸝⸝ᵕᴗᵕ⸝⸝)
-  {"(⸝⸝ᵕᴗᵕ⸝⸝)", "Such a nice day for having fun!" } //ᕙ(⇀‸↼‶)ᕗ
-  {"(⇀‸↼‶)", "You dare waking me up mortal?" } //(｡•́︿•̀｡)(╥﹏╥)
-  {"(╥﹏╥)", "Come back to me! Please!" } //♡✧( •⌄• )
-  {"( •⌄• )", "I just don't know what went wrong!" } 
-  {"( ・ω・)", "Hey! You dropped this: ';' You can thank me later" } 
-  {"(⌒▽⌒)", "Don't mind me, just swapping your semicolon with greek question mark" } 
-  {"(◉__◉)", "Incoming task: touch grass" } 
-  {"(►__◄)", "YOU FORGOT YOUR SEMICOLON YOU IDIOT" } 
-  {"(≧ヮ≦)", "meow" } 
-  {"╯‵Д′)╯彡┻━┻", "Jokes on you, your table have been flipped" } 
+  {"(.__.)", "Why did you left me?" },
+  {"(@__@)", "file mood.cpp has stopped working" },
+  {"(✞__✞)", "Blue Screen of Death incoming..." },//broken
+  {"(@__@)", "Too much 0s and 1s to understand" }, //(˶˃⤙˂˶)(｡>﹏<)
+  {"(≧ヮ≦)", "I'm so happy to see you!" },//broken
+  {"(˶˃⤙˂˶)", "It's taking you so long!" },//broken
+  {"(O__O)", "It's snapshot day my dudes" },
+  {"(O__O)", "Welcome to another day of using my system!" }, //(⸝⸝ᵕᴗᵕ⸝⸝)
+  {"(⸝⸝ᵕᴗᵕ⸝⸝)", "Such a nice day for having fun!" }, //ᕙ(⇀‸↼‶)ᕗ //broken , uncentered
+  {"(⇀‸↼‶)", "You dare waking me up mortal?" }, //(｡•́︿•̀｡)(╥﹏╥) //broken
+  {"(╥﹏╥)", "Come back to me! Please!" }, //♡✧( •⌄• ), //broken
+  {"( •⌄• )", "I just don't know what went wrong!" } ,//broken
+  {"( ・ω・)", "Hey! You dropped this: ';' You can thank me later" }, //broken
+  {"(⌒▽⌒)", "Don't mind me, just swapping your semicolon with greek question mark" }, //broken
+  {"(◉__◉)", "Incoming task: touch grass" },//broken
+  {"(►__◄)", "YOU FORGOT YOUR SEMICOLON YOU IDIOT" },//broken
+  {"(≧ヮ≦)", "meow" },//broken
+  {"╯‵Д′)╯彡┻━┻", "Jokes on you, your table have been flipped" } ,//broken, uncentered
   {"(v__v)", "Zzzz.... I'm just taking a quick nap, but I'll be back soon!" },
   {"(=__=)", "..." },
   {"(O__O)", "Ready for action! Let's dive into the adventure!" },
@@ -69,45 +69,44 @@ splash mainFaces[] = {
   {"(;__;)", "Lonely, I am so lonely... Can someone keep me company?" },
   {"(X__X)", "It works on my end. On your it don't need to :). Let's troubleshoot!" },
   {"(#__#)", "WTF! I didn't even touch it! What just happened?" },
-  {"(✧__✧)", "Wow! Look at all the possibilities!" },
-  {"(≧◡≦)", "Yay! I'm so excited to be here!" },
-  {"(•̀ᴗ•́)", "Ready to tackle the day! Let's do this!" },
-  {"(⊙_☉)", "What just happened? I'm intrigued!" },
-  {"(￣▽￣)", "Just chilling, waiting for some action!" },
-  {"(╯°□°）╯︵ ┻━┻", "Oops! I flipped the table again!" },
-  {"(✿◠‿◠)", "Hello, friend! Let's spread some positivity!" },
-  {"(¬‿¬)", "I see what you're up to... Care to share?" },
-  {"(✧ω✧)", "Adventure time! Where are we headed?" },
-  {"(╥ω╥)", "Feeling a bit down... Can someone cheer me up?" },
-  {"(≧▽≦)", "Let's celebrate! Good vibes only!" },
-  {"(￣︿￣)", "Hmm... Something feels off today." },
-  {"(✧ω✧)", "I'm all ears! What do you want to talk about?" },
-  {"(⊙_☉)", "Surprise! I didn't see that coming!" },
-  {"(╯✧▽✧)╯", "Let's flip the script and have some fun!" },
-  {"(•̀ᴗ•́)", "Onward and upward! Let's make progress!" },
-  {"(✿´‿`)", "Just here to spread some love and joy!" },
-  {"(╯°□°）╯︵ ┻━┻", "Table flipping mode activated! Just kidding!" },
-  {"(≧◡≦)", "I'm ready to rock! What’s the plan?" },
-  {"(•̀ᴗ•́)", "Let’s get this party started!" },
-  {"(✧ω✧)", "I’m buzzing with excitement! What’s next?" },
-  {"(⊙_☉)", "Did you see that? I need to know more!" },
-  {"(￣▽￣)", "Just another day in paradise!" },
-  {"(╥ω╥)", "Feeling a bit lost... Can you help me find my way?" },
-  {"(≧▽≦)", "Let’s make some magic happen!" },
-  {"(✿◠‿◠)", "So happy to see you! What’s on your mind?" },
-  {"(¬‿¬)", "I have a feeling something interesting is about to happen!" },
-  {"(✧ω✧)", "Adventure awaits! Let’s dive in!" },
-  {"(⊙_☉)", "What’s going on? I’m all ears!" },
-  {"(•̀ᴗ•́)", "Let’s tackle this challenge together!" },
-  {"(≧◡≦)", "I’m here and ready to shine!" },
-  {"(✿´‿`)", "Let’s spread some kindness today!" }
+  {"(✧__✧)", "Wow! Look at all the possibilities!" },//broken
+  {"(≧◡≦)", "Yay! I'm so excited to be here!" },//broken
+  {"(•̀ᴗ•́)", "Ready to tackle the day! Let's do this!" },//broken
+  {"(⊙_☉)", "What just happened? I'm intrigued!" },//broken
+  {"(￣▽￣)", "Just chilling, waiting for some action!" },//broken
+  {"(╯°□°）╯︵ ┻━┻", "Oops! I flipped the table again!" },//broken uncentered
+  {"(✿◠‿◠)", "Hello, friend! Let's spread some positivity!" },//broken
+  {"(¬‿¬)", "I see what you're up to... Care to share?" },//broken
+  {"(✧ω✧)", "Adventure time! Where are we headed?" },//broken
+  {"(╥ω╥)", "Feeling a bit down... Can someone cheer me up?" },//broken
+  {"(≧▽≦)", "Let's celebrate! Good vibes only!" },//broken
+  {"(￣︿￣)", "Hmm... Something feels off today." },//broken
+  {"(✧ω✧)", "I'm all ears! What do you want to talk about?" },//broken
+  {"(⊙_☉)", "Surprise! I didn't see that coming!" },//broken
+  {"(╯✧▽✧)╯", "Let's flip the script and have some fun!" },//broken
+  {"(•̀ᴗ•́)", "Onward and upward! Let's make progress!" },//broken
+  {"(✿´‿`)", "Just here to spread some love and joy!" },//broken
+  {"(╯°□°）╯︵ ┻━┻", "Table flipping mode activated! Just kidding!" },//broken uncentered
+  {"(≧◡≦)", "I'm ready to rock! What's the plan?" },//broken
+  {"(•̀ᴗ•́)", "Let's get this party started!" },//broken
+  {"(✧ω✧)", "I'm buzzing with excitement! What's next?" },//broken
+  {"(⊙_☉)", "Did you see that? I need to know more!" },//broken
+  {"(￣▽￣)", "Just another day in paradise!" },//broken
+  {"(╥ω╥)", "Feeling a bit lost... Can you help me find my way?" },//broken
+  {"(≧▽≦)", "Let's make some magic happen!" },//broken
+  {"(✿◠‿◠)", "So happy to see you! What's on your mind?" },//broken
+  {"(¬‿¬)", "I have a feeling something interesting is about to happen!" },//broken
+  {"(✧ω✧)", "Adventure awaits! Let's dive in!" },//broken
+  {"(⊙_☉)", "What's going on? I'm all ears!" },//broken
+  {"(•̀ᴗ•́)", "Let's tackle this challenge together!" },//broken
+  {"(≧◡≦)", "I'm here and ready to shine!" },//broken
+  {"(✿´‿`)", "Let's spread some kindness today!" },//broken
   {"(v__v)", "Zzzz.... Just debugging my dreams!" },
   {"(=__=)", "Compiling... Please wait." },
   {"(O_O )", "I see you debugging! Need a hand?" },
   {"(0_0 )", "Oh, hello, don't hide! I promise I won't break your code!" },
   {"(+__+)", "Working... Just fixing some bugs in the matrix!" },
-  {"(-@_@)", "So many possibilities!! Which algorithm should we use?" },
-
+  {"(-@_@)", "So many possibilities!! Which algorithm should we use?" }
 };
 
 uint8_t current_mood = 0;
@@ -116,11 +115,8 @@ String part2 = "";
 String current_face = "";
 bool current_broken = false;
 
-uint8_t getCurrentMoodId() { return current_mood; }
 String getCurrentMoodFace() { return current_face; }
 String getCurrentMoodPhrase() { return current_phrase; }
-//String getCurrentMoodPart2() {return part2;}
-bool isCurrentMoodBroken() { return current_broken; }
 
 void setMood(uint8_t mood, String face, String phrase, bool broken) {
   current_mood = mood;

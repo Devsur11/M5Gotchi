@@ -16,7 +16,7 @@ void drawInfoBox(String tittle, String info, String info2, bool canBeQuit, bool 
 bool activityRewarded();
 void initUi();
 void wakeUp();
-void drawMood(String face, String phrase,  bool broken = false);
+void drawMood(String face, String phrase);
 void drawTopCanvas();
 void drawRightBar();
 void drawBottomCanvas(uint8_t friends_run = 0, uint8_t friends_tot = 0,
@@ -30,5 +30,5 @@ void drawMainMenu();
 inline void resetSprite();
 String userInput(String tittle, String desc, uint8_t maxLenght);
 bool drawQuestionBox(String tittle, String info, String info2);
-int drawMultiChoice(String toDraw[], uint8_t menuSize, uint8_t prevMenuID, uint8_t prevOpt);
+int drawMultiChoice(String tittle, String toDraw[], uint8_t menuSize, uint8_t prevMenuID, uint8_t prevOpt);
 uint8_t returnBrightness();

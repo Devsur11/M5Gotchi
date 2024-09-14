@@ -2,15 +2,12 @@
 
 #define MOOD_BROKEN 19
 
-struct splash {
-  String face;
-  String splash;
-};
+  struct splash {
+    String face;
+    String splash;
+  };
 
 void setMood(uint8_t mood, String face = "", String phrase = "",
              bool broken = false);
-uint8_t getCurrentMoodId();
 String getCurrentMoodFace();
 String getCurrentMoodPhrase();
-bool isCurrentMoodBroken();
-//String getCurrentMoodPart2();
