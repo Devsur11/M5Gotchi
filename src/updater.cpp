@@ -3,8 +3,10 @@
 #include <Update.h>
 #include <FS.h>
 #include <SD.h>
+#include <ESPAsyncWebServer.h>
+#include <Update.h>
 
-WebServer server(80);
+AsyncWebServer updateServer(80);
 
 // Strona HTML do przesyłania pliku
 const char* upload_form = R"(
@@ -20,42 +22,76 @@ const char* upload_form = R"(
 )";
 
 // Funkcja obsługująca stronę główną (formularz)
-void handleRoot() {
-  server.send(200, "text/html", upload_form);
+void handleRoot(AsyncWebServerRequest *request) {
+  request->send(200, "text/html", upload_form);
 }
 
 // Funkcja obsługująca przesyłanie pliku
-void handleUpdate() {
-  HTTPUpload& upload = server.upload();
-
-  if (upload.status == UPLOAD_FILE_START) {
-    drawInfoBox("Uploading...", "Please wait...", "",false, false);
+void handleUpdate(AsyncWebServerRequest *request, 
+                  const String& filename, 
+                  size_t index, 
+                  uint8_t *data, 
+                  size_t len, 
+                  bool final) {
+  if (index == 0) {
+    drawInfoBox("Uploading...", "Please wait...", "", false, false);
     if (!Update.begin()) {  // Inicjalizacja aktualizacji OTA
       drawInfoBox("Init error", "Error with initialization", "Please contact developer.", true, false);
+      request->send(500, "text/plain", "Init error");
+      return;
     }
-  } else if (upload.status == UPLOAD_FILE_WRITE) {
-    // Zapis przesyłanych danych do pamięci
-    if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
-      drawInfoBox("Write error", "Error writing file", "to device", true, false);
-    }
-  } else if (upload.status == UPLOAD_FILE_END) {
+  }
+
+  // Zapis przesyłanych danych do pamięci
+  if (Update.write(data, len) != len) {
+    drawInfoBox("Write error", "Error writing file", "to device", true, false);
+    request->send(500, "text/plain", "Write error");
+    return;
+  }
+
+  if (final) {
     if (Update.end(true)) {  // Zakończenie aktualizacji
       drawInfoBox("All done!", "Please reboot device", "", false, false);
-      server.send(200, "text/html", "<center>Update succesful, please reboot device");
-      while(true){}
+      request->send(200, "text/html", "<center>Update successful, please reboot device");
+      while (true) {} // Czekanie na restart
     } else {
       drawInfoBox("Update failed", "Unknown error", "", true, false);
-      server.send(500, "text/html", "<center>Update failed...");
+      request->send(500, "text/html", "<center>Update failed...");
     }
-  } else {
-    drawInfoBox("Upload error", "Upload failed", "", true, false);
   }
 }
 
 // Funkcja obsługująca nieprawidłowe żądania
-void handleNotFound() {
-  server.send(404, "text/plain", "<center>404 Not Found.");
+void handleNotFound(AsyncWebServerRequest *request) {
+  request->send(404, "text/plain", "<center>404 Not Found.");
 }
+
+void updateFromHTML() {
+  if (WiFi.status() == WL_CONNECTED) {
+    updateServer.on("/", HTTP_GET, handleRoot);  // Strona główna
+
+    // Funkcja obsługująca aktualizację
+    updateServer.on(
+      "/update", HTTP_POST, [](AsyncWebServerRequest *request) {}, 
+      [](AsyncWebServerRequest *request, const String& filename, size_t index, uint8_t *data, size_t len, bool final) {
+        handleUpdate(request, filename, index, data, len, final);
+      }
+    );
+
+    updateServer.onNotFound(handleNotFound);  // Obsługa nieznanych stron
+
+    // Uruchomienie serwera
+    updateServer.begin();
+
+    while (true) {
+      drawInfoBox("Ready", "Please send update to", WiFi.localIP().toString(), false, true);
+      delay(1000);  // Zamiast handleClient(), robimy delay w pętli (serwer działa asynchronicznie)
+    }
+  } else {
+    drawInfoBox("Error", "No WIFI connected", "Please connect to it first", true, false);
+  }
+}
+
 
 void updateFromSd(){
   uint8_t cardType;
@@ -152,22 +188,4 @@ void rebootEspWithReason(String reason){
     Serial.println(reason);
     delay(1000);
     ESP.restart();
-}
-void updateFromHTML(){
-  if(WiFi.status() == WL_CONNECTED){
-    server.on("/", HTTP_GET, handleRoot);  // Strona główna
-    server.on("/update", HTTP_POST, []() { server.send(200); }, handleUpdate);  // Aktualizacja
-    server.onNotFound(handleNotFound);  // Obsługa nieznanych stron
-    // Uruchomienie serwera
-    server.begin();
-    
-    while(true){
-      drawInfoBox("Ready", "Please send update to", WiFi.localIP().toString(), false, true);
-      server.handleClient();
-    }
-  }
-  else
-  {
-    drawInfoBox("Error", "No WIFI connected", "Please connect to it first", true, false);
-  }
 }

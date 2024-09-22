@@ -1,7 +1,6 @@
 #include "M5Cardputer.h"
 #include "M5Unified.h"
 #include "ui.h"
-#include "customFont.h"
 
 #define STATE_INIT 0
 #define STATE_WAKE 1
@@ -20,7 +19,6 @@ void initM5() {
   auto cfg = M5.config();
   M5.begin(cfg);
   M5.Display.begin();
-  //M5.Display.loadFont(&customFont);
   M5.Display.setFont(0);
   M5Cardputer.begin(cfg);
   M5Cardputer.Keyboard.begin();
@@ -36,9 +34,9 @@ void setup() {
 uint32_t last_mood_switch = 10001;
 
 void wakeUp() {
-  for (uint8_t i = 0; i < 3; i++) {
+  for (uint8_t i = 0; i <= 2; i++) {
     setMood(activity_level[activity]);
-    activity ++;
+    activity++;
     updateUi();
     delay(1250);
   }

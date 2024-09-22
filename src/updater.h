@@ -2,7 +2,6 @@
 #include <FS.h>
 #include <SD.h>
 #include <WiFi.h>
-#include <WebServer.h>
 
 void rebootEspWithReason(String reason);
 void updateFromFS(fs::FS &fs);
