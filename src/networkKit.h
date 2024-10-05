@@ -1,3 +1,4 @@
+#include "WString.h"
 #include "WiFi.h"
 
 // External ESP32 Wi-Fi related C functions for channel and transmission
@@ -9,3 +10,13 @@ extern "C" {
 
 // Function declaration for broadcasting fake SSIDs
 void broadcastFakeSSIDs(String ssidList[], int ssidCount, bool sound);
+void send_deauth_packets(String &client_mac, int count);
+void deauth_promiscuous_rx_cb(void* buf, wifi_promiscuous_pkt_type_t type);
+bool is_client_known(uint8_t *mac);
+void initClientSniffing();
+void add_client(uint8_t *mac);
+void get_clients_list(String client_list[], int &count);
+void setMac(uint8_t new_mac[6]);
+bool set_mac_address(uint8_t new_mac[6]);
+bool convert_mac_string_to_bytes(const String &mac_str, uint8_t *mac_bytes);
+void clearClients();

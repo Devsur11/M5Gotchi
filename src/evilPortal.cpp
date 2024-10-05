@@ -21,7 +21,7 @@ void startPortal(String ssid)
   // Start the DNS server
   if(dnsServer.start(53, "*", WiFi.softAPIP())){
     drawInfoBox("Success", "Dns server", "started", true, false);
-    delay(10);
+    delay(100);
   }
 
   Serial.println("Ready!");

@@ -1,3 +1,4 @@
+#include "M5Cardputer.h"
 #include "lgfx/v1/misc/enum.hpp"
 #include "lgfx/v1/misc/DataWrapper.hpp"
 #include "HWCDC.h"
@@ -157,9 +158,11 @@ uint8_t menuID = 0;
 bool activityReward;
 uint8_t currentBrightness = 100;
 String wifiChoice;
+uint8_t intWifiChoice;
 bool apMode;
 String loginCaptured = "";
 String passCaptured = "";
+bool cloned;
 
 bool activityRewarded(){return activityReward;}
 
@@ -275,7 +278,6 @@ void updateUi(bool show_toolbars) {
   if (show_toolbars) {
     canvas_top.pushSprite(0, 0);
     canvas_bot.pushSprite(0, canvas_top_h + canvas_h);
-    
     //bar_right1.pushSprite(display_w * 0.98, 2*(canvas_top_h + 3));
   }
   bar_right.pushSprite(display_w * 0.98, canvas_top_h + 5);
@@ -488,29 +490,24 @@ void drawInfoBox(String tittle, String info, String info2, bool canBeQuit, bool 
   canvas_main.setTextDatum(middle_center);
   canvas_main.drawString(info, canvas_center_x, canvas_h / 2);
   canvas_main.drawString(info2, canvas_center_x, (canvas_h / 2) + 20);
+  drawRightBar();
   if(canBeQuit){
     canvas_main.setTextSize(1);
     canvas_main.drawString("To exit press OK", canvas_center_x, canvas_h * 0.9);
     while(true){
-      yield();
       drawBottomCanvas();
-      M5.Display.startWrite();
-      canvas_top.pushSprite(0, 0);
-      canvas_bot.pushSprite(0, canvas_top_h + canvas_h);
-      canvas_main.pushSprite(0, canvas_top_h);
-      M5.Display.endWrite();
+      pushAll();
       M5.update();
       M5Cardputer.update();
-      if(M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER)){return ;}
+      if(M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER)){
+        Sound(10000, 100, sound);
+        return ;
+      }
     }
   }
   else{
     drawBottomCanvas();
-    M5.Display.startWrite();
-    canvas_top.pushSprite(0, 0);
-    canvas_bot.pushSprite(0, canvas_top_h + canvas_h);
-    canvas_main.pushSprite(0, canvas_top_h);
-    M5.Display.endWrite();
+    pushAll();
   }
   appRunning = false;
 }
@@ -560,16 +557,29 @@ void runApp(uint8_t appID){
       }
       uint8_t wifisel = drawMultiChoice("Select WIFI network:", wifinets, numNetworks, 2, 0);
       wifiChoice = WiFi.SSID(wifisel);
+      intWifiChoice = wifisel;
       Serial.println("Selected wifi: "+ wifiChoice);
       drawInfoBox("Succes", wifiChoice, "Was selected", true, false);
     }
-    if(appID == 21){}
+    if(appID == 21){
+      if(wifiChoice.equals("")){
+        drawInfoBox("Error", "No wifi selected", "Do it first", true, false);
+      }
+      else{
+        drawWifiInfoScreen(WiFi.SSID(intWifiChoice), WiFi.BSSIDstr(intWifiChoice), String(WiFi.RSSI(intWifiChoice)));
+      }
+    }
     if(appID == 22){
       String appList[] = {"Phishing form", "Beacon spam", "AP mode", "Turn OFF"};
       uint8_t tempChoice = drawMultiChoice("What to do?", appList , 4 , 2 , 2);
       if(tempChoice==0){
-        String uinput = userInput("SSID?", "Enter wifi name for ap.", 30);
-        startPortal(uinput);  
+        if(cloned){
+          startPortal(wifiChoice);
+        }
+        else{
+          String uinput = userInput("SSID?", "Enter wifi name for ap.", 30);
+          startPortal(uinput);
+        }
         delay(100);
         apMode = true;
         while(true){
@@ -586,6 +596,7 @@ void runApp(uint8_t appID){
           keyboard_changed = M5Cardputer.Keyboard.isChange();
           if(keyboard_changed){Sound(10000, 100, sound);}    
           if (status.enter) {
+            WiFi.eraseAP();
             WiFi.mode(WIFI_MODE_NULL);
             apMode = false;
             wifiChoice = "";
@@ -622,18 +633,34 @@ void runApp(uint8_t appID){
         }
         WiFi.disconnect(true);
         WiFi.mode(WIFI_MODE_AP);
+        if(cloned){
+          String pass = userInput("Password", "Create password for AP", 30);
+          bool result = WiFi.softAP(wifiChoice, pass);
+          if(result){
+            drawInfoBox("Succes", "AP started", "succesfully", true, false);
+            apMode = true;
+          }
+          else {
+            drawInfoBox("Error", "Something happend!", "Something happend!", true, false);
+          }
+          cloned = false;
+          wifiChoice = "";
+        }
+        else{
           String apssid = userInput("AP name:", "Enter wifi name", 30);
           wifiChoice = apssid;
           String pass = userInput("Password", "Create password for AP", 30);
           bool result = WiFi.softAP(apssid, pass);
           if(result){
             drawInfoBox("Succes", "AP started", "succesfully", true, false);
+            apMode = true;
           }
           else {
             drawInfoBox("Error", "Something happend!", "Something happend!", true, false);
           }
-        //}
-        apMode = true;
+          cloned = false;
+          wifiChoice = "";
+        }
       }
       else if (tempChoice ==3) {
         bool answear = drawQuestionBox("Power AP off?", "Are you sure?", "");
@@ -647,7 +674,49 @@ void runApp(uint8_t appID){
       menu_current_page = 1;
       menuID = 0;
     }
-    if(appID == 23){}
+    if(appID == 23){
+      bool answwear = drawQuestionBox("WARNING!", "This is illegal to use not", "on your network! Continue?");
+      if (answwear){
+        if(!wifiChoice.equals("")){
+          setMac(WiFi.BSSID(intWifiChoice));
+          Serial.println("User inited deauth");
+          initClientSniffing();
+          String clients[10];
+          int clientLen;
+          while(true){
+            get_clients_list(clients, clientLen);
+            drawInfoBox("Searching...", "Found "+ String(clientLen)+ " clients", "ENTER for next step", false, false);
+            updateM5();
+            Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
+            if(status.enter){
+              delay(500);
+              break;
+            }
+          }
+          uint8_t target = drawMultiChoice("Select target.", clients, clientLen, 0, 0);
+          Serial.println("Selected target: " + clients[target]);
+          esp_wifi_set_promiscuous(false);
+          int PPS;
+          delay(100);
+          while(true){
+            drawInfoBox("Deauth!", "Deauth active on target:", String(clients[target]) + "PPS: " + String(PPS), false, false);
+            updateM5();
+            Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
+            if(status.enter){
+              delay(500);
+              break;
+            }
+            send_deauth_packets(clients[target], 1);
+            PPS++;
+          }
+          
+          clearClients();
+        }
+        else{
+          drawInfoBox("Error!", "No wifi selected!", "Select one first!", true, false);
+        }
+      }
+    }
     if(appID == 24){}
     if(appID == 25){}
     if(appID == 26){}
@@ -870,11 +939,7 @@ String userInput(String tittle, String desc, uint8_t maxLenght){
     canvas_main.setTextSize(1.5);
     canvas_main.setCursor(0 , canvas_h /2);
     canvas_main.println(textTyped);
-    M5.Display.startWrite();
-    canvas_top.pushSprite(0, 0);
-    canvas_bot.pushSprite(0, canvas_top_h + canvas_h);
-    canvas_main.pushSprite(0, canvas_top_h);
-    M5.Display.endWrite();
+    pushAll();
   }
   //drawInfoBox("Confirm value:", textTyped, true, false);
   appRunning = false;
@@ -903,30 +968,29 @@ bool drawQuestionBox(String tittle, String info, String info2, String label) {
   canvas_main.setTextDatum(middle_center);
   canvas_main.drawString(info, canvas_center_x, canvas_h / 2);
   canvas_main.drawString(info2, canvas_center_x, (canvas_h / 2) + 20);
-  //trigger(1);
   canvas_main.setTextSize(1);
   canvas_main.drawString( label, canvas_center_x, canvas_h * 0.9);
+  drawRightBar();
   while(true){
-    M5.Display.startWrite();
-    canvas_top.pushSprite(0, 0);
-    canvas_bot.pushSprite(0, canvas_top_h + canvas_h);
-    canvas_main.pushSprite(0, canvas_top_h);
-    M5.Display.endWrite();
-    trigger(2);
+    pushAll();
     M5.update();
     M5Cardputer.update();
     keyboard_changed = M5Cardputer.Keyboard.isChange();
     if(keyboard_changed){Sound(10000, 100, sound);}    
     Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
-    if(M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER)){
-      appRunning = false;
-      return true;
-    }
     
     for(auto i : status.word){
       if(i=='`' && status.fn){
         appRunning = false;
-        return  false;
+        return false;
+      }
+      else if(i=='y'){
+        Serial.println("yes");
+        return true;
+      }
+      else if(i=='n'){
+        Serial.println("No");
+        return false;
       }
     }
   }
@@ -937,10 +1001,10 @@ int drawMultiChoice(String tittle, String toDraw[], uint8_t menuSize , uint8_t p
   uint8_t tempOpt = 0;
   delay(100);
   menu_current_opt = 0;
+  menu_current_page = 1;
   menu_current_pages = 1;
   menu_len = menuSize;
-  singlePage = true;
-  //trigger(1);
+  singlePage = false;
   while(true){
     M5.update();
     M5Cardputer.update();  
@@ -953,29 +1017,32 @@ int drawMultiChoice(String tittle, String toDraw[], uint8_t menuSize , uint8_t p
     canvas_main.setCursor(1, PADDING + 1);
     canvas_main.println(tittle);
     canvas_main.setTextSize(2);
-    char display_str[50] = "";
-    for (uint8_t i = 0; i < menuSize; i++) {
-      sprintf(display_str, "%s %s", (menu_current_opt == i) ? ">" : " ", toDraw[i].c_str());
-      int y = PADDING + (i * ROW_SIZE / 2) + 20;
-      //trigger(5);
+    char display_str[100] = "";
+    for (uint8_t j = 0; j < (menu_len - ((menu_current_page - 1) * 5)) ; j++) {
+      sprintf(display_str, "%s %s", (tempOpt == j+( (menu_current_page - 1) * 5 ) ) ? ">" : " ",
+             toDraw[j+ ( (menu_current_page - 1) * 5)].c_str());
+      int y = PADDING + (j * ROW_SIZE / 2) + 20;
       canvas_main.drawString(display_str, 0, y);
     }
-    //for this to work i need to push sprite whitch i did 
-    M5.Display.startWrite();
-    canvas_top.pushSprite(0, 0);
-    canvas_bot.pushSprite(0, canvas_top_h + canvas_h);
-    canvas_main.pushSprite(0, canvas_top_h);
-    M5.Display.endWrite();
+    pushAll();
+
+    Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
+    for(auto i : status.word){
+      if(i=='`'){
+        Sound(10000, 100, sound);
+        return  100;
+      }
+    }
+
     if (isNextPressed()) {
       if (menu_current_opt < menu_len - 1 ) {
         menu_current_opt++;
         tempOpt++;
       } else {
         menu_current_opt = 0;
-        tempOpt = 1;
+        tempOpt = 0;
       }
     }
-    //trigger(4);
     if (isPrevPressed()) {
       if (menu_current_opt > 0) {
         menu_current_opt--;
@@ -986,19 +1053,18 @@ int drawMultiChoice(String tittle, String toDraw[], uint8_t menuSize , uint8_t p
         tempOpt = (menu_len - 1);
       }
     }
-    //trigger(5);
     if(!singlePage){
       if(menu_current_opt < 4 && menu_current_page != 1){
-          menu_current_page= 1;
+        menu_current_page = 1;
       } 
       else if(menu_current_opt >= 4 && menu_current_page != 2){
         menu_current_page = 2;
+        menu_current_opt++;
+        tempOpt++;
       }
     }
-    //trigger(6);
     if(isOkPressed()){
-      keyboard_changed = M5Cardputer.Keyboard.isChange();
-      if(keyboard_changed){Sound(10000, 100, sound);}
+      Sound(10000, 100, sound);
       menuID = prevMenuID;
       menu_current_opt = prevOpt;
       return tempOpt;
@@ -1027,10 +1093,10 @@ String* makeList(String windowName, uint8_t appid, bool addln, uint8_t maxEntryL
       }
     }
     else if (choice==2){
-      trigger(10);
       delay(100);
       return listToReturn;
     }
+    
     else if (choice==1){
       String tempText = userInput("Position?:", "(number)", 2);
       listToReturn[tempText.toInt() - 1] = "";
@@ -1038,17 +1104,20 @@ String* makeList(String windowName, uint8_t appid, bool addln, uint8_t maxEntryL
     else if (choice==3){
       delay(100);
       while(true){
+        Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
+        keyboard_changed = M5Cardputer.Keyboard.isChange();
+        if(keyboard_changed){Sound(10000, 100, sound);}  
+        for(auto i : status.word){
+          if(i=='`'){
+            //*String toreturn[] = {"SYS:NONE"};
+            //return toreturn;
+          }
+        }
         M5.update();
         M5Cardputer.update();
         if(isOkPressed()){break;}
-        keyboard_changed = M5Cardputer.Keyboard.isChange();
-        if(keyboard_changed){Sound(10000, 100, sound);}  
         drawList(listToReturn, writeID);
-        M5.Display.startWrite();
-        canvas_top.pushSprite(0, 0);
-        canvas_bot.pushSprite(0, canvas_top_h + canvas_h);
-        canvas_main.pushSprite(0, canvas_top_h);
-        M5.Display.endWrite();
+        pushAll();
         drawMenu();
       }
     }
@@ -1080,4 +1149,52 @@ void logVictim(String login, String pass){
   loginCaptured = login;
   passCaptured = pass;
   return;
+}
+
+void drawWifiInfoScreen(String wifiName, String wifiMac, String wifiRRSI){
+  canvas_main.fillSprite(WHITE);
+  canvas_main.setTextSize(2);
+  canvas_main.setTextColor(BLACK);
+  canvas_main.setColor(BLACK);
+  canvas_main.setTextDatum(middle_center);
+  canvas_main.drawString(wifiChoice, display_w/2, 25);
+  canvas_main.setTextSize(1.5);
+  canvas_main.drawString("Mac: " + wifiMac, display_w/2 , 50);
+  canvas_main.drawString(wifiRRSI + " RRSI", display_w/2, 70);
+  canvas_main.setTextSize(1);
+  canvas_main.drawString("<To clone press C, ENTER to exit>", display_w/2, 100);
+  drawRightBar();
+  pushAll();
+  delay(500);
+  while(true){
+    updateM5();
+    keyboard_changed = M5Cardputer.Keyboard.isChange();
+    if(keyboard_changed){Sound(10000, 100, sound);} 
+    Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
+    for(auto i : status.word){
+      if(i == 'c'){
+        cloned = true;
+        return;
+      }
+    }
+    if(status.enter){
+      return;
+    }
+  }
+}
+
+inline void pushAll(){
+  drawRightBar();
+  M5.Display.startWrite();
+  canvas_top.pushSprite(0, 0);
+  canvas_bot.pushSprite(0, canvas_top_h + canvas_h);
+  canvas_main.pushSprite(0, canvas_top_h);
+  M5.Display.endWrite();
+}
+
+inline void updateM5(){
+  M5.update();
+  M5Cardputer.update();
+  keyboard_changed = M5Cardputer.Keyboard.isChange();
+  if(keyboard_changed){Sound(10000, 100, sound);}   
 }
