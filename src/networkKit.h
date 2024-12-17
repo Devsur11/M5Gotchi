@@ -20,3 +20,4 @@ void setMac(uint8_t new_mac[6]);
 bool set_mac_address(uint8_t new_mac[6]);
 bool convert_mac_string_to_bytes(const String &mac_str, uint8_t *mac_bytes);
 void clearClients();
+void set_target_channel(const char* target_ssid);

