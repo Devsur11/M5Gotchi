@@ -4,8 +4,9 @@
 #include <FS.h>
 #include <SD.h>
 #include "evilPortal.h"
-//#include "wifiBeacon.h"
 #include "networkKit.h"
+#include "src.h"
+
 
 struct menu {
   char name[25];
@@ -40,3 +41,4 @@ void logVictim(String login, String pass);
 void drawWifiInfoScreen(String wifiName, String wifiMac, String wifiRRSI);
 inline void pushAll();
 inline void updateM5();
+inline void sleepFunction();

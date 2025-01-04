@@ -4,7 +4,6 @@
 #include "HWCDC.h"
 #include <string>
 #include "ui.h"
-#include "src.h"
 #include "updater.h"
 #include <Update.h>
 #include <FS.h>
@@ -479,35 +478,41 @@ void drawMultiplePages(menu toDraw[], uint8_t menuIDPriv, uint8_t menuSize) {
 
 void drawInfoBox(String tittle, String info, String info2, bool canBeQuit, bool isCritical) {
   appRunning = true;
-  if(canBeQuit){delay(150);}
-  canvas_main.clear(TFT_WHITE);
-  canvas_main.setTextSize(3);
-  if(isCritical){canvas_main.setColor(RED);}
-  else {canvas_main.setColor(BLACK);}
-  canvas_main.setTextDatum(middle_center);
-  canvas_main.drawString(tittle, canvas_center_x, canvas_h / 4);
-  canvas_main.setTextSize(1.5);
-  canvas_main.setTextDatum(middle_center);
-  canvas_main.drawString(info, canvas_center_x, canvas_h / 2);
-  canvas_main.drawString(info2, canvas_center_x, (canvas_h / 2) + 20);
-  drawRightBar();
-  if(canBeQuit){
-    canvas_main.setTextSize(1);
-    canvas_main.drawString("To exit press OK", canvas_center_x, canvas_h * 0.9);
-    while(true){
+  while(true){
+    drawTopCanvas();
+    drawBottomCanvas();
+    if(canBeQuit){delay(100);}
+    canvas_main.clear(TFT_WHITE);
+    canvas_main.setTextSize(3);
+    if(isCritical){canvas_main.setColor(RED);}
+    else {canvas_main.setColor(BLACK);}
+    canvas_main.setTextDatum(middle_center);
+    canvas_main.drawString(tittle, canvas_center_x, canvas_h / 4);
+    canvas_main.setTextSize(1.5);
+    canvas_main.setTextDatum(middle_center);
+    canvas_main.drawString(info, canvas_center_x, canvas_h / 2);
+    canvas_main.drawString(info2, canvas_center_x, (canvas_h / 2) + 20);
+    drawRightBar();
+    if(canBeQuit){
+      canvas_main.setTextSize(1);
+      canvas_main.drawString("To exit press OK", canvas_center_x, canvas_h * 0.9);
+
+        sleepFunction();
+        drawBottomCanvas();
+        pushAll();
+        M5.update();
+        M5Cardputer.update();
+        if(M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER)){
+          Sound(10000, 100, sound);
+          return ;
+        }
+
+    }
+    else{
       drawBottomCanvas();
       pushAll();
-      M5.update();
-      M5Cardputer.update();
-      if(M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER)){
-        Sound(10000, 100, sound);
-        return ;
-      }
+      return;
     }
-  }
-  else{
-    drawBottomCanvas();
-    pushAll();
   }
   appRunning = false;
 }
@@ -586,6 +591,7 @@ void runApp(uint8_t appID){
           updatePortal();
           M5.update();
           M5Cardputer.update();
+          sleepFunction();
           Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
           if(!loginCaptured.equals("") && !passCaptured.equals("")){
             drawInfoBox("New victim!", loginCaptured, passCaptured, false, false);
@@ -606,6 +612,9 @@ void runApp(uint8_t appID){
       }
       if(tempChoice == 1){
         String ssidMenu[] = {"Funny SSID", "Broken SSID", "Rick Roll", "Make your own :)"};
+        M5.update();
+        M5Cardputer.update();
+        delay(10);
         uint8_t ssidChoice = drawMultiChoice("Select list", ssidMenu, 4 , 2 , 2);
         if(ssidChoice==0){
           broadcastFakeSSIDs( funny_ssids, 48, sound);
@@ -616,9 +625,12 @@ void runApp(uint8_t appID){
           menu_current_page = 1;
           menuID = 0;
           }
-        else {
+        else if (ssidChoice==3){
           String* BeaconList = makeList("Create spam list", 48, false, 30);
           broadcastFakeSSIDs( BeaconList , sizeof(BeaconList), sound);
+        }
+        else{
+          return;
         }
       }
       else if(tempChoice == 2){
@@ -689,8 +701,10 @@ void runApp(uint8_t appID){
             drawInfoBox("Searching...", "Found "+ String(clientLen)+ " clients", "ENTER for next step", false, false);
             updateM5();
             Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
+            sleepFunction();
             if(status.enter){
               delay(500);
+              esp_wifi_set_promiscuous(false);
               break;
             }
           }
@@ -699,17 +713,34 @@ void runApp(uint8_t appID){
             return;
           }
           Serial.println("Selected target: " + clients[target]);
-          esp_wifi_set_promiscuous(false);
+          
           delay(100);
+          int previousMillis;
+          uint16_t interval = 1000;
+          int PPS;
+          drawInfoBox("Deauth!", "ENTER to end. Target:", String(clients[target]) + " PPS: " + String(PPS), false, false);
           while(true){
-            drawInfoBox("Deauth!", "Deauth active on target:", String(clients[target]) + ".", false, false);
+            int currentMillis = millis();  
+            if (currentMillis - previousMillis >= interval) {
+              drawInfoBox("Deauth!", "Deauth active on target:", String(clients[target]) + " PPS: " + String(PPS), false, false);
+              previousMillis = currentMillis;
+              PPS = 0;
+            }
             updateM5();
             Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
+            sleepFunction();
             if(status.enter){
               delay(500);
               break;
             }
-            send_deauth_packets(clients[target], 1);
+
+            if(send_deauth_packets(clients[target], 1)){
+              PPS++;
+            }
+            else{
+              delay(5);
+            }
+            
           }
           
           clearClients();
@@ -719,7 +750,9 @@ void runApp(uint8_t appID){
         }
       }
     }
-    if(appID == 24){}
+    if(appID == 24){
+      //uint8_t answerrr = drawMultiChoice()
+    }
     if(appID == 25){}
     if(appID == 26){}
     if(appID == 27){}
@@ -894,16 +927,19 @@ String userInput(String tittle, String desc, uint8_t maxLenght){
   appRunning = true;
   delay(500);
   //bool loop = 1;
-  canvas_main.clear(TFT_WHITE);
-  canvas_main.setTextSize(3);
-  canvas_main.setTextColor(BLACK);
-  canvas_main.setTextDatum(middle_center);
-  canvas_main.drawString(tittle, canvas_center_x, canvas_h / 4);
-  canvas_main.setTextSize(1);
-  canvas_main.drawString(desc, canvas_center_x, canvas_h * 0.9);
   while (true){
+    drawTopCanvas();
+    drawBottomCanvas();
+    canvas_main.clear(TFT_WHITE);
+    canvas_main.setTextSize(3);
+    canvas_main.setTextColor(BLACK);
+    canvas_main.setTextDatum(middle_center);
+    canvas_main.drawString(tittle, canvas_center_x, canvas_h / 4);
+    canvas_main.setTextSize(1);
+    canvas_main.drawString(desc, canvas_center_x, canvas_h * 0.9);
     M5.update();
     M5Cardputer.update();
+    sleepFunction();
     //auto i;
     keyboard_changed = M5Cardputer.Keyboard.isChange();
     if(keyboard_changed){Sound(10000, 100, sound);}    
@@ -961,25 +997,28 @@ String multiplyChar(char toMultiply, uint8_t literations){
 bool drawQuestionBox(String tittle, String info, String info2, String label) {
   appRunning = true;
   delay(150);
-  canvas_main.clear(TFT_WHITE);
-  canvas_main.setTextSize(3);
-  canvas_main.setColor(BLACK);
-  canvas_main.setTextDatum(middle_center);
-  canvas_main.drawString(tittle, canvas_center_x, canvas_h / 4);
-  canvas_main.setTextSize(1.5);
-  canvas_main.setTextDatum(middle_center);
-  canvas_main.drawString(info, canvas_center_x, canvas_h / 2);
-  canvas_main.drawString(info2, canvas_center_x, (canvas_h / 2) + 20);
-  canvas_main.setTextSize(1);
-  canvas_main.drawString( label, canvas_center_x, canvas_h * 0.9);
-  drawRightBar();
   while(true){
+    drawTopCanvas();
+    drawBottomCanvas();
+    canvas_main.clear(TFT_WHITE);
+    canvas_main.setTextSize(3);
+    canvas_main.setColor(BLACK);
+    canvas_main.setTextDatum(middle_center);
+    canvas_main.drawString(tittle, canvas_center_x, canvas_h / 4);
+    canvas_main.setTextSize(1.5);
+    canvas_main.setTextDatum(middle_center);
+    canvas_main.drawString(info, canvas_center_x, canvas_h / 2);
+    canvas_main.drawString(info2, canvas_center_x, (canvas_h / 2) + 20);
+    canvas_main.setTextSize(1);
+    canvas_main.drawString( label, canvas_center_x, canvas_h * 0.9);
     pushAll();
     M5.update();
     M5Cardputer.update();
     keyboard_changed = M5Cardputer.Keyboard.isChange();
     if(keyboard_changed){Sound(10000, 100, sound);}    
     Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
+    sleepFunction();
+
     
     for(auto i : status.word){
       if(i=='`' && status.fn){
@@ -1000,16 +1039,23 @@ bool drawQuestionBox(String tittle, String info, String info2, String label) {
 }
 
 int drawMultiChoice(String tittle, String toDraw[], uint8_t menuSize , uint8_t prevMenuID, uint8_t prevOpt) {
-  uint8_t tempOpt = 0;
   delay(100);
+  uint8_t tempOpt = 0;
   menu_current_opt = 0;
   menu_current_page = 1;
   menu_current_pages = 1;
   menu_len = menuSize;
   singlePage = false;
   while(true){
+    drawTopCanvas();
+    drawBottomCanvas();
     M5.update();
     M5Cardputer.update();  
+    keyboard_changed = M5Cardputer.Keyboard.isChange();
+    if(keyboard_changed){Sound(10000, 100, sound);}
+    Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
+    sleepFunction();
+
     canvas_main.clear(TFT_WHITE);
     canvas_main.fillSprite(WHITE); //Clears main display
     canvas_main.setTextSize(1.5);
@@ -1028,7 +1074,7 @@ int drawMultiChoice(String tittle, String toDraw[], uint8_t menuSize , uint8_t p
     }
     pushAll();
 
-    Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
+    
     for(auto i : status.word){
       if(i=='`'){
         Sound(10000, 100, sound);
@@ -1071,8 +1117,7 @@ int drawMultiChoice(String tittle, String toDraw[], uint8_t menuSize , uint8_t p
       menu_current_opt = prevOpt;
       return tempOpt;
     }
-    keyboard_changed = M5Cardputer.Keyboard.isChange();
-    if(keyboard_changed){Sound(10000, 100, sound);}
+    
   }
 }
 
@@ -1082,6 +1127,7 @@ String* makeList(String windowName, uint8_t appid, bool addln, uint8_t maxEntryL
   String* listToReturn = new String[30];
   while(true){
     delay(100);
+    sleepFunction();
     uint8_t choice = drawMultiChoice(windowName, list, 4 , 0, 0);
     if (choice==0){
       String tempText = userInput("Add value:", "", maxEntryLen);
@@ -1106,6 +1152,9 @@ String* makeList(String windowName, uint8_t appid, bool addln, uint8_t maxEntryL
     else if (choice==3){
       delay(100);
       while(true){
+        drawTopCanvas();
+        drawBottomCanvas();
+        sleepFunction();
         Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
         keyboard_changed = M5Cardputer.Keyboard.isChange();
         if(keyboard_changed){Sound(10000, 100, sound);}  
@@ -1154,23 +1203,25 @@ void logVictim(String login, String pass){
 }
 
 void drawWifiInfoScreen(String wifiName, String wifiMac, String wifiRRSI){
-  canvas_main.fillSprite(WHITE);
-  canvas_main.setTextSize(2);
-  canvas_main.setTextColor(BLACK);
-  canvas_main.setColor(BLACK);
-  canvas_main.setTextDatum(middle_center);
-  canvas_main.drawString(wifiChoice, display_w/2, 25);
-  canvas_main.setTextSize(1.5);
-  canvas_main.drawString("Mac: " + wifiMac, display_w/2 , 50);
-  canvas_main.drawString(wifiRRSI + " RRSI", display_w/2, 70);
-  canvas_main.setTextSize(1);
-  canvas_main.drawString("<To clone press C, ENTER to exit>", display_w/2, 100);
-  drawRightBar();
-  pushAll();
-  delay(500);
+  delay(100);
   while(true){
+    drawTopCanvas();
+    drawBottomCanvas();
+    canvas_main.fillSprite(WHITE);
+    canvas_main.setTextSize(2);
+    canvas_main.setTextColor(BLACK);
+    canvas_main.setColor(BLACK);
+    canvas_main.setTextDatum(middle_center);
+    canvas_main.drawString(wifiChoice, display_w/2, 25);
+    canvas_main.setTextSize(1.5);
+    canvas_main.drawString("Mac: " + wifiMac, display_w/2 , 50);
+    canvas_main.drawString(wifiRRSI + " RRSI", display_w/2, 70);
+    canvas_main.setTextSize(1);
+    canvas_main.drawString("<To clone press C, ENTER to exit>", display_w/2, 100);
+    pushAll();
     updateM5();
     keyboard_changed = M5Cardputer.Keyboard.isChange();
+    sleepFunction();
     if(keyboard_changed){Sound(10000, 100, sound);} 
     Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
     for(auto i : status.word){
@@ -1186,7 +1237,6 @@ void drawWifiInfoScreen(String wifiName, String wifiMac, String wifiRRSI){
 }
 
 inline void pushAll(){
-  drawRightBar();
   M5.Display.startWrite();
   canvas_top.pushSprite(0, 0);
   canvas_bot.pushSprite(0, canvas_top_h + canvas_h);
@@ -1199,4 +1249,20 @@ inline void updateM5(){
   M5Cardputer.update();
   keyboard_changed = M5Cardputer.Keyboard.isChange();
   if(keyboard_changed){Sound(10000, 100, sound);}   
+}
+
+inline void sleepFunction(){
+  if(M5Cardputer.BtnA.isPressed()){
+    M5.Lcd.setBrightness(0);
+    M5.Display.fillScreen(TFT_BLACK);
+    delay(500);
+    while(true){
+      M5.update();
+      M5Cardputer.update();
+      if(M5Cardputer.BtnA.isPressed()){break;}
+    }
+    M5.Lcd.setBrightness(returnBrightness());
+    initUi();
+    delay(500);
+  }
 }

