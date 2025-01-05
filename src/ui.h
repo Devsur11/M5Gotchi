@@ -38,7 +38,7 @@ uint8_t returnBrightness();
 String* makeList(String windowName, uint8_t appid, bool addln, uint8_t maxEntryLen);
 void drawList(String toDraw[], uint8_t manu_size);
 void logVictim(String login, String pass);
-void drawWifiInfoScreen(String wifiName, String wifiMac, String wifiRRSI);
+void drawWifiInfoScreen(String wifiName, String wifiMac, String wifiRRSI, String wifiChanel);
 inline void pushAll();
 inline void updateM5();
 inline void sleepFunction();

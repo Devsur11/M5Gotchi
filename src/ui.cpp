@@ -135,7 +135,7 @@ menu settings_menu[] = {
     {"Power off", 46}
 };
 
-bool sound = 1;
+bool sound = 0;
 bool appRunning;
 bool userInputVar;
 uint8_t menu_current_pages = 1;
@@ -571,7 +571,7 @@ void runApp(uint8_t appID){
         drawInfoBox("Error", "No wifi selected", "Do it first", true, false);
       }
       else{
-        drawWifiInfoScreen(WiFi.SSID(intWifiChoice), WiFi.BSSIDstr(intWifiChoice), String(WiFi.RSSI(intWifiChoice)));
+        drawWifiInfoScreen(WiFi.SSID(intWifiChoice), WiFi.BSSIDstr(intWifiChoice), String(WiFi.RSSI(intWifiChoice)), String(WiFi.channel(intWifiChoice)));
       }
     }
     if(appID == 22){
@@ -751,7 +751,80 @@ void runApp(uint8_t appID){
       }
     }
     if(appID == 24){
-      //uint8_t answerrr = drawMultiChoice()
+      String mmenu[] = {"Mac sniffing", "EAPOL sniffing", "Chanels graph", "Beacon sniff", "Client sniff"};
+      singlePage = false;
+      menu_current_pages = 2;
+      uint8_t answerrr = drawMultiChoice("Sniffing", mmenu, 5, 1, 0);
+      if(answerrr == 0){
+        String mmenuu[] = {"Auto switch" ,"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"};
+        answerrr = drawMultiChoice("Select chanel", mmenuu, 13, 1, 0);
+        if(true){
+          uint8_t chanelSwitch = 1;
+          static unsigned long lastSwitchTime = millis();
+          const unsigned long channelSwitchInterval = 500;  
+          esp_wifi_set_channel(answerrr, WIFI_SECOND_CHAN_NONE);
+          WiFi.mode(WIFI_STA);  // Ustawienie trybu WiFi na stację
+          esp_wifi_set_promiscuous(true);  // Włączenie trybu promiskuitywnego
+          esp_wifi_set_promiscuous_rx_cb(client_sniff_promiscuous_rx_cb);
+          Serial.println("Started mac sniffing!");
+          canvas_main.clear();
+          uint8_t line;
+          while(true){
+            M5.update();
+            M5Cardputer.update();  
+            keyboard_changed = M5Cardputer.Keyboard.isChange();
+            if(keyboard_changed){Sound(10000, 100, sound);}
+            sleepFunction();
+            drawTopCanvas();
+            drawBottomCanvas();
+            canvas_main.clear(TFT_WHITE);
+            canvas_main.fillSprite(WHITE); //Clears main display
+            canvas_main.setTextSize(1);
+            canvas_main.setTextColor(BLACK);
+            canvas_main.setColor(BLACK);
+            canvas_main.setTextDatum(top_left);
+            canvas_main.setCursor(1, (((PADDING + 1) * line) + 5) + 1);
+            canvas_main.println("From:             To:               Ch:");
+            line++;
+            canvas_main.setCursor(1, (((PADDING + 1) * line) + 5) + 1);
+            canvas_main.println("---------------------------------------");
+            line++;
+            int macCount;  // Non-const integer to hold the count of MAC entries
+            const MacEntry* tableOfMac = get_mac_table(macCount);  // Get the MAC table
+            if(macCount){
+              for (int i = macCount ; i > 0; i--) {
+                // Convert MAC addresses to strings and print them
+                canvas_main.setCursor(1, (((PADDING + 1) * line) + 5) + 1);
+                String sourceMac = macToString(tableOfMac[i-1].source);
+                String destinationMac = macToString(tableOfMac[i-1].destination);
+                // Example usage with canvas_main
+                canvas_main.println(sourceMac + " " + destinationMac + " " + answerrr);
+                line++;
+              }
+            }
+            pushAll();
+            line = 0;
+            Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
+            for(auto i : status.word){
+              if(i=='`' && status.fn){
+              esp_wifi_set_promiscuous(false);
+              WiFi.mode(WIFI_MODE_NULL);
+              return;
+              }
+            }
+
+            if (millis() - lastSwitchTime > channelSwitchInterval && !answerrr) {
+              chanelSwitch++;
+              if (chanelSwitch > 12) {
+                chanelSwitch = 1;  // Loop back to channel 1
+              }
+              lastSwitchTime = millis();
+              esp_wifi_set_channel(chanelSwitch , WIFI_SECOND_CHAN_NONE);
+            }
+
+          }
+        }
+      }
     }
     if(appID == 25){}
     if(appID == 26){}
@@ -965,7 +1038,7 @@ String userInput(String tittle, String desc, uint8_t maxLenght){
       drawInfoBox("Error", "Can't type more than " + String(maxLenght), " characters" , true, false);
       textTyped.remove(textTyped.length() - 1);
       temp --;
-      delay(250);
+      delay(100);
     }
     canvas_main.clear(TFT_WHITE);
     canvas_main.setTextSize(3);
@@ -1043,7 +1116,6 @@ int drawMultiChoice(String tittle, String toDraw[], uint8_t menuSize , uint8_t p
   uint8_t tempOpt = 0;
   menu_current_opt = 0;
   menu_current_page = 1;
-  menu_current_pages = 1;
   menu_len = menuSize;
   singlePage = false;
   while(true){
@@ -1066,9 +1138,9 @@ int drawMultiChoice(String tittle, String toDraw[], uint8_t menuSize , uint8_t p
     canvas_main.println(tittle);
     canvas_main.setTextSize(2);
     char display_str[100] = "";
-    for (uint8_t j = 0; j < (menu_len - ((menu_current_page - 1) * 5)) ; j++) {
-      sprintf(display_str, "%s %s", (tempOpt == j+( (menu_current_page - 1) * 5 ) ) ? ">" : " ",
-             toDraw[j+ ( (menu_current_page - 1) * 5)].c_str());
+    for (uint8_t j = 0; j < (menu_len - ((menu_current_page - 1) * 4)) ; j++) {
+      sprintf(display_str, "%s %s", (tempOpt == j+( (menu_current_page - 1) * 4 ) ) ? ">" : " ",
+             toDraw[j+ ( (menu_current_page - 1) * 4)].c_str());
       int y = PADDING + (j * ROW_SIZE / 2) + 20;
       canvas_main.drawString(display_str, 0, y);
     }
@@ -1078,6 +1150,8 @@ int drawMultiChoice(String tittle, String toDraw[], uint8_t menuSize , uint8_t p
     for(auto i : status.word){
       if(i=='`'){
         Sound(10000, 100, sound);
+        menuID = prevMenuID;
+        menu_current_opt = prevOpt;
         return  100;
       }
     }
@@ -1105,10 +1179,14 @@ int drawMultiChoice(String tittle, String toDraw[], uint8_t menuSize , uint8_t p
       if(menu_current_opt < 4 && menu_current_page != 1){
         menu_current_page = 1;
       } 
-      else if(menu_current_opt >= 4 && menu_current_page != 2){
+      else if(menu_current_opt >= 4 && menu_current_page != 2 && menu_current_opt <8){
         menu_current_page = 2;
-        menu_current_opt++;
-        tempOpt++;
+      }
+      else if(menu_current_opt >= 8 && menu_current_page != 3 && menu_current_opt <12){
+        menu_current_page = 3;
+      }
+      else if(menu_current_opt >= 12 && menu_current_page != 4 && menu_current_opt <=16){
+        menu_current_page = 4;
       }
     }
     if(isOkPressed()){
@@ -1202,7 +1280,7 @@ void logVictim(String login, String pass){
   return;
 }
 
-void drawWifiInfoScreen(String wifiName, String wifiMac, String wifiRRSI){
+void drawWifiInfoScreen(String wifiName, String wifiMac, String wifiRRSI, String wifiChanel){
   delay(100);
   while(true){
     drawTopCanvas();
@@ -1215,7 +1293,7 @@ void drawWifiInfoScreen(String wifiName, String wifiMac, String wifiRRSI){
     canvas_main.drawString(wifiChoice, display_w/2, 25);
     canvas_main.setTextSize(1.5);
     canvas_main.drawString("Mac: " + wifiMac, display_w/2 , 50);
-    canvas_main.drawString(wifiRRSI + " RRSI", display_w/2, 70);
+    canvas_main.drawString(wifiRRSI + " RRSI, Chanel: " + wifiChanel, display_w/2, 70);
     canvas_main.setTextSize(1);
     canvas_main.drawString("<To clone press C, ENTER to exit>", display_w/2, 100);
     pushAll();
@@ -1251,18 +1329,22 @@ inline void updateM5(){
   if(keyboard_changed){Sound(10000, 100, sound);}   
 }
 
+bool sleep_mode = false;
+
 inline void sleepFunction(){
   if(M5Cardputer.BtnA.isPressed()){
-    M5.Lcd.setBrightness(0);
-    M5.Display.fillScreen(TFT_BLACK);
-    delay(500);
-    while(true){
-      M5.update();
-      M5Cardputer.update();
-      if(M5Cardputer.BtnA.isPressed()){break;}
+    if(sleep_mode == false){
+      delay(250);
+      M5.Lcd.setBrightness(0);
+      M5.Display.fillScreen(TFT_BLACK);
+      sleep_mode = true;
+      return;
     }
-    M5.Lcd.setBrightness(returnBrightness());
-    initUi();
-    delay(500);
+    if(sleep_mode == true){
+      delay(250);
+      M5.Lcd.setBrightness(returnBrightness());
+      initUi();
+      sleep_mode = false;
+    }
   }
 }

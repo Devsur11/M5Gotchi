@@ -30,3 +30,4 @@ void add_mac_to_table(uint8_t *src, uint8_t *dest);
 bool is_mac_in_table(uint8_t *src, uint8_t *dest);
 void resetMacTable();
 MacEntry* get_mac_table(int &count);
+String macToString(const uint8_t *mac);
