@@ -797,8 +797,9 @@ void runApp(uint8_t appID){
                 canvas_main.setCursor(1, (((PADDING + 1) * line) + 5) + 1);
                 String sourceMac = macToString(tableOfMac[i-1].source);
                 String destinationMac = macToString(tableOfMac[i-1].destination);
+                String chanelMac = String(tableOfMac[i-1].channel);
                 // Example usage with canvas_main
-                canvas_main.println(sourceMac + " " + destinationMac + " " + answerrr);
+                canvas_main.println(sourceMac + " " + destinationMac + " " + chanelMac);
                 line++;
               }
             }

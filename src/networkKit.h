@@ -3,6 +3,7 @@
 struct MacEntry {
     uint8_t source[6];
     uint8_t destination[6];
+    uint8_t channel;
 };
 
 // External ESP32 Wi-Fi related C functions for channel and transmission
@@ -27,7 +28,7 @@ void clearClients();
 void set_target_channel(const char* target_ssid);
 void client_sniff_promiscuous_rx_cb(void* buf, wifi_promiscuous_pkt_type_t type);
 void add_mac_to_table(uint8_t *src, uint8_t *dest);
-bool is_mac_in_table(uint8_t *src, uint8_t *dest);
+bool is_mac_in_table(uint8_t *src, uint8_t *dest, uint8_t channel);
 void resetMacTable();
 MacEntry* get_mac_table(int &count);
 String macToString(const uint8_t *mac);

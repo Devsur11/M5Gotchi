@@ -354,31 +354,32 @@ MacEntry mac_table[255];
 
 int mac_count = 0;
 
-// Funkcja do sprawdzania, czy adres MAC znajduje się w tablicy
-bool is_mac_in_table(uint8_t *src, uint8_t *dest) {
+bool is_mac_in_table(uint8_t *src, uint8_t *dest, uint8_t channel) {
     for (int i = 0; i < mac_count; i++) {
         if (memcmp(mac_table[i].source, src, 6) == 0 &&
-            memcmp(mac_table[i].destination, dest, 6) == 0) {
-            return true;  // Już istnieje
+            memcmp(mac_table[i].destination, dest, 6) == 0 &&
+            mac_table[i].channel == channel) {
+            return true;  // Already exists
         }
     }
     return false;
 }
 
 // Funkcja do dodawania adresu MAC do tablicy
-void add_mac_to_table(uint8_t *src, uint8_t *dest) {
-    if (!is_mac_in_table(src, dest)) {
-        if (mac_count < 256) {
+void add_mac_to_table(uint8_t *src, uint8_t *dest, uint8_t channel) {
+    if (!is_mac_in_table(src, dest, channel)) {
+        if (mac_count < 255) {
             memcpy(mac_table[mac_count].source, src, 6);
             memcpy(mac_table[mac_count].destination, dest, 6);
+            mac_table[mac_count].channel = channel;
             mac_count++;
-            Serial.print("Dodano: ");
-            Serial.printf("Źródło: %02X:%02X:%02X:%02X:%02X:%02X ", 
+            Serial.printf("Added: Source: %02X:%02X:%02X:%02X:%02X:%02X ", 
                           src[0], src[1], src[2], src[3], src[4], src[5]);
-            Serial.printf("Cel: %02X:%02X:%02X:%02X:%02X:%02X\n", 
+            Serial.printf("Destination: %02X:%02X:%02X:%02X:%02X:%02X ", 
                           dest[0], dest[1], dest[2], dest[3], dest[4], dest[5]);
+            Serial.printf("Channel: %d\n", channel);
         } else {
-            Serial.println("Tablica pełna, nie można dodać więcej adresów.");
+            Serial.println("Table full, cannot add more addresses.");
         }
     }
 }
@@ -389,13 +390,15 @@ void client_sniff_promiscuous_rx_cb(void* buf, wifi_promiscuous_pkt_type_t type)
     uint8_t *hdr = pkt->payload;
 
     if (type == WIFI_PKT_MGMT || type == WIFI_PKT_DATA || type == WIFI_PKT_CTRL) {
-        uint8_t *source_mac = hdr + 10;  // Źródło MAC (pole addr2 w nagłówku 802.11)
-        uint8_t *destination_mac = hdr + 4;  // Cel MAC (pole addr1 w nagłówku 802.11)
+        uint8_t *source_mac = hdr + 10;  // Source MAC (addr2 field in 802.11 header)
+        uint8_t *destination_mac = hdr + 4;  // Destination MAC (addr1 field in 802.11 header)
+        uint8_t channel = pkt->rx_ctrl.channel;
 
-        // Dodaj adresy MAC do tablicy
-        add_mac_to_table(source_mac, destination_mac);
+        // Add MAC addresses to the table
+        add_mac_to_table(source_mac, destination_mac, channel);
     }
 }
+
 
 void resetMacTable(){
   mac_count = 0;
