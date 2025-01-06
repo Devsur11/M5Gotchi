@@ -9,6 +9,7 @@
 #include <FS.h>
 #include <SD.h>
 #include <WiFi.h>
+#include "eapolSniffer.h"
 #define ROW_SIZE 40
 #define PADDING 10
 
@@ -824,6 +825,58 @@ void runApp(uint8_t appID){
             }
 
           }
+        }
+      }
+      else if(answerrr==1){
+        String mmenuu[] = {"Auto switch" ,"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"};
+        answerrr = drawMultiChoice("Select chanel", mmenuu, 13, 1, 0);
+        EapolSniffer sniffer;
+        if(sniffer.begin(answerrr)){
+          canvas_main.clear();
+          pushAll();
+          uint8_t line;
+          while(true){
+            M5.update();
+            M5Cardputer.update();  
+            keyboard_changed = M5Cardputer.Keyboard.isChange();
+            if(keyboard_changed){Sound(10000, 100, sound);}
+            sleepFunction();
+            drawTopCanvas();
+            drawBottomCanvas();
+            canvas_main.setTextSize(1);
+            canvas_main.setTextColor(BLACK);
+            canvas_main.setColor(BLACK);
+            canvas_main.setTextDatum(top_left);
+            canvas_main.setCursor(1, (((PADDING + 1) * line) + 5) + 1);
+            canvas_main.println("EAPOL sniffer ver.1.0 by Devsur.");
+            line++;
+            canvas_main.setCursor(1, (((PADDING + 1) * line) + 5) + 1);
+            canvas_main.println("From:             To:               ID:");
+            line++; // ID is what is added to file to identify thic=s copture of others
+            canvas_main.setCursor(1, (((PADDING + 1) * line) + 5) + 1);
+            canvas_main.println("---------------------------------------");
+            line++;
+            canvas_main.setCursor(1, (((PADDING + 1) * line) + 5) + 1);
+            if(sniffer.getClientCount()){
+              const PacketInfo* packets = sniffer.getPacketInfoTable();
+              int packetCount = sniffer.getClientCount();
+              for (int i = 0; i < packetCount; i++) {
+                String strMacSrc = macToString(packets[i].srcMac);
+                String strMacDest = macToString(packets[i].destMac);
+                String fileID = String(packets[i].fileName);
+                canvas_main.println(strMacSrc + " " + strMacDest + " " + fileID);
+                line++;
+              }
+            
+            }
+            pushAll();
+            sniffer.loop();
+            line = 0;
+          }
+        }
+        else{
+          drawInfoBox("Error!", "Can't init EAPOL sniffer.", "Contact developer or try again.", true, false);
+          return;
         }
       }
     }
