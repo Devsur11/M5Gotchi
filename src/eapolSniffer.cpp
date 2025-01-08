@@ -11,22 +11,23 @@ EapolSniffer::EapolSniffer()
 
 
 bool EapolSniffer::begin(int userChannel) {
+    instance = this; // Set the static instance pointer
     this->userChannel = userChannel;
     autoChannelSwitch = (userChannel == 0);
 
-    // Ustawienie początkowego kanału
+    // Set the initial channel
     currentChannel = autoChannelSwitch ? 1 : userChannel;
 
     WiFi.mode(WIFI_MODE_STA);
     esp_wifi_set_promiscuous(true);
-    esp_wifi_set_promiscuous_rx_cb(promiscuousCallback);
+    esp_wifi_set_promiscuous_rx_cb(snifferCallbackDeauth);
 
-    // Ustaw kanał w trybie ręcznym lub rozpocznij automatyczne przełączanie
     esp_wifi_set_channel(currentChannel, WIFI_SECOND_CHAN_NONE);
 
     writePcapHeader();
     return true;
 }
+
 
 
 void EapolSniffer::loop() {
@@ -213,4 +214,70 @@ void EapolSniffer::updatePcapFileName() {
 }
 const PacketInfo* EapolSniffer::getPacketInfoTable() const {
     return packetInfoTable;
+}
+
+void EapolSniffer::snifferCallbackDeauth(void* buf, wifi_promiscuous_pkt_type_t type) {
+    if (!instance) return; // Ensure instance is set
+
+    if (type != WIFI_PKT_DATA && type != WIFI_PKT_MGMT) return;
+
+    wifi_promiscuous_pkt_t* pkt = (wifi_promiscuous_pkt_t*)buf;
+    const uint8_t* payload = pkt->payload;
+    int len = pkt->rx_ctrl.sig_len;
+
+    if (isEAPOL(pkt)) {
+        Serial.println("EAPOL Detected !!!!");
+
+        // Use instance to access non-static members
+        if (instance->packetInfoCount < 100) {
+            memcpy(instance->packetInfoTable[instance->packetInfoCount].srcMac, payload + 10, 6); // Source MAC
+            memcpy(instance->packetInfoTable[instance->packetInfoCount].destMac, payload + 4, 6); // Destination MAC
+            instance->packetInfoTable[instance->packetInfoCount].fileName = String(instance->pcapFileName);
+            instance->packetInfoCount++;
+        } else {
+            Serial.println("Packet info table full, skipping...");
+        }
+
+        // Update PCAP file
+        instance->updatePcapFileName();
+        File file = SD.open(instance->pcapFileName, FILE_WRITE);
+        if (file) {
+            instance->writePcapHeader();
+            instance->writePcapPacket(pkt->payload, len);
+            file.close();
+        }
+    }
+}
+
+//HUGE Thanks to 7h30th3r0n3 for this function: https://github.com/7h30th3r0n3/Evil-M5Project
+
+bool isEAPOL(const wifi_promiscuous_pkt_t* packet) {
+  const uint8_t *payload = packet->payload;
+  int len = packet->rx_ctrl.sig_len;
+
+  // length check to ensure packet is large enough for EAPOL (minimum length)
+  if (len < (24 + 8 + 4)) { // 24 bytes for the MAC header, 8 for LLC/SNAP, 4 for EAPOL minimum
+    return false;
+  }
+
+  // check for LLC/SNAP header indicating EAPOL payload
+  // LLC: AA-AA-03, SNAP: 00-00-00-88-8E for EAPOL
+  if (payload[24] == 0xAA && payload[25] == 0xAA && payload[26] == 0x03 &&
+      payload[27] == 0x00 && payload[28] == 0x00 && payload[29] == 0x00 &&
+      payload[30] == 0x88 && payload[31] == 0x8E) {
+    return true;
+  }
+
+  // handle QoS tagging which shifts the start of the LLC/SNAP headers by 2 bytes
+  // check if the frame control field's subtype indicates a QoS data subtype (0x08)
+  if ((payload[0] & 0x0F) == 0x08) {
+    // Adjust for the QoS Control field and recheck for LLC/SNAP header
+    if (payload[26] == 0xAA && payload[27] == 0xAA && payload[28] == 0x03 &&
+        payload[29] == 0x00 && payload[30] == 0x00 && payload[31] == 0x00 &&
+        payload[32] == 0x88 && payload[33] == 0x8E) {
+      return true;
+    }
+  }
+
+  return false;
 }

@@ -8,6 +8,7 @@
 #ifndef EAPOL_SNIFFER_H
 #define EAPOL_SNIFFER_H
 
+bool isEAPOL(const wifi_promiscuous_pkt_t* packet);
 
 struct PacketInfo {
     uint8_t srcMac[6];
@@ -26,9 +27,11 @@ public:
     int getClientCount() const;
     const uint8_t* getClient(int index) const; // Added declaration
     const PacketInfo* getPacketInfoTable() const;
+    
 
 private:
     static void promiscuousCallback(void* buf, wifi_promiscuous_pkt_type_t type);
+    static void snifferCallbackDeauth(void* buf, wifi_promiscuous_pkt_type_t type);
     void handlePacket(void* buf, wifi_promiscuous_pkt_type_t type);
     void writePcapHeader();
     void writePcapPacket(const uint8_t* packet, uint32_t packet_length);
