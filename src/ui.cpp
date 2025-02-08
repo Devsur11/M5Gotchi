@@ -373,7 +373,7 @@ void drawTopCanvas() {
   canvas_top.setTextColor(BLACK);
   canvas_top.setColor(BLACK);
   canvas_top.setTextDatum(top_left);
-  canvas_top.drawString("ESPBlaster v0.1", 0, 3);
+  canvas_top.drawString("M5Blaster v0.1", 0, 3);
   canvas_top.setTextDatum(top_right);
   /*            part of original code 
   char right_str[50] = "UPS 0%";
@@ -830,8 +830,7 @@ void runApp(uint8_t appID){
       else if(answerrr==1){
         String mmenuu[] = {"Auto switch" ,"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"};
         answerrr = drawMultiChoice("Select chanel", mmenuu, 13, 1, 0);
-        EapolSniffer sniffer;
-        if(sniffer.begin(answerrr)){
+        if(SnifferBegin(answerrr)){
           canvas_main.clear();
           pushAll();
           uint8_t line;
@@ -840,6 +839,14 @@ void runApp(uint8_t appID){
             M5Cardputer.update();  
             keyboard_changed = M5Cardputer.Keyboard.isChange();
             if(keyboard_changed){Sound(10000, 100, sound);}
+            keyboard_changed = M5Cardputer.Keyboard.isChange();
+            Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
+            for(auto i : status.word){
+              if(i=='`' && status.fn){
+                return;
+              }
+              delay(250);
+            }
             sleepFunction();
             drawTopCanvas();
             drawBottomCanvas();
@@ -857,20 +864,22 @@ void runApp(uint8_t appID){
             canvas_main.println("---------------------------------------");
             line++;
             canvas_main.setCursor(1, (((PADDING + 1) * line) + 5) + 1);
-            if(sniffer.getClientCount()){
-              const PacketInfo* packets = sniffer.getPacketInfoTable();
-              int packetCount = sniffer.getClientCount();
+            int packetCount = SnifferGetClientCount();
+            Serial.println(packetCount);
+            if(packetCount){
+              const PacketInfo* packets = SnifferGetPacketInfoTable();
               for (int i = 0; i < packetCount; i++) {
                 String strMacSrc = macToString(packets[i].srcMac);
                 String strMacDest = macToString(packets[i].destMac);
                 String fileID = String(packets[i].fileName);
+                canvas_main.setCursor(1, (((PADDING + 1) * line) + 5) + 1);
                 canvas_main.println(strMacSrc + " " + strMacDest + " " + fileID);
-                line++;
+                line = line + 2;
               }
             
             }
             pushAll();
-            sniffer.loop();
+            SnifferLoop();
             line = 0;
           }
         }

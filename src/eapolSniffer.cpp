@@ -1,18 +1,8 @@
 #include "EapolSniffer.h"
 
-EapolSniffer* EapolSniffer::instance = nullptr;
 
-EapolSniffer::EapolSniffer() 
-    : clientCount(0), currentChannel(1), userChannel(0), autoChannelSwitch(false), packetInfoCount(0) {
-    memset(clients, 0, sizeof(clients));
-    memset(packetInfoTable, 0, sizeof(packetInfoTable));
-    updatePcapFileName(); // Ustaw pierwszy plik .pcap
-}
-
-
-bool EapolSniffer::begin(int userChannel) {
-    instance = this; // Set the static instance pointer
-    this->userChannel = userChannel;
+bool SnifferBegin(int userChannel) {
+  SD.begin();
     autoChannelSwitch = (userChannel == 0);
 
     // Set the initial channel
@@ -20,37 +10,33 @@ bool EapolSniffer::begin(int userChannel) {
 
     WiFi.mode(WIFI_MODE_STA);
     esp_wifi_set_promiscuous(true);
-    esp_wifi_set_promiscuous_rx_cb(snifferCallbackDeauth);
+    esp_wifi_set_promiscuous_rx_cb(SnifferCallbackDeauth);
 
     esp_wifi_set_channel(currentChannel, WIFI_SECOND_CHAN_NONE);
 
-    writePcapHeader();
+    SnifferWritePcapHeader();
     return true;
 }
 
 
 
-void EapolSniffer::loop() {
+void SnifferLoop() {
     static unsigned long lastSwitch = 0;
     unsigned long now = millis();
 
     // W trybie automatycznym przełącz kanał co 500 ms
     if (autoChannelSwitch && (now - lastSwitch > 500)) {
-        switchChannel();
+        SnifferSwitchChannel();
         lastSwitch = now;
     }
 }
 
 
-void EapolSniffer::promiscuousCallback(void* buf, wifi_promiscuous_pkt_type_t type) {
-  //Serial.println("Packet");
-    //if (instance) {
-        instance->handlePacket(buf, type);
-        //Serial.println("Called");
-    //}
+void SnifferPromiscuousCallback(void* buf, wifi_promiscuous_pkt_type_t type) {
+  SnifferHandlePacket(buf, type);
 }
 
-void EapolSniffer::handlePacket(void* buf, wifi_promiscuous_pkt_type_t type) {
+void SnifferHandlePacket(void* buf, wifi_promiscuous_pkt_type_t type) {
     if (type != WIFI_PKT_MGMT && type != WIFI_PKT_DATA) {
         return; // Skip non-management or non-data packets
     }
@@ -68,8 +54,7 @@ void EapolSniffer::handlePacket(void* buf, wifi_promiscuous_pkt_type_t type) {
 
     if (etherType == 0x888E) {
         Serial.println("EAPOL packet detected!");
-        while(true){};
-        writePcapPacket(payload, len);
+        SnifferWritePcapPacket(payload, len);
 
         // Save packet info
         if (packetInfoCount < 100) {
@@ -88,7 +73,7 @@ void EapolSniffer::handlePacket(void* buf, wifi_promiscuous_pkt_type_t type) {
 
 
 /*
-void EapolSniffer::handlePacket(void* buf, wifi_promiscuous_pkt_type_t type) {
+void SnifferhandlePacket(void* buf, wifi_promiscuous_pkt_type_t type) {
     wifi_promiscuous_pkt_t* pkt = (wifi_promiscuous_pkt_t*)buf;
     uint8_t* hdr = pkt->payload;
     //Serial.println("Packet detected");
@@ -118,7 +103,7 @@ void EapolSniffer::handlePacket(void* buf, wifi_promiscuous_pkt_type_t type) {
     }
 }
 */
-void EapolSniffer::writePcapHeader() {
+void SnifferWritePcapHeader() {
     struct {
         uint32_t magic_number = 0xa1b2c3d4;
         uint16_t version_major = 2;
@@ -136,7 +121,7 @@ void EapolSniffer::writePcapHeader() {
     }
 }
 
-void EapolSniffer::writePcapPacket(const uint8_t* packet, uint32_t packet_length) {
+void SnifferWritePcapPacket(const uint8_t* packet, uint32_t packet_length) {
     uint32_t timestamp = millis();
     uint32_t length = packet_length;
 
@@ -151,7 +136,7 @@ void EapolSniffer::writePcapPacket(const uint8_t* packet, uint32_t packet_length
     }
 }
 
-bool EapolSniffer::addClient(const uint8_t* mac) {
+bool SnifferAddClient(const uint8_t* mac) {
     for (int i = 0; i < clientCount; i++) {
         if (memcmp(clients[i], mac, 6) == 0) {
             return false;
@@ -166,15 +151,15 @@ bool EapolSniffer::addClient(const uint8_t* mac) {
     return false;
 }
 
-void EapolSniffer::clearClients() {
+void SnifferClearClients() {
     clientCount = 0;
 }
 
-int EapolSniffer::getClientCount() const {
-    return clientCount;
+int SnifferGetClientCount() {
+    return packetInfoCount;
 }
 
-const uint8_t* EapolSniffer::getClient(int index) const {
+const uint8_t* SnifferGetClient(int index) {
     if (index >= 0 && index < clientCount) {
         return clients[index];
     }
@@ -182,7 +167,7 @@ const uint8_t* EapolSniffer::getClient(int index) const {
 }
 
 
-void EapolSniffer::switchChannel() {
+void SnifferSwitchChannel() {
     if (autoChannelSwitch) {
         currentChannel++;
         if (currentChannel > 13) {
@@ -196,7 +181,7 @@ void EapolSniffer::switchChannel() {
 }
 
 
-void EapolSniffer::end() {
+void SnifferEnd() {
     // Wyłącz tryb promiscuous
     esp_wifi_set_promiscuous(false);
 
@@ -208,17 +193,15 @@ void EapolSniffer::end() {
 }
 
 
-void EapolSniffer::updatePcapFileName() {
+void SnifferUpdatePcapFileName() {
     static int fileIndex = 0;
     snprintf(pcapFileName, sizeof(pcapFileName), "/eapol_%03d.pcap", fileIndex++);
 }
-const PacketInfo* EapolSniffer::getPacketInfoTable() const {
+const PacketInfo* SnifferGetPacketInfoTable() {
     return packetInfoTable;
 }
 
-void EapolSniffer::snifferCallbackDeauth(void* buf, wifi_promiscuous_pkt_type_t type) {
-    if (!instance) return; // Ensure instance is set
-
+void SnifferCallbackDeauth(void* buf, wifi_promiscuous_pkt_type_t type) {
     if (type != WIFI_PKT_DATA && type != WIFI_PKT_MGMT) return;
 
     wifi_promiscuous_pkt_t* pkt = (wifi_promiscuous_pkt_t*)buf;
@@ -229,21 +212,21 @@ void EapolSniffer::snifferCallbackDeauth(void* buf, wifi_promiscuous_pkt_type_t 
         Serial.println("EAPOL Detected !!!!");
 
         // Use instance to access non-static members
-        if (instance->packetInfoCount < 100) {
-            memcpy(instance->packetInfoTable[instance->packetInfoCount].srcMac, payload + 10, 6); // Source MAC
-            memcpy(instance->packetInfoTable[instance->packetInfoCount].destMac, payload + 4, 6); // Destination MAC
-            instance->packetInfoTable[instance->packetInfoCount].fileName = String(instance->pcapFileName);
-            instance->packetInfoCount++;
+        if (packetInfoCount < 100) {
+            memcpy(packetInfoTable[packetInfoCount].srcMac, payload + 10, 6); // Source MAC
+            memcpy(packetInfoTable[packetInfoCount].destMac, payload + 4, 6); // Destination MAC
+            packetInfoTable[packetInfoCount].fileName = String(pcapFileName);
+            packetInfoCount++;
         } else {
             Serial.println("Packet info table full, skipping...");
         }
 
         // Update PCAP file
-        instance->updatePcapFileName();
-        File file = SD.open(instance->pcapFileName, FILE_WRITE);
+        SnifferUpdatePcapFileName();
+        File file = SD.open(pcapFileName, FILE_WRITE);
         if (file) {
-            instance->writePcapHeader();
-            instance->writePcapPacket(pkt->payload, len);
+            SnifferWritePcapHeader();
+            SnifferWritePcapPacket(pkt->payload, len);
             file.close();
         }
     }

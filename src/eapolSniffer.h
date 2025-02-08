@@ -5,8 +5,6 @@
 #include <cstring>
 #include <SD.h>
 
-#ifndef EAPOL_SNIFFER_H
-#define EAPOL_SNIFFER_H
 
 bool isEAPOL(const wifi_promiscuous_pkt_t* packet);
 
@@ -16,39 +14,29 @@ struct PacketInfo {
     String fileName; // Store the file name
 };
 
-class EapolSniffer {
-public:
-    EapolSniffer();
+int clientCount;
+bool autoChannelSwitch;
+int currentChannel;
+PacketInfo packetInfoTable[100];
+int packetInfoCount;
+char pcapFileName[32];
+uint8_t clients[50][6];
+int userChannel;
 
-    bool begin(int userChannel = 0);
-    void loop();
-    void end();
-    void clearClients();
-    int getClientCount() const;
-    const uint8_t* getClient(int index) const; // Added declaration
-    const PacketInfo* getPacketInfoTable() const;
-    
+// Function declarations
+bool SnifferBegin(int userChannel);
+void SnifferLoop();
+void SnifferHandlePacket(void* buf, wifi_promiscuous_pkt_type_t type);
+void SnifferWritePcapHeader();
+void SnifferWritePcapPacket(const uint8_t* packet, uint32_t packet_length);
+bool SnifferAddClient(const uint8_t* mac);
+void SnifferClearClients();
+int SnifferGetClientCount();
+const uint8_t* SnifferGetClient(int index);
+void SnifferSwitchChannel();
+void SnifferEnd();
+void SnifferUpdatePcapFileName();
+const PacketInfo* SnifferGetPacketInfoTable();
+void SnifferCallbackDeauth(void* buf, wifi_promiscuous_pkt_type_t type);
+bool isEAPOL(const wifi_promiscuous_pkt_t* packet);
 
-private:
-    static void promiscuousCallback(void* buf, wifi_promiscuous_pkt_type_t type);
-    static void snifferCallbackDeauth(void* buf, wifi_promiscuous_pkt_type_t type);
-    void handlePacket(void* buf, wifi_promiscuous_pkt_type_t type);
-    void writePcapHeader();
-    void writePcapPacket(const uint8_t* packet, uint32_t packet_length);
-    bool addClient(const uint8_t* mac);
-    void switchChannel();
-    void updatePcapFileName();
-
-    static EapolSniffer* instance;
-
-    char pcapFileName[32];
-    uint8_t clients[50][6];
-    int clientCount;
-    PacketInfo packetInfoTable[100];
-    int packetInfoCount; // Keep track of added PacketInfo
-    int currentChannel;
-    int userChannel;
-    bool autoChannelSwitch;
-};
-
-#endif
