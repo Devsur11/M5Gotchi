@@ -865,10 +865,10 @@ void runApp(uint8_t appID){
             line++;
             canvas_main.setCursor(1, (((PADDING + 1) * line) + 5) + 1);
             int packetCount = SnifferGetClientCount();
-            Serial.println(packetCount);
             if(packetCount){
               const PacketInfo* packets = SnifferGetPacketInfoTable();
-              for (int i = 0; i < packetCount; i++) {
+              for (int i = packetCount ; i > 0; i--){
+              //for (int i = 0; i < packetCount; i++) {
                 String strMacSrc = macToString(packets[i].srcMac);
                 String strMacDest = macToString(packets[i].destMac);
                 String fileID = String(packets[i].fileName);

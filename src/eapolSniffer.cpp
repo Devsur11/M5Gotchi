@@ -1,171 +1,203 @@
 #include "EapolSniffer.h"
+#define MAX_PKT_SIZE 3000
+long lastpacketsend;
 
+// Global variable used to hold the current handshake file handle.
+// When a new handshake capture begins, we create (and keep open) a file in which we write the
+// PCAP global header and subsequent per–packet records until a timeout occurs.
+File currentPcapFile;
 
+// Define the handshake timeout in milliseconds (here 2000ms as in your original logic)
+const unsigned long HANDSHAKE_TIMEOUT = 2000;
+
+// PCAP Global Header (24 bytes)
+// (Packed to avoid any structure padding.)
+struct pcap_hdr_s {
+  uint32_t magic_number;   /* magic number */
+  uint16_t version_major;  /* major version number */
+  uint16_t version_minor;  /* minor version number */
+  int32_t  thiszone;       /* GMT to local correction */
+  uint32_t sigfigs;        /* accuracy of timestamps */
+  uint32_t snaplen;        /* max length of captured packets, in octets */
+  uint32_t network;        /* data link type */
+} __attribute__((packed));
+
+// PCAP Per-Packet Record Header (16 bytes)
+struct pcaprec_hdr_s {
+  uint32_t ts_sec;   /* timestamp seconds */
+  uint32_t ts_usec;  /* timestamp microseconds */
+  uint32_t incl_len; /* number of octets of packet saved in file */
+  uint32_t orig_len; /* actual length of packet */
+} __attribute__((packed));
+
+// Structure to hold a captured packet that we queue for writing
+typedef struct {
+  size_t    len;
+  uint8_t  *data;
+  uint32_t  ts_sec;
+  uint32_t  ts_usec;
+} CapturedPacket;
+
+// Global variables for packet capture
+QueueHandle_t packetQueue;  // FreeRTOS queue for passing captured packets
+volatile uint32_t packetCount = 0;  // Total number of captured packets
+
+// Global variables for handshake file management
+uint32_t handshakeFileCount = 0;  // A counter used to create unique filenames
+unsigned long lastHandshakeMillis = 0; // Timestamp (millis) of the last handshake packet received
+const unsigned long handshakeTimeout = 5000; // If no handshake packet is received within 5 sec, close current file
+
+// WiFi promiscuous callback function
+// IRAM_ATTR places this function in IRAM for faster execution.
+void IRAM_ATTR wifi_sniffer_cb(void *buf, wifi_promiscuous_pkt_type_t type) {
+  // Process only valid WiFi packet types (management, data, or control)
+  if (type != WIFI_PKT_MGMT && type != WIFI_PKT_DATA && type != WIFI_PKT_CTRL) {
+    return;
+  }
+  
+  // The ESP32 supplies a pointer to a wifi_promiscuous_pkt_t structure.
+  wifi_promiscuous_pkt_t *pkt = (wifi_promiscuous_pkt_t *)buf;
+  uint16_t len = pkt->rx_ctrl.sig_len;
+  const uint8_t* payload = pkt->payload;
+  
+  // Filter for EAPOL frames by checking for the LLC/SNAP header pattern.
+  // (This filter may be adjusted based on your needs.)
+  if (!((payload[24] == 0xAA && payload[25] == 0xAA && payload[26] == 0x03) ||
+        (payload[26] == 0xAA && payload[27] == 0xAA && payload[28] == 0x03))) {
+    return;
+  }
+  Serial.println("EAPOL Detected");
+  if (len == 0 || len > MAX_PKT_SIZE) return;
+  
+  // Allocate a structure to hold this packet.
+  CapturedPacket *p = (CapturedPacket*) malloc(sizeof(CapturedPacket));
+  if (!p) return;
+  p->data = (uint8_t *) malloc(len);
+  if (!p->data) {
+    free(p);
+    return;
+  }
+  
+  // Copy the raw packet data.
+  memcpy(p->data, pkt->payload, len);
+  p->len = len;
+  
+  // Get a timestamp (in microseconds since boot) and break it into seconds and microseconds.
+  uint64_t ts = esp_timer_get_time(); // returns microseconds
+  p->ts_sec = ts / 1000000;
+  p->ts_usec = ts % 1000000;
+  
+  // Send the pointer to the packet to our queue.
+  BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+  xQueueSendFromISR(packetQueue, &p, &xHigherPriorityTaskWoken);
+  if (xHigherPriorityTaskWoken) {
+    portYIELD_FROM_ISR();
+  }
+}
+char filename[32];
 bool SnifferBegin(int userChannel) {
+  autoChannelSwitch = (userChannel == 0);
+  // Set the initial channel
+  currentChannel = autoChannelSwitch ? 1 : userChannel;
+
   SD.begin();
-    autoChannelSwitch = (userChannel == 0);
 
-    // Set the initial channel
-    currentChannel = autoChannelSwitch ? 1 : userChannel;
-
-    WiFi.mode(WIFI_MODE_STA);
-    esp_wifi_set_promiscuous(true);
-    esp_wifi_set_promiscuous_rx_cb(SnifferCallbackDeauth);
-
-    esp_wifi_set_channel(currentChannel, WIFI_SECOND_CHAN_NONE);
-
-    SnifferWritePcapHeader();
-    return true;
+  // Create a FreeRTOS queue to hold captured packets.
+  packetQueue = xQueueCreate(32, sizeof(CapturedPacket*));
+  if (packetQueue == NULL) {
+    while (1) {
+      delay(1000);
+    }
+  }
+  // Set WiFi to station mode and disconnect from any AP.
+  WiFi.mode(WIFI_STA);
+  WiFi.disconnect();
+  delay(100);
+  // Enable WiFi promiscuous mode on channel 11.
+  esp_wifi_set_promiscuous(true);
+  esp_wifi_set_channel(currentChannel, WIFI_SECOND_CHAN_NONE);
+  esp_wifi_set_promiscuous_rx_cb(&wifi_sniffer_cb);
+  return true;
 }
 
-
-
 void SnifferLoop() {
+  CapturedPacket *packet = NULL;
+  
+  // Check if any captured packet is waiting in the queue.
+  if (xQueueReceive(packetQueue, &packet, 10 / portTICK_PERIOD_MS) == pdTRUE) {
+    
+    // If no current handshake file is open, start a new one.
+    if (!currentPcapFile) {
+      char filename[32];
+      sprintf(filename, "/handshake_%u.pcap", handshakeFileCount++);
+      currentPcapFile = SD.open(filename, FILE_WRITE);
+      if (!currentPcapFile) {
+        // Free the packet memory and return early.
+        free(packet->data);
+        free(packet);
+        return;
+      }
+      // Write the PCAP global header to the new file.
+      pcap_hdr_s globalHeader;
+      globalHeader.magic_number = 0xa1b2c3d4;
+      globalHeader.version_major = 2;
+      globalHeader.version_minor = 4;
+      globalHeader.thiszone = 0;
+      globalHeader.sigfigs = 0;
+      globalHeader.snaplen = 65535;  // maximum number of bytes captured per packet
+      globalHeader.network = 105;    // DLT_IEEE802_11 (raw 802.11 frames)
+      currentPcapFile.write((uint8_t*)&globalHeader, sizeof(globalHeader));
+      currentPcapFile.flush();
+    }
+    
+    // Prepare the PCAP per-packet header.
+    pcaprec_hdr_s recHeader;
+    recHeader.ts_sec   = packet->ts_sec;
+    recHeader.ts_usec  = packet->ts_usec;
+    recHeader.incl_len = packet->len;
+    recHeader.orig_len = packet->len;
+    
+    // Write the record header and the packet data to the current file.
+    currentPcapFile.write((uint8_t*)&recHeader, sizeof(recHeader));
+    currentPcapFile.write(packet->data, packet->len);
+    currentPcapFile.flush();
+    if (packetCount < 100) {
+      
+      memcpy(packetInfoTable[packetCount].srcMac, packet + 10, 6); // Source MAC
+      memcpy(packetInfoTable[packetCount].destMac, packet + 4, 6); // Destination MAC
+      packetInfoTable[packetCount].fileName = String(filename);
+    } else {
+      Serial.println("Packet info table full, skipping...");
+    }
+    
+    // Update the timestamp for the last handshake packet.
+    lastHandshakeMillis = millis();
+    
+    // Free the dynamically allocated memory for this packet.
+    free(packet->data);
+    free(packet);
+  }
+  
+  // If a handshake file is open and we've exceeded the handshake timeout,
+  // close the file. (This marks the end of a handshake capture.)
+  if (currentPcapFile && (millis() - lastHandshakeMillis > handshakeTimeout)) {
+    packetCount++;
+    currentPcapFile.close();
+    currentPcapFile = File(); // Reset the file object.
+  }
     static unsigned long lastSwitch = 0;
     unsigned long now = millis();
 
-    // W trybie automatycznym przełącz kanał co 500 ms
+    // In auto channel mode, switch channels every 500 ms
     if (autoChannelSwitch && (now - lastSwitch > 500)) {
         SnifferSwitchChannel();
         lastSwitch = now;
     }
 }
 
-
-void SnifferPromiscuousCallback(void* buf, wifi_promiscuous_pkt_type_t type) {
-  SnifferHandlePacket(buf, type);
-}
-
-void SnifferHandlePacket(void* buf, wifi_promiscuous_pkt_type_t type) {
-    if (type != WIFI_PKT_MGMT && type != WIFI_PKT_DATA) {
-        return; // Skip non-management or non-data packets
-    }
-
-    wifi_promiscuous_pkt_t* pkt = (wifi_promiscuous_pkt_t*)buf;
-    uint16_t len = pkt->rx_ctrl.sig_len;
-/*
-    if (len < 60) {
-        Serial.println("Packet too short, skipping...");
-        return; // Skip packets that are too short
-    }
-*/
-    const uint8_t* payload = pkt->payload;
-    uint16_t etherType = (payload[12] << 8) | payload[13]; // Extract EtherType
-
-    if (etherType == 0x888E) {
-        Serial.println("EAPOL packet detected!");
-        SnifferWritePcapPacket(payload, len);
-
-        // Save packet info
-        if (packetInfoCount < 100) {
-            memcpy(packetInfoTable[packetInfoCount].srcMac, payload + 10, 6); // Source MAC
-            memcpy(packetInfoTable[packetInfoCount].destMac, payload + 4, 6); // Destination MAC
-            packetInfoTable[packetInfoCount].fileName = pcapFileName;
-            packetInfoCount++;
-        } else {
-            Serial.println("Packet info table full, skipping...");
-        }
-    } else {
-        Serial.println("Non-EAPOL packet detected, skipping...");
-    }
-}
-
-
-
-/*
-void SnifferhandlePacket(void* buf, wifi_promiscuous_pkt_type_t type) {
-    wifi_promiscuous_pkt_t* pkt = (wifi_promiscuous_pkt_t*)buf;
-    uint8_t* hdr = pkt->payload;
-    //Serial.println("Packet detected");
-
-    if (type == WIFI_PKT_MGMT && hdr[0] == 0x88) { // EAPOL frame
-        Serial.println("EAPOL detected");
-        uint8_t* destMac = hdr + 4;
-        uint8_t* srcMac = hdr + 10;
-
-        // Zapis do tablicy packetInfoTable
-        if (packetInfoCount < 100) { // Ograniczenie do 100 obiektów
-            memcpy(packetInfoTable[packetInfoCount].srcMac, srcMac, 6);
-            memcpy(packetInfoTable[packetInfoCount].destMac, destMac, 6);
-            packetInfoTable[packetInfoCount].fileName = String(pcapFileName);
-            packetInfoCount++;
-        }
-
-        // Tworzenie nowego pliku .pcap
-        updatePcapFileName();
-
-        File file = SD.open(pcapFileName, FILE_WRITE);
-        if (file) {
-            writePcapHeader();
-            writePcapPacket(pkt->payload, pkt->rx_ctrl.sig_len);
-            file.close();
-        }
-    }
-}
-*/
-void SnifferWritePcapHeader() {
-    struct {
-        uint32_t magic_number = 0xa1b2c3d4;
-        uint16_t version_major = 2;
-        uint16_t version_minor = 4;
-        uint32_t thiszone = 0;
-        uint32_t sigfigs = 0;
-        uint32_t snaplen = 0xffff;
-        uint32_t network = 105;  // DLT_IEEE802_11
-    } pcapHeader;
-
-    File file = SD.open(pcapFileName, FILE_WRITE);
-    if (file) {
-        file.write((uint8_t*)&pcapHeader, sizeof(pcapHeader));
-        file.close();
-    }
-}
-
-void SnifferWritePcapPacket(const uint8_t* packet, uint32_t packet_length) {
-    uint32_t timestamp = millis();
-    uint32_t length = packet_length;
-
-    File file = SD.open(pcapFileName, FILE_APPEND);
-    if (file) {
-        file.write((uint8_t*)&timestamp, sizeof(timestamp));
-        file.write((uint8_t*)&timestamp, sizeof(timestamp));
-        file.write((uint8_t*)&length, sizeof(length));
-        file.write((uint8_t*)&length, sizeof(length));
-        file.write(packet, packet_length);
-        file.close();
-    }
-}
-
-bool SnifferAddClient(const uint8_t* mac) {
-    for (int i = 0; i < clientCount; i++) {
-        if (memcmp(clients[i], mac, 6) == 0) {
-            return false;
-        }
-    }
-
-    if (clientCount < 50) {
-        memcpy(clients[clientCount], mac, 6);
-        clientCount++;
-        return true;
-    }
-    return false;
-}
-
-void SnifferClearClients() {
-    clientCount = 0;
-}
-
 int SnifferGetClientCount() {
-    return packetInfoCount;
+    return packetCount;
 }
-
-const uint8_t* SnifferGetClient(int index) {
-    if (index >= 0 && index < clientCount) {
-        return clients[index];
-    }
-    return nullptr; // Return null if index is out of bounds
-}
-
 
 void SnifferSwitchChannel() {
     if (autoChannelSwitch) {
@@ -180,7 +212,6 @@ void SnifferSwitchChannel() {
     }
 }
 
-
 void SnifferEnd() {
     // Wyłącz tryb promiscuous
     esp_wifi_set_promiscuous(false);
@@ -193,74 +224,6 @@ void SnifferEnd() {
 }
 
 
-void SnifferUpdatePcapFileName() {
-    static int fileIndex = 0;
-    snprintf(pcapFileName, sizeof(pcapFileName), "/eapol_%03d.pcap", fileIndex++);
-}
 const PacketInfo* SnifferGetPacketInfoTable() {
     return packetInfoTable;
-}
-
-void SnifferCallbackDeauth(void* buf, wifi_promiscuous_pkt_type_t type) {
-    if (type != WIFI_PKT_DATA && type != WIFI_PKT_MGMT) return;
-
-    wifi_promiscuous_pkt_t* pkt = (wifi_promiscuous_pkt_t*)buf;
-    const uint8_t* payload = pkt->payload;
-    int len = pkt->rx_ctrl.sig_len;
-
-    if (isEAPOL(pkt)) {
-        Serial.println("EAPOL Detected !!!!");
-
-        // Use instance to access non-static members
-        if (packetInfoCount < 100) {
-            memcpy(packetInfoTable[packetInfoCount].srcMac, payload + 10, 6); // Source MAC
-            memcpy(packetInfoTable[packetInfoCount].destMac, payload + 4, 6); // Destination MAC
-            packetInfoTable[packetInfoCount].fileName = String(pcapFileName);
-            packetInfoCount++;
-        } else {
-            Serial.println("Packet info table full, skipping...");
-        }
-
-        // Update PCAP file
-        SnifferUpdatePcapFileName();
-        File file = SD.open(pcapFileName, FILE_WRITE);
-        if (file) {
-            SnifferWritePcapHeader();
-            SnifferWritePcapPacket(pkt->payload, len);
-            file.close();
-        }
-    }
-}
-
-//HUGE Thanks to 7h30th3r0n3 for this function: https://github.com/7h30th3r0n3/Evil-M5Project
-
-bool isEAPOL(const wifi_promiscuous_pkt_t* packet) {
-  const uint8_t *payload = packet->payload;
-  int len = packet->rx_ctrl.sig_len;
-
-  // length check to ensure packet is large enough for EAPOL (minimum length)
-  if (len < (24 + 8 + 4)) { // 24 bytes for the MAC header, 8 for LLC/SNAP, 4 for EAPOL minimum
-    return false;
-  }
-
-  // check for LLC/SNAP header indicating EAPOL payload
-  // LLC: AA-AA-03, SNAP: 00-00-00-88-8E for EAPOL
-  if (payload[24] == 0xAA && payload[25] == 0xAA && payload[26] == 0x03 &&
-      payload[27] == 0x00 && payload[28] == 0x00 && payload[29] == 0x00 &&
-      payload[30] == 0x88 && payload[31] == 0x8E) {
-    return true;
-  }
-
-  // handle QoS tagging which shifts the start of the LLC/SNAP headers by 2 bytes
-  // check if the frame control field's subtype indicates a QoS data subtype (0x08)
-  if ((payload[0] & 0x0F) == 0x08) {
-    // Adjust for the QoS Control field and recheck for LLC/SNAP header
-    if (payload[26] == 0xAA && payload[27] == 0xAA && payload[28] == 0x03 &&
-        payload[29] == 0x00 && payload[30] == 0x00 && payload[31] == 0x00 &&
-        payload[32] == 0x88 && payload[33] == 0x8E) {
-      return true;
-    }
-  }
-
-  return false;
 }

@@ -24,19 +24,10 @@ uint8_t clients[50][6];
 int userChannel;
 
 // Function declarations
+void IRAM_ATTR wifi_sniffer_cb(void *buf, wifi_promiscuous_pkt_type_t type);
 bool SnifferBegin(int userChannel);
 void SnifferLoop();
-void SnifferHandlePacket(void* buf, wifi_promiscuous_pkt_type_t type);
-void SnifferWritePcapHeader();
-void SnifferWritePcapPacket(const uint8_t* packet, uint32_t packet_length);
-bool SnifferAddClient(const uint8_t* mac);
-void SnifferClearClients();
 int SnifferGetClientCount();
-const uint8_t* SnifferGetClient(int index);
 void SnifferSwitchChannel();
 void SnifferEnd();
-void SnifferUpdatePcapFileName();
 const PacketInfo* SnifferGetPacketInfoTable();
-void SnifferCallbackDeauth(void* buf, wifi_promiscuous_pkt_type_t type);
-bool isEAPOL(const wifi_promiscuous_pkt_t* packet);
-
