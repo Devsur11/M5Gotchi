@@ -7,6 +7,15 @@ long lastpacketsend;
 // PCAP global header and subsequent per–packet records until a timeout occurs.
 File currentPcapFile;
 
+int clientCount;
+bool autoChannelSwitch;
+int currentChannel;
+PacketInfo packetInfoTable[100];
+int packetInfoCount;
+char pcapFileName[32];
+uint8_t clients[50][6];
+int userChannel;
+
 // Define the handshake timeout in milliseconds (here 2000ms as in your original logic)
 const unsigned long HANDSHAKE_TIMEOUT = 2000;
 

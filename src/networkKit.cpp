@@ -10,14 +10,15 @@ uint8_t target_mac[] = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF};
 
 
 // Tablica do przechowywania adresów MAC klientów
-uint8_t clients[MAX_CLIENTS][6];
+uint8_t network_clients[MAX_CLIENTS][6];
 int client_count = 0;
 int target_channel = 1;
 
 //bypass stupid wifi restrictions
-extern "C" int ieee80211_raw_frame_sanity_check(int32_t arg, int32_t arg2, int32_t arg3) {
-  return 0;
-}
+//extern "C" int ieee80211_raw_frame_sanity_check(int32_t arg, int32_t arg2, int32_t arg3) {
+//  return 0;
+//}
+//NOTE: Not needed implemented in other file
 
 // Liczba pakietów deauth do wysłania
 const int packet_count = 100;
@@ -235,7 +236,7 @@ void deauth_promiscuous_rx_cb(void* buf, wifi_promiscuous_pkt_type_t type) {
 
 bool is_client_known(uint8_t *mac) {
   for (int i = 0; i < client_count; i++) {
-    if (memcmp(clients[i], mac, 6) == 0) {
+    if (memcmp(network_clients[i], mac, 6) == 0) {
       return true;
     }
   }
@@ -246,7 +247,7 @@ void initClientSniffing() {
   WiFi.mode(WIFI_STA);  // Ustawienie trybu WiFi na stację
   esp_wifi_set_promiscuous(true);  // Włączenie trybu promiskuitywnego
   esp_wifi_set_promiscuous_rx_cb(deauth_promiscuous_rx_cb);  // Ustawienie callback dla trybu promiskuitywnego
-  Serial.println("Sniffing for clients...");
+  Serial.println("Sniffing for network_clients...");
 }
 
 void get_clients_list(String client_list[], int &count) {
@@ -254,7 +255,7 @@ void get_clients_list(String client_list[], int &count) {
   for (int i = 0; i < client_count; i++) {
     String mac = "";
     for (int j = 0; j < 6; j++) {
-      mac += String(clients[i][j], HEX);
+      mac += String(network_clients[i][j], HEX);
       if (j < 5) {
         mac += ":";
       }
@@ -265,7 +266,7 @@ void get_clients_list(String client_list[], int &count) {
 
 void add_client(uint8_t *mac) {
   if (client_count < MAX_CLIENTS) {
-    memcpy(clients[client_count], mac, 6);
+    memcpy(network_clients[client_count], mac, 6);
     client_count++;
     new_clients_detected = true;
     Serial.print("Dodano nowego klienta: ");
@@ -327,7 +328,7 @@ bool convert_mac_string_to_bytes(const String &mac_str, uint8_t *mac_bytes) {
 void clearClients() {
   // Przejdź przez każdy klienta w tablicy i wyzeruj jego MAC
   for (int i = 0; i < MAX_CLIENTS; i++) {
-    memset(clients[i], 0, 6);  // Ustaw wszystkie bajty MAC na 0
+    memset(network_clients[i], 0, 6);  // Ustaw wszystkie bajty MAC na 0
   }
   client_count = 0;  // Zresetuj licznik klientów
   Serial.println("Client table cleared successfully.");

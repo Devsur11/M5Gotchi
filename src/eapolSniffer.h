@@ -4,7 +4,7 @@
 #include <esp_wifi.h>
 #include <cstring>
 #include <SD.h>
-
+#pragma once
 
 bool isEAPOL(const wifi_promiscuous_pkt_t* packet);
 
@@ -14,14 +14,6 @@ struct PacketInfo {
     String fileName; // Store the file name
 };
 
-int clientCount;
-bool autoChannelSwitch;
-int currentChannel;
-PacketInfo packetInfoTable[100];
-int packetInfoCount;
-char pcapFileName[32];
-uint8_t clients[50][6];
-int userChannel;
 
 // Function declarations
 void IRAM_ATTR wifi_sniffer_cb(void *buf, wifi_promiscuous_pkt_type_t type);
