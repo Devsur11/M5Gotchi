@@ -18,17 +18,21 @@ uint8_t activity_level[] = {17,18,16,15,0,1,2,3,11,13,4,5,6,7,9,8,14,19,20,10,12
 void initM5() {
   auto cfg = M5.config();
   M5.begin(cfg);
-  M5.Display.begin();
-  M5.Display.setFont(0);
-  M5Cardputer.begin(cfg);
+  //M5.Display.begin();
+  M5Cardputer.begin(cfg, true);
   M5Cardputer.Keyboard.begin();
 }
 
 void setup() {
-  Serial.begin(9600);
+
+  Serial.begin(115200);
+  Serial.println("Starting setup...");
   initM5();
+  Serial.println("M5 initialized");
   initUi();
+  Serial.println("UI initialized");
   state = STATE_INIT;
+  Serial.println("Setup done");
 }
 
 uint32_t last_mood_switch = 10001;
@@ -48,12 +52,8 @@ void loop() {
   //updateActivity();
   M5.update();
   M5Cardputer.update();
-  Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();//this is only for testinf, remove later
-  if(status.fn){
-    activity++;
-    delay(300);
-  }
-  if(M5Cardputer.BtnA.isPressed()){
+  if(M5.BtnA.isPressed()){
+    Serial.println("Button A pressed");
     M5.Lcd.setBrightness(0);
     M5.Display.fillScreen(TFT_BLACK);
     delay(500);

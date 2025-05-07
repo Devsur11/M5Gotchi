@@ -190,6 +190,7 @@ void initUi() {
   bar_right2.createSprite((display_w * 0.02) / 2, (canvas_h - 6) / 4 );
   bar_right3.createSprite((display_w * 0.02) / 2, (canvas_h - 6) / 4 );
   bar_right4.createSprite((display_w * 0.02) / 2, (canvas_h - 6) / 4 );
+  Serial.println("UI initialized");
 }
 
 uint8_t returnBrightness(){return currentBrightness;}
@@ -1395,7 +1396,7 @@ inline void updateM5(){
 bool sleep_mode = false;
 
 inline void sleepFunction(){
-  if(M5Cardputer.BtnA.isPressed()){
+  if(M5.BtnA.isPressed()){
     if(sleep_mode == false){
       delay(250);
       M5.Lcd.setBrightness(0);
