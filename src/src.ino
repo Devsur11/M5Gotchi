@@ -60,7 +60,7 @@ void loop() {
     while(true){
       M5.update();
       M5Cardputer.update();
-      if(M5Cardputer.BtnA.isPressed()){break;}
+      if(M5.BtnA.isPressed()){break;}
     }
     M5.Lcd.setBrightness(returnBrightness());
     initUi();
