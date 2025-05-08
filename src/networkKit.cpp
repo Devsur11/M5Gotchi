@@ -105,7 +105,7 @@ void broadcastFakeSSIDs(String ssidList[], int ssidCount, bool sound) {
   };
 
   // Begin setup: Serial communication, set Wi-Fi mode, randomize MAC, etc.
-  Serial.println("Hello, NodeMCU! Broadcasting fake SSIDs...");
+  logMessage("Hello, NodeMCU! Broadcasting fake SSIDs...");
 
   WiFi.mode(WIFI_MODE_STA); // Set to station mode
 
@@ -178,8 +178,8 @@ void broadcastFakeSSIDs(String ssidList[], int ssidCount, bool sound) {
     if (currentTime - packetRateTime > 1000) {
       packetRateTime = currentTime;
       drawInfoBox("Beacon spam", "Packets/sec: " + String(packetCounter) , "Press ENTER to stop", false, false);
-      Serial.print("Packets/s: ");
-      Serial.println(packetCounter);
+      logMessage("Packets/s: ");
+      logMessage(String(packetCounter));
       packetCounter = 0;
     }
   }
@@ -191,7 +191,7 @@ bool send_deauth_packets(String &client_mac_str, int count) {
   
   // Konwersja adresu MAC z string na tablicę bajtów
   if (!convert_mac_string_to_bytes(client_mac_str, client_mac)) {
-    Serial.println("Błędny format adresu MAC klienta.");
+    logMessage("Błędny format adresu MAC klienta.");
     return false;
   }
 
@@ -207,10 +207,10 @@ bool send_deauth_packets(String &client_mac_str, int count) {
 
   esp_err_t result = esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
   if (result == ESP_OK) {
-    Serial.println("Packet sent successfully.");
+    logMessage("Packet sent successfully.");
     return true;
   } else {
-    Serial.println("Error sending packet.");
+    logMessage("Error sending packet.");
     return false;
   }
 }
@@ -247,7 +247,7 @@ void initClientSniffing() {
   WiFi.mode(WIFI_STA);  // Ustawienie trybu WiFi na stację
   esp_wifi_set_promiscuous(true);  // Włączenie trybu promiskuitywnego
   esp_wifi_set_promiscuous_rx_cb(deauth_promiscuous_rx_cb);  // Ustawienie callback dla trybu promiskuitywnego
-  Serial.println("Sniffing for network_clients...");
+  logMessage("Sniffing for network_clients...");
 }
 
 void get_clients_list(String client_list[], int &count) {
@@ -274,9 +274,8 @@ void add_client(uint8_t *mac) {
       Serial.printf("%02X", mac[i]);
       if (i < 5) Serial.print(":");
     }
-    Serial.println();
   } else {
-    Serial.println("Max client lenght is abused.");
+    logMessage("Max client lenght is abused.");
   }
 }
 
@@ -288,7 +287,6 @@ void setMac(uint8_t new_mac[6]) {
     Serial.printf("%02X", target_mac[i]);
     if (i < 5) Serial.print(":");
   }
-  Serial.println();
 }
 
 bool set_mac_address(uint8_t new_mac[6]) {
@@ -300,10 +298,9 @@ bool set_mac_address(uint8_t new_mac[6]) {
       Serial.printf("%02X", new_mac[i]);
       if (i < 5) Serial.print(":");
     }
-    Serial.println();
     return true;  // Sukces
   } else {
-    Serial.println("Błąd podczas ustawiania adresu MAC!");
+    logMessage("Błąd podczas ustawiania adresu MAC!");
     return false;  // Błąd
   }
 }
@@ -331,7 +328,7 @@ void clearClients() {
     memset(network_clients[i], 0, 6);  // Ustaw wszystkie bajty MAC na 0
   }
   client_count = 0;  // Zresetuj licznik klientów
-  Serial.println("Client table cleared successfully.");
+  logMessage("Client table cleared successfully.");
 }
 
 void set_target_channel(const char* target_ssid) {
@@ -340,14 +337,14 @@ void set_target_channel(const char* target_ssid) {
         if (strcmp(WiFi.SSID(i).c_str(), target_ssid) == 0) {
             target_channel = WiFi.channel(i);
             Serial.print("Detected target network: ");
-            Serial.println(target_ssid);
+            logMessage(target_ssid);
             Serial.print("Setting chanel to: ");
-            Serial.println(target_channel);
+            logMessage(String(target_channel));
             esp_wifi_set_channel(target_channel, WIFI_SECOND_CHAN_NONE);
             return;
         }
     }
-    Serial.println("ERROR!");
+    logMessage("ERROR!");
 }
 
 
@@ -380,7 +377,7 @@ void add_mac_to_table(uint8_t *src, uint8_t *dest, uint8_t channel) {
                           dest[0], dest[1], dest[2], dest[3], dest[4], dest[5]);
             Serial.printf("Channel: %d\n", channel);
         } else {
-            Serial.println("Table full, cannot add more addresses.");
+            logMessage("Table full, cannot add more addresses.");
         }
     }
 }

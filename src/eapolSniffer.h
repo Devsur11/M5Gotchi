@@ -5,7 +5,7 @@
 #include <cstring>
 #include <SD.h>
 #pragma once
-
+#include "logger.h"
 bool isEAPOL(const wifi_promiscuous_pkt_t* packet);
 
 struct PacketInfo {

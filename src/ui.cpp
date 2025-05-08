@@ -190,7 +190,7 @@ void initUi() {
   bar_right2.createSprite((display_w * 0.02) / 2, (canvas_h - 6) / 4 );
   bar_right3.createSprite((display_w * 0.02) / 2, (canvas_h - 6) / 4 );
   bar_right4.createSprite((display_w * 0.02) / 2, (canvas_h - 6) / 4 );
-  Serial.println("UI initialized");
+  logMessage("UI initialized");
 }
 
 uint8_t returnBrightness(){return currentBrightness;}
@@ -519,10 +519,10 @@ void drawInfoBox(String tittle, String info, String info2, bool canBeQuit, bool 
   appRunning = false;
 }
 
-inline void trigger(uint8_t trigID){Serial.println("Trigger" + String(trigID));}
+inline void trigger(uint8_t trigID){logMessage("Trigger" + String(trigID));}
 
 void runApp(uint8_t appID){
-  Serial.println("App started running, ID:"+ String(appID));
+  logMessage("App started running, ID:"+ String(appID));
   menu_current_opt = 0;
   menu_current_page = 1;
   menuID = 0; 
@@ -559,13 +559,13 @@ void runApp(uint8_t appID){
         String ssid = WiFi.SSID(i);
         
         wifinets[i] = String(ssid);
-        Serial.println(wifinets[i]);
+        logMessage(wifinets[i]);
         }
       }
       uint8_t wifisel = drawMultiChoice("Select WIFI network:", wifinets, numNetworks, 2, 0);
       wifiChoice = WiFi.SSID(wifisel);
       intWifiChoice = wifisel;
-      Serial.println("Selected wifi: "+ wifiChoice);
+      logMessage("Selected wifi: "+ wifiChoice);
       drawInfoBox("Succes", wifiChoice, "Was selected", true, false);
     }
     if(appID == 21){
@@ -694,7 +694,7 @@ void runApp(uint8_t appID){
         if(!wifiChoice.equals("")){
           set_target_channel(WiFi.SSID(intWifiChoice).c_str());
           setMac(WiFi.BSSID(intWifiChoice));
-          Serial.println("User inited deauth");
+          logMessage("User inited deauth");
           initClientSniffing();
           String clients[10];
           int clientLen;
@@ -714,7 +714,7 @@ void runApp(uint8_t appID){
           if(target==100){
             return;
           }
-          Serial.println("Selected target: " + clients[target]);
+          logMessage("Selected target: " + clients[target]);
           
           delay(100);
           int previousMillis;
@@ -768,7 +768,7 @@ void runApp(uint8_t appID){
           WiFi.mode(WIFI_STA);  // Ustawienie trybu WiFi na stację
           esp_wifi_set_promiscuous(true);  // Włączenie trybu promiskuitywnego
           esp_wifi_set_promiscuous_rx_cb(client_sniff_promiscuous_rx_cb);
-          Serial.println("Started mac sniffing!");
+          logMessage("Started mac sniffing!");
           canvas_main.clear();
           uint8_t line;
           while(true){
@@ -935,7 +935,7 @@ void runApp(uint8_t appID){
       }
       
       if(name<=255 && name!=0){
-        Serial.println(String(name));
+        logMessage(String(name));
         M5.Lcd.setBrightness(int(name));
         currentBrightness = int(name);
       }
@@ -960,7 +960,7 @@ void runApp(uint8_t appID){
         String ssid = WiFi.SSID(i);
         
         wifinets[i] = String(ssid);
-        Serial.println(wifinets[i]);
+        logMessage(wifinets[i]);
         }
       }
       uint8_t wifisel = drawMultiChoice("Select WIFI network:", wifinets, numNetworks, 6, 3);
@@ -1019,27 +1019,27 @@ void drawMenu() {
 
   if(isOkPressed()){
     if(menuID == 1){
-      //Serial.println(main_menu[menu_current_opt].command); - for debugging purposses
+      //logMessage(main_menu[menu_current_opt].command); - for debugging purposses
       runApp(main_menu[menu_current_opt].command);
     }
     else if(menuID == 2){
-      //Serial.println(main_menu[menu_current_opt].command); - for debugging purposses
+      //logMessage(main_menu[menu_current_opt].command); - for debugging purposses
       runApp(wifi_menu[menu_current_opt].command);
     }
     else if(menuID == 3){
-      //Serial.println(main_menu[menu_current_opt].command); - for debugging purposses
+      //logMessage(main_menu[menu_current_opt].command); - for debugging purposses
       runApp(bluetooth_menu[menu_current_opt].command);
     }
     else if(menuID == 4){
-      //Serial.println(main_menu[menu_current_opt].command); - for debugging purposses
+      //logMessage(main_menu[menu_current_opt].command); - for debugging purposses
       runApp(IR_menu[menu_current_opt].command);
     }
     else if(menuID == 5){
-      //Serial.println(main_menu[menu_current_opt].command); - for debugging purposses
+      //logMessage(main_menu[menu_current_opt].command); - for debugging purposses
       runApp(pwngotchi_menu[menu_current_opt].command);
     }
     else if(menuID == 6){
-      //Serial.println(main_menu[menu_current_opt].command); - for debugging purposses
+      //logMessage(main_menu[menu_current_opt].command); - for debugging purposses
       runApp(settings_menu[menu_current_opt].command);
     }
     else{
@@ -1118,7 +1118,7 @@ String userInput(String tittle, String desc, uint8_t maxLenght){
   }
   //drawInfoBox("Confirm value:", textTyped, true, false);
   appRunning = false;
-  Serial.println("Userinput returning: " + textTyped);
+  logMessage("Userinput returning: " + textTyped);
   return textTyped;
 }
 
@@ -1163,11 +1163,11 @@ bool drawQuestionBox(String tittle, String info, String info2, String label) {
         return false;
       }
       else if(i=='y'){
-        Serial.println("yes");
+        logMessage("yes");
         return true;
       }
       else if(i=='n'){
-        Serial.println("No");
+        logMessage("No");
         return false;
       }
     }

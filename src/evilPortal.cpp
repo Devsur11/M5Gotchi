@@ -24,9 +24,9 @@ void startPortal(String ssid)
     delay(100);
   }
 
-  Serial.println("Ready!");
+  logMessage("Ready!");
   Serial.print("IP address: ");
-  Serial.println(WiFi.softAPIP());
+  logMessage(String(WiFi.softAPIP().toString()));
 }
 
 void updatePortal()

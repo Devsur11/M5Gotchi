@@ -1,5 +1,5 @@
 #pragma once
-
+#include "logger.h"
 struct MacEntry {
     uint8_t source[6];
     uint8_t destination[6];

@@ -2,6 +2,7 @@
 #include <FS.h>
 #include <SD.h>
 #include <WiFi.h>
+#include "logger.h"
 
 void rebootEspWithReason(String reason);
 void updateFromFS(fs::FS &fs);

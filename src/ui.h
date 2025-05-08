@@ -6,6 +6,7 @@
 #include "evilPortal.h"
 #include "networkKit.h"
 #include "src.h"
+#include "logger.h"
 
 
 struct menu {

