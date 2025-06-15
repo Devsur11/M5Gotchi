@@ -13,7 +13,7 @@ long lastpacketsend;
 
 SPIClass sdSPI(FSPI);  // FSPI bus is typically used on ESP32-S3
 
-
+File file;
 File currentPcapFile;
 int clientCount;
 bool autoChannelSwitch;
@@ -103,13 +103,26 @@ void IRAM_ATTR wifi_sniffer_cb(void *buf, wifi_promiscuous_pkt_type_t type) {
   }
 }
 
-bool SnifferBegin(int userChannel) {
+bool SnifferBegin(int userChannel, bool skipSDCardCheck /*ONLY For debugging purposses*/) {
   autoChannelSwitch = (userChannel == 0);
   currentChannel = autoChannelSwitch ? 1 : userChannel;
   sdSPI.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
-  if (!SD.begin(SD_CS, sdSPI, 1000000)) {
-    logMessage("SD card init failed");
-    return false;
+  if(!skipSDCardCheck) {
+    if (!SD.begin(SD_CS, sdSPI, 1000000)) {
+      logMessage("SD card init failed");
+      return false;
+    }
+    File testFile = SD.open("/test_write.txt", FILE_WRITE);
+    if (testFile) {
+      testFile.println("Test OK");
+      testFile.close();
+      Serial.println("Test file written.");
+    } else {
+      Serial.println("Failed to write test file.");
+      return false;
+    }
+  } else {
+    logMessage("Skipping SD card check for debugging purposes.");
   }
 
   packetQueue = xQueueCreate(32, sizeof(CapturedPacket*));
@@ -117,14 +130,7 @@ bool SnifferBegin(int userChannel) {
     logMessage("Packet queue creation failed");
     return false;
   }
-  File testFile = SD.open("/test.txt", FILE_WRITE);
-  if (testFile) {
-    testFile.println("Test OK");
-    testFile.close();
-    Serial.println("Test file written.");
-  } else {
-    Serial.println("Failed to write test file.");
-  }
+  
   WiFi.mode(WIFI_STA);
   WiFi.disconnect();
   delay(100);
@@ -146,16 +152,16 @@ void SnifferLoop() {
             packet->data[10], packet->data[11], packet->data[12],
             packet->data[13], packet->data[14], packet->data[15]);
     String apKey = String(apName);
-
-    if (!apFiles.count(apKey)) {
+    ///<> is statment controling when new file will be created
+    if (isNewHandshake()) {
       char filename[64];
-      snprintf(filename, sizeof(filename), "/sd/handshake_%s_%u.pcap", apName, handshakeFileCount++);
+      snprintf(filename, sizeof(filename), "/sd/handshake_%s.pcap", apName);
 
       if (!SD.exists("/sd")) {
         SD.mkdir("/sd");
       }
 
-      File file = SD.open(filename, FILE_WRITE);
+      file = SD.open(filename, FILE_WRITE);
       if (!file) {
         logMessage("[ERROR] fopen failed: " + String(filename));
         free(packet->data);
@@ -175,9 +181,20 @@ void SnifferLoop() {
       file.flush();
 
       apFiles[apKey] = {apKey, file};
+      logMessage("New handshake file created: " + String(filename));
+      if (packetCount < 100) {
+        memcpy(packetInfoTable[packetCount].srcMac, packet->data + 10, 6);
+        memcpy(packetInfoTable[packetCount].destMac, packet->data + 4, 6);
+        packetInfoTable[packetCount].fileName = String(apName);
+        packetCount++;
+        logMessage("Packet info added to table: " + String(packetCount));
+      } else {
+        logMessage("Packet info table full, skipping...");
+      } 
     }
 
-    File &file = apFiles[apKey].file;
+    //File &file = apFiles[apKey].file;
+    logMessage("Processing packet for AP: " + String(apName));
 
     pcaprec_hdr_s recHeader;
     recHeader.ts_sec   = packet->ts_sec;
@@ -186,18 +203,11 @@ void SnifferLoop() {
     recHeader.orig_len = packet->len;
 
     file.write((uint8_t*)&recHeader, sizeof(recHeader));
+    logMessage("Adding packet header to file for AP: " + String(apName));
     file.write(packet->data, packet->len);
+    logMessage("Packet data written to file for AP: " + String(apName));
     file.flush();
-
-    if (packetCount < 100) {
-      memcpy(packetInfoTable[packetCount].srcMac, packet->data + 10, 6);
-      memcpy(packetInfoTable[packetCount].destMac, packet->data + 4, 6);
-      packetInfoTable[packetCount].fileName = String(apName);
-      packetCount++;
-      logMessage("Packet info added to table: " + String(packetCount));
-    } else {
-      logMessage("Packet info table full, skipping...");
-    }
+    logMessage("flush() called for file: " + String(apName));
 
     lastHandshakeMillis = millis();
     free(packet->data);
@@ -248,4 +258,29 @@ void SnifferEnd() {
 
 const PacketInfo* SnifferGetPacketInfoTable() {
     return packetInfoTable;
+}
+
+void SnifferDebugMode(){
+  delay(10000);
+  SnifferBegin(6, true);
+  logMessage("Sniffer started in debug mode on channel 6.");
+  while (true) {
+    SnifferLoop();
+  }
+}
+
+String getSSIDFromMac(const uint8_t* mac) {
+    char ssid[18];
+    esp_wifi_set_promiscuous(false);
+    esp_wifi_scan_start(nullptr, true);
+    return String(ssid);
+}
+
+bool isNewHandshake(){
+  unsigned long currentMillis = millis();
+  if (currentMillis - lastHandshakeMillis > HANDSHAKE_TIMEOUT) {
+    lastHandshakeMillis = currentMillis;
+    return true;
+  }
+  return false;
 }

@@ -17,9 +17,12 @@ struct PacketInfo {
 
 // Function declarations
 void IRAM_ATTR wifi_sniffer_cb(void *buf, wifi_promiscuous_pkt_type_t type);
-bool SnifferBegin(int userChannel);
+bool SnifferBegin(int userChannel, bool skipSDCardCheck = false /*ONLY For debugging purposses*/);;
 void SnifferLoop();
 int SnifferGetClientCount();
 void SnifferSwitchChannel();
 void SnifferEnd();
 const PacketInfo* SnifferGetPacketInfoTable();
+void SnifferDebugMode();
+String getSSIDFromMac(const uint8_t* mac);
+bool isNewHandshake();

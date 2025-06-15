@@ -2,6 +2,7 @@
 #include "M5Unified.h"
 #include "ui.h"
 
+
 #define STATE_INIT 0
 #define STATE_WAKE 1
 #define STATE_HALT 255
@@ -27,6 +28,7 @@ void initM5() {
 void setup() {
   Serial.begin(115200);
   initM5();
+  //SnifferDebugMode();
   initUi();
   wakeUp();
 }

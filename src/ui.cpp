@@ -9,7 +9,7 @@
 #include <FS.h>
 #include <SD.h>
 #include <WiFi.h>
-#include "eapolSniffer.h"
+#include "EapolSniffer.h"
 #define ROW_SIZE 40
 #define PADDING 10
 
@@ -859,7 +859,7 @@ void runApp(uint8_t appID){
             canvas_main.println("EAPOL sniffer ver.1.0 by Devsur.");
             line++;
             canvas_main.setCursor(1, (((PADDING + 1) * line) + 5) + 1);
-            canvas_main.println("From:             To:               ID:");
+            canvas_main.println("From:             To:               ");
             line++; // ID is what is added to file to identify thic=s copture of others
             canvas_main.setCursor(1, (((PADDING + 1) * line) + 5) + 1);
             canvas_main.println("---------------------------------------");
@@ -868,13 +868,13 @@ void runApp(uint8_t appID){
             int packetCount = SnifferGetClientCount();
             if(packetCount){
               const PacketInfo* packets = SnifferGetPacketInfoTable();
-              for (int i = packetCount ; i > 0; i--){
+              for (int i = packetCount  ; i > 0; i--){
               //for (int i = 0; i < packetCount; i++) {
-                String strMacSrc = macToString(packets[i].srcMac);
-                String strMacDest = macToString(packets[i].destMac);
-                String fileID = String(packets[i].fileName);
+                String strMacSrc = macToString(packets[i-1].srcMac);
+                String strMacDest = macToString(packets[i-1].destMac);
+                String fileID = String(packets[i-1].fileName);
                 canvas_main.setCursor(1, (((PADDING + 1) * line) + 5) + 1);
-                canvas_main.println(strMacSrc + " " + strMacDest + " " + fileID);
+                canvas_main.println(strMacSrc + " " + strMacDest );//+ " " + fileID);
                 line = line + 2;
               }
             
