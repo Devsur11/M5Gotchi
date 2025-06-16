@@ -3,8 +3,6 @@
 #define MAX_PKT_SIZE 3000
 long lastpacketsend;
 
-
-
 // Pin mapping from the official docs
 #define SD_CS    12  // G12
 #define SD_MOSI  14  // G14
@@ -24,7 +22,7 @@ char pcapFileName[32];
 uint8_t clients[50][6];
 int userChannel;
 
-const unsigned long HANDSHAKE_TIMEOUT = 2000;
+const unsigned long HANDSHAKE_TIMEOUT = 5000;
 
 struct pcap_hdr_s {
   uint32_t magic_number;
@@ -112,15 +110,15 @@ bool SnifferBegin(int userChannel, bool skipSDCardCheck /*ONLY For debugging pur
       logMessage("SD card init failed");
       return false;
     }
-    File testFile = SD.open("/test_write.txt", FILE_WRITE);
-    if (testFile) {
-      testFile.println("Test OK");
-      testFile.close();
-      Serial.println("Test file written.");
-    } else {
-      Serial.println("Failed to write test file.");
-      return false;
-    }
+    // File testFile = SD.open("/test_write.txt", FILE_WRITE);
+    // if (testFile) {
+    //   testFile.println("Test OK");
+    //   testFile.close();
+    //   Serial.println("Test file written.");
+    // } else {
+    //   Serial.println("Failed to write test file.");
+    //   return false;
+    // }
   } else {
     logMessage("Skipping SD card check for debugging purposes.");
   }
@@ -141,24 +139,29 @@ bool SnifferBegin(int userChannel, bool skipSDCardCheck /*ONLY For debugging pur
   return true;
 }
 
+char apName[18];
 
 void SnifferLoop() {
   CapturedPacket *packet = NULL;
-
   if (xQueueReceive(packetQueue, &packet, 10 / portTICK_PERIOD_MS) == pdTRUE) {
-
-    char apName[18];
-    sprintf(apName, "%02X_%02X_%02X_%02X_%02X_%02X",
-            packet->data[10], packet->data[11], packet->data[12],
-            packet->data[13], packet->data[14], packet->data[15]);
+    
+    //strncpy(apName, getSSIDFromMac(packet->data + 10).c_str(), sizeof(apName) - 1);  <- too long for the buffer
+    //apName[sizeof(apName) - 1] = '\0';
+    //sprintf(apName, "%02X_%02X_%02X_%02X_%02X_%02X",
+    //        packet->data[10], packet->data[11], packet->data[12],
+    //        packet->data[13], packet->data[14], packet->data[15]);
+    
     String apKey = String(apName);
     ///<> is statment controling when new file will be created
     if (isNewHandshake()) {
+      delay(1000); // <- delay for making sure none of the packets are missing fue to recierving turned off
+      strncpy(apName, getSSIDFromMac(packet->data + 10).c_str(), sizeof(apName) - 1);
+      apName[sizeof(apName) - 1] = '\0';
       char filename[64];
-      snprintf(filename, sizeof(filename), "/sd/handshake_%s.pcap", apName);
+      snprintf(filename, sizeof(filename), "/handshake/handshake_%s_ID:%i.pcap", apName, random(999));
 
-      if (!SD.exists("/sd")) {
-        SD.mkdir("/sd");
+      if (!SD.exists("/handshake")) {
+        SD.mkdir("/handshake");
       }
 
       file = SD.open(filename, FILE_WRITE);
@@ -270,9 +273,34 @@ void SnifferDebugMode(){
 }
 
 String getSSIDFromMac(const uint8_t* mac) {
+    logMessage("Searching SSID for MAC: " + String(mac[0], HEX) + ":" + String(mac[1], HEX) + ":" +
+               String(mac[2], HEX) + ":" + String(mac[3], HEX) + ":" + String(mac[4], HEX) + ":" + String(mac[5], HEX));
     char ssid[18];
     esp_wifi_set_promiscuous(false);
-    esp_wifi_scan_start(nullptr, true);
+    WiFi.mode(WIFI_STA);
+    WiFi.scanNetworks(true);
+    while(WiFi.scanComplete() == WIFI_SCAN_RUNNING) {
+        delay(10);
+    }
+    int numNetworks = WiFi.scanComplete();
+    if (numNetworks < 0) {
+        logMessage("WiFi scan failed");
+        WiFi.mode(WIFI_STA);
+        esp_wifi_set_promiscuous(true);
+        return String();
+    }
+    for (int i = 0; i < numNetworks; i++) {
+        if (memcmp(WiFi.BSSID(i), mac, 6) == 0) {
+            WiFi.SSID(i).toCharArray(ssid, sizeof(ssid));
+            WiFi.mode(WIFI_STA);
+            esp_wifi_set_promiscuous(true);
+            return String(ssid);
+        }
+    }
+    logMessage("SSID not found for MAC: " + String(mac[0], HEX) + ":" + String(mac[1], HEX) + ":" +
+               String(mac[2], HEX) + ":" + String(mac[3], HEX) + ":" + String(mac[4], HEX) + ":" + String(mac[5], HEX));
+    WiFi.mode(WIFI_STA);
+    esp_wifi_set_promiscuous(true);
     return String(ssid);
 }
 

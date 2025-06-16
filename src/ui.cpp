@@ -851,15 +851,16 @@ void runApp(uint8_t appID){
             sleepFunction();
             drawTopCanvas();
             drawBottomCanvas();
+            canvas_main.clear(TFT_WHITE);
             canvas_main.setTextSize(1);
             canvas_main.setTextColor(BLACK);
-            canvas_main.setColor(BLACK);
+            //canvas_main.setColor(BLACK);
             canvas_main.setTextDatum(top_left);
             canvas_main.setCursor(1, (((PADDING + 1) * line) + 5) + 1);
             canvas_main.println("EAPOL sniffer ver.1.0 by Devsur.");
             line++;
             canvas_main.setCursor(1, (((PADDING + 1) * line) + 5) + 1);
-            canvas_main.println("From:             To:               ");
+            canvas_main.println("From:             To SSID:");
             line++; // ID is what is added to file to identify thic=s copture of others
             canvas_main.setCursor(1, (((PADDING + 1) * line) + 5) + 1);
             canvas_main.println("---------------------------------------");
@@ -869,13 +870,12 @@ void runApp(uint8_t appID){
             if(packetCount){
               const PacketInfo* packets = SnifferGetPacketInfoTable();
               for (int i = packetCount  ; i > 0; i--){
-              //for (int i = 0; i < packetCount; i++) {
-                String strMacSrc = macToString(packets[i-1].srcMac);
+                //String strMacSrc = macToString(packets[i-1].srcMac);
                 String strMacDest = macToString(packets[i-1].destMac);
                 String fileID = String(packets[i-1].fileName);
                 canvas_main.setCursor(1, (((PADDING + 1) * line) + 5) + 1);
-                canvas_main.println(strMacSrc + " " + strMacDest );//+ " " + fileID);
-                line = line + 2;
+                canvas_main.println(strMacDest + "   " + fileID);
+                line++;
               }
             
             }
@@ -885,7 +885,7 @@ void runApp(uint8_t appID){
           }
         }
         else{
-          drawInfoBox("Error!", "Can't init EAPOL sniffer.", "Contact developer or try again.", true, false);
+          drawInfoBox("Error!", "Can't init EAPOL sniffer.", "Check SD card!", true, false);
           return;
         }
       }
