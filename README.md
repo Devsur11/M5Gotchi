@@ -200,4 +200,6 @@ To help out, fork this repo and open a PR.
 
 Join our Discord community for support, discussion, and sneak peeks at upcoming features.
 
+https://discord.gg/2TZFcndkhB
+
 ---
