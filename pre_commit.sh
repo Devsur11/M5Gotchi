@@ -1,35 +1,60 @@
 #!/bin/bash
 
-# Absolute paths
-BUILD_DIR=".pio/build/m5stack-stamps3"
-SRC="$BUILD_DIR/firmware.bin"
-DEST_DIR="docs/firmware"
-DEST="$DEST_DIR/latest.bin"
-VERSION_FILE="docs/version.txt"
+set -e
 
-# Ensure source exists
-if [ ! -f "$SRC" ]; then
-    echo "[post_build.sh] ERROR: Firmware not found at $SRC"
+REPO_URL="https://devsur11.github.io/M5Gotchi/firmware"
+
+# Step 1: Ask user to compile full version manually
+echo "🛠️  Please compile the FULL version of your firmware now (press Enter when done)..."
+read -r
+
+# Step 2: Ask for version
+read -p "📄 Enter firmware version (e.g., 0.3.1): " VERSION
+
+# Step 3: Create output folder if it doesn't exist
+mkdir -p firmware
+
+# Step 4: Copy firmware binary to /firmware/firmware.bin
+FULL_BIN_PATH=$(find .pio/build -name "*.bin" | head -n 1)
+if [ ! -f "$FULL_BIN_PATH" ]; then
+    echo "❌ Full binary not found!"
     exit 1
 fi
+cp "$FULL_BIN_PATH" firmware/firmware.bin
+echo "✅ Full firmware copied to firmware/firmware.bin"
 
-# Create destination directory
-mkdir -p "$DEST_DIR"
+# Step 5: Ask user to compile lite version manually
+echo "🛠️  Please compile the LITE version of your firmware now (press Enter when done)..."
+read -r
 
-# Copy firmware
-cp "$SRC" "$DEST"
-echo "[post_build.sh] Copied firmware to $DEST"
-
-# Prompt for version
-read -p "[post_build.sh] Add version to docs/version.txt? [y/N]: " choice
-if [[ "$choice" =~ ^[Yy]$ ]]; then
-    read -p "Enter version number: " version
-    if [[ -n "$version" ]]; then
-        echo "$version" > "$VERSION_FILE"
-        echo "[post_build.sh] Version '$version' saved to $VERSION_FILE"
-    else
-        echo "[post_build.sh] No version entered. Skipping."
-    fi
-else
-    echo "[post_build.sh] Version entry skipped."
+# Step 6: Copy lite binary to /firmware/lite.bin
+LITE_BIN_PATH=$(find .pio/build -name "*.bin" | head -n 1)
+if [ ! -f "$LITE_BIN_PATH" ]; then
+    echo "❌ Lite binary not found!"
+    exit 1
 fi
+cp "$LITE_BIN_PATH" firmware/lite.bin
+echo "✅ Lite firmware copied to firmware/lite.bin"
+
+# Step 7: Create firmware.json with full URL
+DATE=$(date +%F)
+cat <<EOF > firmware/firmware.json
+{
+  "version": "$VERSION",
+  "file": "$REPO_URL/firmware.bin",
+  "date": "$DATE",
+  "notes": "Full version"
+}
+EOF
+
+# Step 8: Create lite.json with full URL
+cat <<EOF > firmware/lite.json
+{
+  "version": "$VERSION",
+  "file": "$REPO_URL/lite.bin",
+  "date": "$DATE",
+  "notes": "Lite version"
+}
+EOF
+
+echo "✅ Metadata files with full download URLs created"
