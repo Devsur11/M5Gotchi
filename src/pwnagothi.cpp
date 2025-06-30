@@ -246,3 +246,18 @@ void removeItemFromWhitelist(String valueToRemove) {
     serializeJson(list, whitelist);
     saveSettings();
 }
+
+void setWhitelistFromArray(String* arr) {
+    JsonDocument list;
+    JsonArray array = list.to<JsonArray>();
+    size_t len = 0;
+    // Calculate length by finding first empty string or hitting 30
+    while (arr[len].length() > 0) {
+        len++;
+    }
+    for (size_t i = 0; i < len; ++i) {
+        array.add(arr[i]);
+    }
+    serializeJson(list, whitelist);
+    saveSettings();
+}

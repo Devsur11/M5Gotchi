@@ -38,13 +38,14 @@ void setup() {
   M5.Display.setBrightness(brightness);
   wakeUp();
   #ifdef LITE_VERSION
+  #ifndef SKIP_AUTO_UPDATE
   drawInfoBox("Update", "Checking for updates", "Please wait...", false, false);
   WiFi.begin(savedApSSID.c_str(), savedAPPass.c_str());
   delay(5000);
   if(check_for_new_firmware_version(true)) {
     drawInfoBox("Update", "New firmware version available", "Downloading...", false, false);
     delay(1000);
-    logMessage("New firmware version available");
+    logMessage("New firmware version available, downloading...");
     if(ota_update_from_url(true)) {
       drawInfoBox("Update", "Update successful", "Restarting...", false, false);
       logMessage("Update successful, restarting...");
@@ -58,6 +59,7 @@ void setup() {
     logMessage("No new firmware version found, or wifi not connected");
     delay(1000);
   }
+  #endif
   #endif
 
   if(pwnagothiMode) {

@@ -2,7 +2,7 @@
 
 #pragma once
 
-
+void setWhitelistFromArray(String* arr);
 void addToWhitelist(String valueToAdd);
 String* parseWhitelist();
 void pwnagothiLoop();

@@ -10,6 +10,7 @@
 #define TEMP_BIN_PATH   TEMP_DIR "/update.bin"
 //#define LITE_VERSION
 #define SERIAL_LOGS
+//#define SKIP_AUTO_UPDATE
 //#define BYPASS_SD_CHECK
 //#define USE_EXPERIMENTAL_APPS
 #define SD_CS    12  // G12

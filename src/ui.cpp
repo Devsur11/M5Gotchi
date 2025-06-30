@@ -1418,7 +1418,7 @@ int drawMultiChoice(String tittle, String toDraw[], uint8_t menuSize , uint8_t p
         Sound(10000, 100, sound);
         menuID = prevMenuID;
         menu_current_opt = prevOpt;
-        return  100;
+        return -1;
       }
     }
 
@@ -1489,30 +1489,32 @@ String* makeList(String windowName, uint8_t appid, bool addln, uint8_t maxEntryL
       delay(100);
       return listToReturn;
     }
-    
     else if (choice==1){
-      uint16_t idOfItemToRemove = drawMultiChoice("Remove element", listToReturn, writeID, 0, 0);
-      listToReturn[idOfItemToRemove] = "";
-      for(uint8_t i = idOfItemToRemove; i < writeID - 1; i++){
-        listToReturn[i] = listToReturn[i+1];
+      s16_t idOfItemToRemove = drawMultiChoice("Remove element", list, writeID, 0, 0);
+      if (idOfItemToRemove == -1) {
+        continue;
       }
+      else
+      {// Shift items up to remove the selected one
+      for (uint8_t i = idOfItemToRemove; i < writeID - 1; i++) {
+        list[i] = list[i + 1];
+      }
+      list[writeID - 1] = "";
+      writeID--;}
     }
     else if (choice==3){
       delay(100);
       while(true){
+        if (writeID == 0) {
+          drawInfoBox("Info", "Whitelist is empty", "Nothing to preview.", true, false);
+          break;
+        }
         drawTopCanvas();
         drawBottomCanvas();
         sleepFunction();
         Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
         keyboard_changed = M5Cardputer.Keyboard.isChange();
         if(keyboard_changed){Sound(10000, 100, sound);}  
-        for(auto i : status.word){
-          if(i=='`'){
-            //*String toreturn[] = {"SYS:NONE"};
-            //return toreturn;
-            // | needs implementation
-          }
-        }
         M5.update();
         M5Cardputer.update();
         if(isOkPressed()){break;}
@@ -1625,34 +1627,52 @@ void sleepFunction(){
 #ifndef LITE_VERSION
 
 void editWhitelist(){
-  uint8_t writeID = sizeof(parseWhitelist()) - 1;
+  String* whitelist = parseWhitelist();
+  s8_t writeID = 0;
+  // Count only non-empty entries
+  for (int i = 0; i < sizeof(parseWhitelist()); i++) { // assuming max 50 entries, adjust as needed
+    if (whitelist[i].length() > 0) {
+      writeID++;
+    }
+  }
   String list[] = {"Add element", "Remove element" , "Done", "Preview"};
   delay(100);
   while(true){
+    initVars();
+    logMessage("WRITE ID: " + String(writeID));
     String* listToReturn = parseWhitelist();
     sleepFunction();
-    uint8_t choice = drawMultiChoice("Whitelist editor", list, 4 , 0, 0);
+    s8_t choice = drawMultiChoice("Whitelist editor", list, 4 , 0, 0);
     if (choice==0){
       String tempText = userInput("Add value:", "", 12);
       addToWhitelist(tempText);
       writeID++;
     }
-    else if (choice==2){
+    else if (choice==2 || choice == -1){
       delay(100);
+      setWhitelistFromArray(listToReturn);
       return;
     }
     else if (choice==1){
-      uint16_t idOfItemToRemove = drawMultiChoice("Remove element", listToReturn, writeID, 0, 0);
-      if(idOfItemToRemove == 100){
-        return;
+      s16_t idOfItemToRemove = drawMultiChoice("Remove element", listToReturn, writeID, 0, 0);
+      if(idOfItemToRemove == -1){
+        continue;
       }
-      removeItemFromWhitelist(listToReturn[idOfItemToRemove]);
-      writeID--;
-      drawInfoBox("Info", "You need to restart", "for changes to take effect", true, false);
+      else
+      {removeItemFromWhitelist(listToReturn[idOfItemToRemove]);
+      writeID = writeID - 2;
+      if(writeID < 0){
+        writeID = 0;
+      }}
     }
     else if (choice==3){
       delay(100);
       while(true){
+        // Exception handler: if list is empty, show info and break
+        if (writeID == 0) {
+          drawInfoBox("Info", "Whitelist is empty", "Nothing to preview.", true, false);
+          break;
+        }
         drawTopCanvas();
         drawBottomCanvas();
         sleepFunction();
@@ -1661,7 +1681,7 @@ void editWhitelist(){
         if(keyboard_changed){Sound(10000, 100, sound);}  
         for(auto i : status.word){
           if(i=='`'){
-            return;
+            break;
           }
         }
         M5.update();

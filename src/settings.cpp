@@ -27,23 +27,17 @@ bool initVars(){
         if(SD.open("/config.conf", "r", false)){
             logMessage("Conf file found, loading data");
 
-            // 1. Open the config file
             File file = SD.open("/config.conf", FILE_READ);
-            logMessage("conf file opened");
             if (!file) {
               logMessage("Failed to open config file");
               return false;
             }
 
             JsonDocument doc;
-
-            logMessage(" 3. Parse JSON directly from the file stream");
             DeserializationError error = deserializeJson(doc, file);
 
-            logMessage("4. Always close the file after reading");
             file.close();
 
-            // 5. Check for deserialization errors
             if (error) {
               logMessage("deserializeJson() failed: ");
               logMessage(error.c_str());
