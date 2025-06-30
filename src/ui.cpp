@@ -177,11 +177,9 @@ bool cloned;
 
 void initUi() {
   M5.Display.setRotation(1);
-  //M5.Display.setFont();
   M5.Display.setTextSize(1);
   M5.Display.fillScreen(TFT_WHITE);
   M5.Display.setTextColor(BLACK);
-  //M5.Display.setColor(WHITE);
 
   display_w = M5.Display.width();
   display_h = M5.Display.height();
@@ -547,6 +545,8 @@ void drawMultiplePages(menu toDraw[], uint8_t menuIDPriv, uint8_t menuSize) {
   }
 }
 
+#endif
+
 void drawInfoBox(String tittle, String info, String info2, bool canBeQuit, bool isCritical) {
   appRunning = true;
   while(true){
@@ -589,6 +589,8 @@ void drawInfoBox(String tittle, String info, String info2, bool canBeQuit, bool 
   }
   appRunning = false;
 }
+
+#ifndef LITE_VERSION
 
 inline void trigger(uint8_t trigID){logMessage("Trigger" + String(trigID));}
 
@@ -994,7 +996,9 @@ void runApp(uint8_t appID){
       WiFi.mode(WIFI_MODE_NULL);
       drawInfoBox("INFO", "Auto mode turned off", "Enabled manual mode", true, false);
     }
-    if(appID == 38){editWhitelist();}
+    if(appID == 38){
+      editWhitelist();
+    }
     if(appID == 39){
       if(!SD.begin(SD_CS, sdSPI, 1000000)) {
         drawInfoBox("Error", "Cannot open SD card", "Check SD card!", true, true);
@@ -1133,8 +1137,16 @@ void runApp(uint8_t appID){
       String tempMenu[] = {"From SD", "From WIFI", "From Github"};
       uint8_t choice = drawMultiChoice("Update type", tempMenu, 3, 6, 4);
       if(choice == 0){updateFromSd();}
-      else if(choice == 1){updateFromHTML();}
+      else if(choice == 1){
+        if(!(WiFi.status() == WL_CONNECTED)){
+          runApp(43);
+        }
+        updateFromHTML();
+      }
       else if(choice == 2){
+        if(!(WiFi.status() == WL_CONNECTED)){
+          runApp(43);
+        }
         drawInfoBox("Updating...", "Updating from github...", "This may take a while...", false,false);
         updateFromGithub();
         drawInfoBox("ERROR!", "Update failed!", "Try again or contact dev", true, false);
@@ -1164,16 +1176,15 @@ void runApp(uint8_t appID){
       String options[] = {"Enable", "Disable", "Back"};
       int choice = drawMultiChoice("Pwnagothi on boot", options, 3, 6, 0);
       if (choice == 0) {
-        pwnagothiMode = true;
+        pwnagothiModeEnabled = true;
         if (saveSettings()) {
           drawInfoBox("Success", "Pwnagothi will run", "on boot", true, false);
-          pwnagothiMode = false;
           return;
         } else {
           drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);
         }
       } else if (choice == 1) {
-        pwnagothiMode = false;
+        pwnagothiModeEnabled = false;
         if (saveSettings()) {
           drawInfoBox("Success", "Pwnagothi will NOT run", "on boot", true, false);
           return;
@@ -1637,6 +1648,7 @@ void editWhitelist(){
       }
       removeItemFromWhitelist(listToReturn[idOfItemToRemove]);
       writeID--;
+      drawInfoBox("Info", "You need to restart", "for changes to take effect", true, false);
     }
     else if (choice==3){
       delay(100);

@@ -4,6 +4,7 @@
 #include "settings.h"
 #include "mood.h"
 #include "pwnagothi.h"
+#include "githubUpdater.h"
 
 uint8_t state;
 uint8_t activity = 14;
@@ -30,14 +31,35 @@ void setup() {
   if(initVars()){}
   else{
     #ifndef BYPASS_SD_CHECK
-    #ifndef LITE_VERSION
     drawInfoBox("ERROR!", "SD card is needed to work.", "Insert it and restart", false, true);
-    #endif
     while(true){delay(10);}
     #endif
   }
   M5.Display.setBrightness(brightness);
   wakeUp();
+  #ifdef LITE_VERSION
+  drawInfoBox("Update", "Checking for updates", "Please wait...", false, false);
+  WiFi.begin(savedApSSID.c_str(), savedAPPass.c_str());
+  delay(5000);
+  if(check_for_new_firmware_version(true)) {
+    drawInfoBox("Update", "New firmware version available", "Downloading...", false, false);
+    delay(1000);
+    logMessage("New firmware version available");
+    if(ota_update_from_url(true)) {
+      drawInfoBox("Update", "Update successful", "Restarting...", false, false);
+      logMessage("Update successful, restarting...");
+      delay(1000);
+      ESP.restart();
+    } else {
+      logMessage("Update failed");
+    }
+  } else {
+    drawInfoBox("Update", "No new firmware version found", "Booting...", false, false);
+    logMessage("No new firmware version found, or wifi not connected");
+    delay(1000);
+  }
+  #endif
+
   if(pwnagothiMode) {
     pwnagothiMode = true;
     logMessage("Pwnagothi mode enabled");

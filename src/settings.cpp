@@ -15,6 +15,7 @@ String whitelist;
 File FConf;
 bool pwnagothiMode = false;
 uint8_t sessionCaptures;
+bool pwnagothiModeEnabled = false;
 
 bool initVars(){
     if(!SD.begin(SD_CS, sdSPI, 1000000)){
@@ -68,7 +69,7 @@ bool initVars(){
             config["savedApSSID"] = savedApSSID;
             config["savedAPPass"] = savedAPPass;
             config["whitelist"] = whitelist;
-            config["auto_mode_on_startup"] = pwnagothiMode;
+            config["auto_mode_on_startup"] = pwnagothiModeEnabled;
 
             logMessage("JSON data creation successful, proceeding to save");
 
@@ -96,7 +97,7 @@ bool saveSettings(){
     config["savedApSSID"] = savedApSSID;
     config["savedAPPass"] = savedAPPass;
     config["whitelist"] = whitelist;
-    config["auto_mode_on_startup"] = pwnagothiMode;
+    config["auto_mode_on_startup"] = pwnagothiModeEnabled;
     
     logMessage("JSON data creation successful, proceeding to save");
     FConf = SD.open("/config.conf", FILE_WRITE, false);

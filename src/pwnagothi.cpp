@@ -159,6 +159,7 @@ void pwnagothiLoop(){
                 logMessage("(~_~) Attack failed: Timeout waiting for handshake.");
                 SnifferEnd();
                 updateUi(true, false);
+                delay(70);
                 break;
             }
             if(clients[i] != ""){
@@ -193,6 +194,7 @@ void pwnagothiLoop(){
                 logMessage("(~_~) Attack failed: Timeout waiting for handshake.");
                 SnifferEnd();
                 updateUi(true, false);
+                delay(70);
                 break;
             }
             updateUi(true, false);
