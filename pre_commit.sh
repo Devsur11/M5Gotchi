@@ -15,9 +15,9 @@ read -p "📄 Enter firmware version (e.g., 0.3.1): " VERSION
 mkdir -p firmware
 
 # Step 4: Copy firmware binary to /firmware/firmware.bin
-FULL_BIN_PATH=$(find .pio/build -name "*.bin" | head -n 1)
+FULL_BIN_PATH=$(find .pio/build -type f -name "firmware.bin" | head -n 1)
 if [ ! -f "$FULL_BIN_PATH" ]; then
-    echo "❌ Full binary not found!"
+    echo "❌ Full firmware.bin not found!"
     exit 1
 fi
 cp "$FULL_BIN_PATH" firmware/firmware.bin
@@ -28,9 +28,9 @@ echo "🛠️  Please compile the LITE version of your firmware now (press Enter
 read -r
 
 # Step 6: Copy lite binary to /firmware/lite.bin
-LITE_BIN_PATH=$(find .pio/build -name "*.bin" | head -n 1)
+LITE_BIN_PATH=$(find .pio/build -type f -name "firmware.bin" | head -n 1)
 if [ ! -f "$LITE_BIN_PATH" ]; then
-    echo "❌ Lite binary not found!"
+    echo "❌ Lite firmware.bin not found!"
     exit 1
 fi
 cp "$LITE_BIN_PATH" firmware/lite.bin
