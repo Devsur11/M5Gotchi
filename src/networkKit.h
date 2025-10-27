@@ -33,3 +33,4 @@ void resetMacTable();
 MacEntry* get_mac_table(int &count);
 String macToString(const uint8_t *mac);
 void stopClientSniffing();
+bool deauth_everyone(int count, int delay_ms);

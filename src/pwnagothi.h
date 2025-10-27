@@ -7,3 +7,6 @@ std::vector<String> parseWhitelist();
 void pwnagothiLoop();
 bool pwnagothiBegin();
 void removeItemFromWhitelist(String valueToRemove);
+void speedScanCallback(void* buf, wifi_promiscuous_pkt_type_t type);
+void speedScan();
+void speedScanTestAndPrintResults();

@@ -99,8 +99,10 @@ void loop() {
   M5.update();
   M5Cardputer.update();
   if(M5Cardputer.Keyboard.isKeyPressed(KEY_OPT) && M5Cardputer.Keyboard.isKeyPressed(KEY_LEFT_CTRL) && M5Cardputer.Keyboard.isKeyPressed(KEY_FN)){
-    esp_will_beg_for_its_life();
+    speedScanTestAndPrintResults();
+    //esp_will_beg_for_its_life();
   }
+
   updateUi(true);
   if(!pwnagothiMode)  {
     if (currentMillis >= interval) {
