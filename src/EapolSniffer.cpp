@@ -1,9 +1,9 @@
-#include "pwnagothi.h"
 #include "networkKit.h"
 #include "EapolSniffer.h"
 #include <map>
 #include "src.h"
 #include "settings.h"
+#include "pwnagothi.h"
 
 long lastpacketsend;
 File file;
@@ -200,7 +200,9 @@ bool SnifferBegin(int userChannel, bool skipSDCardCheck /*ONLY For debugging pur
 
   esp_wifi_set_promiscuous(true);
   esp_wifi_set_channel(currentChannel, WIFI_SECOND_CHAN_NONE);
+  esp_wifi_set_promiscuous_filter(nullptr); // no filter
   esp_wifi_set_promiscuous_rx_cb(&wifi_sniffer_cb);
+  logMessage("Activating Sniffer or chanel: " + String(userChannel));
   return true;
 }
 
