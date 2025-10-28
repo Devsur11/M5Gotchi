@@ -345,7 +345,12 @@ bool isPrevPressed() {
 
 void updateUi(bool show_toolbars, bool triggerPwnagothi) {
   if(pwnagothiMode && triggerPwnagothi){
-    pwnagothiLoop();
+    if(!stealth_mode){
+      pwnagothiLoop();
+    }
+    else{
+      pwnagothiStealthLoop();
+    }
   }
   #ifndef LITE_VERSION
   keyboard_changed = M5Cardputer.Keyboard.isChange();
@@ -460,8 +465,8 @@ void drawBottomCanvas() {
   canvas_bot.setTextDatum(top_left);
   uint16_t captures = sessionCaptures;
   uint16_t allTimeCaptures = pwned_ap;
-  String shortWifiName = lastPwnedAP.length() > 7 ? lastPwnedAP.substring(0, 7) + "..." : lastPwnedAP;
-  canvas_bot.drawString("PWND: " + String(captures) + "/" + String(allTimeCaptures) + (shortWifiName.length() > 0 ? " ( " + shortWifiName + " )" : ""), 3, 5);
+  String shortWifiName = lastPwnedAP.length() > 6 ? lastPwnedAP.substring(0, 6) + "..." : lastPwnedAP;
+  canvas_bot.drawString("PWND: " + String(captures) + "/" + String(allTimeCaptures) + (shortWifiName.length() > 0 ? " (" + shortWifiName + ")" : ""), 3, 5);
   String wifiStatus;
   if(WiFi.status() == WL_NO_SHIELD){
     wifiStatus = "off";
@@ -545,16 +550,14 @@ void drawInfoBox(String tittle, String info, String info2, bool canBeQuit, bool 
     if(canBeQuit){
       canvas_main.setTextSize(1);
       canvas_main.drawString("To exit press OK", canvas_center_x, canvas_h * 0.9);
-
-        ;
-        drawBottomCanvas();
-        pushAll();
-        M5.update();
-        M5Cardputer.update();
-        if(M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER)){
-          Sound(10000, 100, sound);
-          return ;
-        }
+      drawBottomCanvas();
+      pushAll();
+      M5.update();
+      M5Cardputer.update();
+      if(M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER)){
+        Sound(10000, 100, sound);
+        return ;
+      }
 
     }
     else{
@@ -659,7 +662,6 @@ void runApp(uint8_t appID){
           updatePortal();
           M5.update();
           M5Cardputer.update();
-          ;
           Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
           if(!loginCaptured.equals("") && !passCaptured.equals("")){
             drawInfoBox("New victim!", loginCaptured, passCaptured, false, false);
@@ -685,12 +687,15 @@ void runApp(uint8_t appID){
         debounceDelay();
         uint8_t ssidChoice = drawMultiChoice("Select list", ssidMenu, 4 , 2 , 2);
         if(ssidChoice==0){
+          debounceDelay();
           broadcastFakeSSIDs( funny_ssids, 48, sound);
         }
         else if (ssidChoice==1){
+          debounceDelay();
           broadcastFakeSSIDs( broken_ssids, 20, sound);
         }
         else if (ssidChoice==2){
+          debounceDelay();
           broadcastFakeSSIDs( rickroll_ssids, 8, sound);
           menu_current_opt = 0;
           menu_current_page = 1;
@@ -979,6 +984,16 @@ void runApp(uint8_t appID){
       if(!pwnagothiMode){
         bool answear = drawQuestionBox("CONFIRMATION", "Operate only if you ", "have premision!");
         if(answear){
+          menuID = 0;
+          String sub_menu[] = {"Stealth (legacy)", "Normal (beta)"};
+          uint8_t modeChoice = drawMultiChoice("Select mode:", sub_menu, 2, 2, 2);
+          debounceDelay();
+          if(modeChoice==0){
+            stealth_mode = true;
+          }
+          else{
+            stealth_mode = false;
+          }
           drawInfoBox("INITIALIZING", "Pwnagothi mode initialization", "please wait...", false, true);
           if(pwnagothiBegin()){
             pwnagothiMode = true;

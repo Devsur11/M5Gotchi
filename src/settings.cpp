@@ -24,6 +24,7 @@ bool lite_mode_wpa_sec_sync_on_startup = false;
 bool sd_logging = false;
 bool toogle_pwnagothi_with_gpio0 = false;
 String lastPwnedAP = "";
+bool stealth_mode = false;
 
 // struct personality{
 //     uint16_t nap_time;
@@ -182,7 +183,7 @@ bool initPersonality(){
     personalityDoc["delay_after_no_clients_found"] = pwnagotchi.delay_after_no_clients_found;
     personalityDoc["delay_after_attack_fail"] = pwnagotchi.delay_after_attack_fail;
     personalityDoc["client_discovery_timeout"] = pwnagotchi.client_discovery_timeout;
-
+    
     if (personalityChanged) {
         logMessage("Personality updated with missing/default values, saving...");
         FConf = SD.open(PERSONALITY_FILE, FILE_WRITE, true);
@@ -310,6 +311,9 @@ bool initVars() {
 
         if(config["toogle_pwnagothi_with_gpio0"].is<bool>()) toogle_pwnagothi_with_gpio0 = config["toogle_pwnagothi_with_gpio0"].as<bool>();
         else configChanged = true;
+
+        if(config["stealth_mode"].is<bool>()) stealth_mode = config["stealth_mode"].as<bool>();
+        else configChanged = true;
     } else {
         logMessage("Conf file not found, creating one");
         configChanged = true;
@@ -331,6 +335,7 @@ bool initVars() {
     config["lite_mode_wpa_sec_sync_on_startup"] = lite_mode_wpa_sec_sync_on_startup;
     config["sd_logging"] = sd_logging;
     config["toogle_pwnagothi_with_gpio0"] = toogle_pwnagothi_with_gpio0;
+    config["stealth_mode"] = stealth_mode;
 
     if (configChanged) {
         logMessage("Config updated with missing/default values, saving...");
@@ -366,6 +371,7 @@ bool saveSettings(){
     config["lite_mode_wpa_sec_sync_on_startup"] = lite_mode_wpa_sec_sync_on_startup;
     config["sd_logging"] = sd_logging;
     config["toogle_pwnagothi_with_gpio0"] = toogle_pwnagothi_with_gpio0;
+    config["stealth_mode"] = stealth_mode;
     
     logMessage("JSON data creation successful, proceeding to save");
     FConf = SD.open(NEW_CONFIG_FILE, FILE_WRITE, false);

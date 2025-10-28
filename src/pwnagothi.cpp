@@ -124,7 +124,8 @@ bool pwnagothiBegin(){
         logMessage("Personality init failed");
         return false;
     }
-    if(!(WiFi.mode(WIFI_MODE_STA) && WiFi.scanNetworks(true, true))){
+    if(!(WiFi.mode(WIFI_MODE_STA))){
+        logMessage("WiFi init failed");
         return false;
     }   
     setMood(1, "(o_o)", "3 seconds for auto mode start... ESC to cancel");
@@ -477,7 +478,6 @@ void pwnagothiStealthLoop(){
         }
         setMood(1, "(O_o)", "Well, well, well  " + clients[i] + " you're OUT!!!" );
         logMessage("(O_o) Well, well, well  " + clients[i] + " you're OUT!!!");
-        setMood(1 , "(@_@)", "WELL, Everyone is OUT!");
         updateUi(true, false);
         setTargetAP(WiFi.BSSID(wifiCheckInt));
         if(pwnagotchi.activate_sniffer_on_deauth){
