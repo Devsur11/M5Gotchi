@@ -64,7 +64,7 @@ personality pwnagotchi = {
     10000,  // handshake_wait_time
     true,   // add_to_whitelist_on_success
     false,  // add_to_whitelist_on_fail
-    false,   // activate_sniffer_on_deauth
+    true,   // activate_sniffer_on_deauth
     0,  // client_sniffing_time  - not used in code
     150,    // deauth_packet_delay
     3000,   // delay_after_no_clients_found

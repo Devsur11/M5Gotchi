@@ -15,7 +15,7 @@ void printHeapInfo() {
 }
 
 
-#define CURRENT_VERSION "0.4.3"
+#define CURRENT_VERSION "0.4.5"
 #define NORMAL_JSON_URL "https://devsur11.github.io/M5Gotchi/firmware/firmware.json"
 #define LITE_JSON_URL   "https://devsur11.github.io/M5Gotchi/firmware/lite.json"
 #define TEMP_DIR        "/temp"

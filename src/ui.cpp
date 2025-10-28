@@ -613,7 +613,7 @@ void runApp(uint8_t appID){
       WiFi.mode(WIFI_STA);
       drawInfoBox("Info", "Scanning for wifi...", "Please wait", false, false);
       int numNetworks = WiFi.scanNetworks();
-      String wifinets[20];
+      String wifinets[numNetworks+1];
       if (numNetworks == 0) {
         drawInfoBox("Info", "No wifi nearby", "Abort.", true, false);
         menuID = 0;
