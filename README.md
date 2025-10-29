@@ -3,7 +3,7 @@
 
 # M5Gothi
 
-M5Gothi brings the powerful Pwnagothi functions and interface to the M5Cardputer platform, providing both automatic and manual Wi-Fi control through an integrated keyboard interface, so you can finally go touch some grass and hack at the same time. Inspied by the original Pwnagothi project. It doesn't have AI, but at least its working like it should.
+M5Gothi brings the powerful Pwnagotchi functions and interface to the M5Cardputer platform, providing both automatic and manual Wi-Fi control through an integrated keyboard interface, so you can finally go touch some grass and hack at the same time. Inspied by the original Pwnagotchi project. It doesn't have AI, but at least its working like it should.
 
 ---
 
