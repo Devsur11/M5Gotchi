@@ -54,3 +54,6 @@ int drawMultiChoiceLonger(String tittle, String toDraw[], uint8_t menuSize , uin
 void IRAM_ATTR handleInterrupt();
 void debounceDelay();
 void esp_will_beg_for_its_life();
+#ifdef ENABLE_COREDUMP_LOGGING
+void sendCrashReport();
+#endif

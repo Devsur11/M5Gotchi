@@ -2606,3 +2606,47 @@ void debounceDelay(){
   M5Cardputer.update();
   M5.update();
 }
+
+
+#ifdef ENABLE_COREDUMP_LOGGING
+void sendCrashReport(){
+  //inform user of state
+  drawInfoBox("Error", "A critical error has", "occurred, sending report...", false, false);
+  //first try to find saved wifi
+  uint8_t wifiCount = WiFi.scanNetworks();
+  for(uint8_t i = 0; i < wifiCount; i++){
+    String ssid = WiFi.SSID(i);
+    if(ssid == savedApSSID){
+      WiFi.begin(savedApSSID.c_str(), savedAPPass.c_str());
+      uint8_t connectTry = 0;
+      while(WiFi.status() != WL_CONNECTED && connectTry < 10){
+        delay(1000);
+        connectTry++;
+      }
+      break;
+    }
+  }
+  if(WiFi.status() == WL_CONNECTED){
+  }
+  else{
+    bool answwer = drawQuestionBox("Error", "Saved wifi not found", "Set up new one?", "Press Y for yes, N for no");
+    if(answwer){
+      runApp(43); //wifi setup app
+      if(WiFi.status() == WL_CONNECTED){
+        logMessage("Wifi connected, sending report...");
+      }
+      else{
+        drawInfoBox("Error", "Cannot send report", "No wifi connected", true, false);
+        return;
+      }
+    }
+    else{
+      drawInfoBox("Error", "Cannot send report", "No wifi connected", true, false);
+      return;
+    }
+  }
+  connectMQTT();
+  sendCoredump();
+  drawInfoBox("Report sent", "Thank you for helping", "to improve this software!", true, false);
+}
+#endif

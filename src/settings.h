@@ -14,8 +14,14 @@ void printHeapInfo() {
     }
 }
 
-
+#ifndef CURRENT_VERSION
 #define CURRENT_VERSION "0.4.5"
+#endif
+#ifdef LITE_VERSION
+#undef ENABLE_COREDUMP_LOGGING
+#undef USE_EXPERIMENTAL_APPS
+#endif
+
 #define NORMAL_JSON_URL "https://devsur11.github.io/M5Gotchi/firmware/firmware.json"
 #define LITE_JSON_URL   "https://devsur11.github.io/M5Gotchi/firmware/lite.json"
 #define TEMP_DIR        "/temp"
