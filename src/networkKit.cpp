@@ -319,10 +319,10 @@ void add_client(uint8_t *mac) {
   }
 }
 
-void setMac(uint8_t new_mac[6]) {
+bool setMac(uint8_t new_mac[6]) {
     if (!new_mac) {
         logMessage("Error: new_mac is NULL!");
-        return;
+        return false;
     }
     memcpy(target_mac, new_mac, 6);
 
@@ -331,6 +331,7 @@ void setMac(uint8_t new_mac[6]) {
         Serial.printf("%02X", target_mac[i]);
         if (i < 5) logMessage(":");
     }
+    return true;
 }
 
 

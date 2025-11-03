@@ -21,7 +21,7 @@ bool is_client_known(uint8_t *mac);
 void initClientSniffing();
 void add_client(uint8_t *mac);
 void get_clients_list(String client_list[], int &count);
-void setMac(uint8_t new_mac[6]);
+bool setMac(uint8_t new_mac[6]);
 bool set_mac_address(uint8_t new_mac[6]);
 bool convert_mac_string_to_bytes(const String &mac_str, uint8_t *mac_bytes);
 void clearClients();

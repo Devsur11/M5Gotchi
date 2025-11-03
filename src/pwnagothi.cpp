@@ -286,7 +286,15 @@ void pwnagothiLoop(){
 
         // prepare attack using speed-scan info
         updateUi(true, false);
-        setMac(&entry.bssid[0]);
+        if(setMac(&entry.bssid[0])){
+            logMessage("Target MAC set to: " + attackVector);
+        }
+        else{
+            logMessage("Failed to set target MAC for: " + attackVector);
+            logMessage("Skipping to next target.");
+            wifiCheckInt++;
+            return;
+        }
         setMood(1 , "(@_@)", "WELL, Everyone is OUT!");
         updateUi(true, false);
         setTargetAP(&entry.bssid[0]);
@@ -438,7 +446,12 @@ void pwnagothiStealthLoop(){
         set_target_channel(attackVector.c_str());
         uint8_t i = 0;
         uint8_t currentCount = SnifferGetClientCount();
-        setMac(WiFi.BSSID(wifiCheckInt));
+        if(!setMac(WiFi.BSSID(wifiCheckInt))){
+            logMessage("Failed to set target MAC for: " + attackVector);
+            logMessage("Skipping to next target.");
+            wifiCheckInt++;
+            return;
+        }
         uint16_t targetChanel;
         uint8_t result = set_target_channel(attackVector.c_str());
         if (result != 0) { //if wifi is not found, enviroment had changed, so rescan to avoid kernel panic

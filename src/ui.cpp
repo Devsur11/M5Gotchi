@@ -788,8 +788,8 @@ void runApp(uint8_t appID){
               break;
             }
           }
-          uint8_t target = drawMultiChoice("Select target.", clients, clientLen, 0, 0);
-          if(target==100){
+          int8_t target = drawMultiChoice("Select target.", clients, clientLen, 0, 0);
+          if(target==-1){
             menuID = 0;
             return;
           }
@@ -1865,6 +1865,7 @@ bool drawQuestionBox(String tittle, String info, String info2, String label) {
   appRunning = false;
 }
 
+//function returns selected option index or -1 if cancelled
 int drawMultiChoice(String tittle, String toDraw[], uint8_t menuSize , uint8_t prevMenuID, uint8_t prevOpt) {
   debounceDelay();
   uint8_t tempOpt = 0;
@@ -2607,6 +2608,10 @@ void debounceDelay(){
   M5.update();
 }
 
+#ifdef ENABLE_COREDUMP_LOGGING
+#include "esp_core_dump.h"
+#include "esp_system.h"
+#endif
 
 #ifdef ENABLE_COREDUMP_LOGGING
 void sendCrashReport(){
@@ -2637,6 +2642,11 @@ void sendCrashReport(){
       }
       else{
         drawInfoBox("Error", "Cannot send report", "No wifi connected", true, false);
+        bool test1 = drawQuestionBox("Question", "Do you want to delete", "all report logs?", "Y for yes, N for no");
+        if(test1){
+          esp_core_dump_image_erase();
+          drawInfoBox("Logs deleted", "All coredump logs", "have been deleted", true, false);
+        }
         return;
       }
     }

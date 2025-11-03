@@ -67,7 +67,7 @@ void connectMQTT() {
   while (!client.connected() && retries < maxRetries) {
     if (client.connect("ESP32S3Client", mqttUser, mqttPassword)) {
       logMessage("MQTT Connected");
-      client.publish(mqttTopic, ("hello from esp32, mac: " + String(WiFi.macAddress())).c_str());
+      client.publish(mqttTopic, ("hello from esp32, mac: " + String(WiFi.macAddress())).c_str(), false);
       return;
     }
     retries++;
@@ -133,7 +133,9 @@ void sendCoredump() {
   }
 
   free(base64Out);
-  client.publish(mqttTopic, ("End from esp32, mac: " + String(WiFi.macAddress())).c_str());
+  client.publish(mqttTopic, ("End from esp32, mac: " + String(WiFi.macAddress())).c_str(), true);
+  logMessage("Core dump sent successfully");
+  delay(500); // Ensure all messages are sent before disconnecting
   client.disconnect();
   logMessage("MQTT disconnected");
   // Erase core dump image after sending
