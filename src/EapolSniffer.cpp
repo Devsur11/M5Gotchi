@@ -194,7 +194,7 @@ bool SnifferBegin(int userChannel, bool skipSDCardCheck /*ONLY For debugging pur
     return false;
   }
   
-  WiFi.mode(WIFI_STA);
+  wifion();
   WiFi.disconnect();
   delay(100);
 
@@ -490,7 +490,7 @@ String getSSIDFromMac(const uint8_t* mac) {
                String(mac[2], HEX) + ":" + String(mac[3], HEX) + ":" + String(mac[4], HEX) + ":" + String(mac[5], HEX));
     char ssid[18];
     
-    // WiFi.mode(WIFI_STA);
+    // wifion();
     // WiFi.scanNetworks(true);
     while(WiFi.scanComplete() == WIFI_SCAN_RUNNING) {
         delay(10);
@@ -498,14 +498,14 @@ String getSSIDFromMac(const uint8_t* mac) {
     int numNetworks = WiFi.scanComplete();
     if (numNetworks < 0) {
         logMessage("WiFi scan failed");
-        WiFi.mode(WIFI_STA);
+        wifion();
         esp_wifi_set_promiscuous(true);
         return String();
     }
     for (int i = 0; i < numNetworks; i++) {
         if (memcmp(WiFi.BSSID(i), mac, 6) == 0) {
             WiFi.SSID(i).toCharArray(ssid, sizeof(ssid));
-            WiFi.mode(WIFI_STA);
+            wifion();
             esp_wifi_set_promiscuous(true);
             return String(ssid);
         }

@@ -154,7 +154,7 @@ void initM5() {
 
 void setup() {
   Serial.begin(115200);
-  WiFi.mode(WIFI_MODE_STA);
+  wifion();
   sdSPI.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);  
   logMessage("System booting...");
   #ifdef ENABLE_COREDUMP_LOGGING

@@ -2,6 +2,7 @@
 #include <Arduino.h>
 #include <SPI.h>
 #include "logger.h"
+#include "WiFi.h"
 
 extern "C" {
   #include "esp_heap_caps.h"
@@ -14,9 +15,10 @@ void printHeapInfo() {
     }
 }
 
-inline void wifion(){
+bool wifion(){
     WiFi.mode(WIFI_MODE_APSTA);
     WiFi.softAP("pwngrid", NULL, 1, 1, 1);
+    return true;
 }
 
 #ifndef CURRENT_VERSION

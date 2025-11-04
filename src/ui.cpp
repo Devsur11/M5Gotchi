@@ -618,7 +618,7 @@ void runApp(uint8_t appID){
     if(appID == 18){}
     if(appID == 19){}
     if(appID == 20){
-      WiFi.mode(WIFI_STA);
+      wifion();
       drawInfoBox("Info", "Scanning for wifi...", "Please wait", false, false);
       int numNetworks = WiFi.scanNetworks();
       String wifinets[numNetworks+1];
@@ -848,7 +848,7 @@ void runApp(uint8_t appID){
           static unsigned long lastSwitchTime = millis();
           const unsigned long channelSwitchInterval = 500;  
           esp_wifi_set_channel(answerrr, WIFI_SECOND_CHAN_NONE);
-          WiFi.mode(WIFI_STA);  // Ustawienie trybu WiFi na stację
+          wifion();  // Ustawienie trybu WiFi na stację
           esp_wifi_set_promiscuous(true);  // Włączenie trybu promiskuitywnego
           esp_wifi_set_promiscuous_rx_cb(client_sniff_promiscuous_rx_cb);
           logMessage("Started mac sniffing!");
@@ -1097,7 +1097,7 @@ void runApp(uint8_t appID){
       menuID = 0;
     }
     if(appID == 43){
-      WiFi.mode(WIFI_STA);
+      wifion();
       drawInfoBox("Scanning...", "Scanning for networks...", "Please wait", false, false);
       int numNetworks = WiFi.scanNetworks();
       String wifinets[50];
@@ -1188,7 +1188,7 @@ void runApp(uint8_t appID){
       String options[] = {"Turn ON", "Turn OFF", "Back"};
       int choice = drawMultiChoice("WiFi Power", options, 3, 2, 0);
       if (choice == 0) {
-        WiFi.mode(WIFI_STA);
+        wifion();
         drawInfoBox("WiFi", "WiFi turned ON", "", true, false);
       } else if (choice == 1) {
         WiFi.mode(WIFI_MODE_NULL);

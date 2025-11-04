@@ -2,6 +2,7 @@
 #include "ui.h"
 #include "WiFi.h"
 #include "networkKit.h"
+#include "settings.h"
 
 
 // Maksymalna liczba klientów, których można śledzić
@@ -103,7 +104,7 @@ void broadcastFakeSSIDs(String ssidList[], int ssidCount, bool sound) {
   // Begin setup: Serial communication, set Wi-Fi mode, randomize MAC, etc.
   logMessage("Hello, NodeMCU! Broadcasting fake SSIDs...");
 
-  WiFi.mode(WIFI_MODE_STA); // Set to station mode
+  wifion(); // Set to station mode
 
   // Set initial Wi-Fi channel
   esp_wifi_set_channel(channels[0], WIFI_SECOND_CHAN_NONE);
@@ -249,7 +250,7 @@ void initClientSniffing() {
 void stopClientSniffing(){
   clearClients();
   esp_wifi_set_promiscuous(false);
-  WiFi.mode(WIFI_MODE_STA);
+  wifion();
 }
 
 void deauth_promiscuous_rx_cb(void* buf, wifi_promiscuous_pkt_type_t type) {
@@ -463,7 +464,7 @@ String macToString(const uint8_t *mac) {
 
 uint8_t* ssidToMac(const String& targetSSID) {
   logMessage("Searching for mac for SSID:" + targetSSID);
-  WiFi.mode(WIFI_MODE_STA);
+  wifion();
   int wifiCount = WiFi.scanNetworks(false);
   if (wifiCount <= 0) return nullptr;
 
