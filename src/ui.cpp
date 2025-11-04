@@ -21,6 +21,7 @@
 #include "logger.h"
 #include "moodLoader.h"
 #include "wpa_sec.h"
+#include "pwngrid.h"
 
 M5Canvas canvas_top(&M5.Display);
 M5Canvas canvas_main(&M5.Display);
@@ -187,6 +188,7 @@ menu settings_menu[] = {
   {"Skip EAPOL check", 49},
   {"Display brightness", 41},
   {"Sound", 42},
+  {"Advertise Pwngrid", 60},
   {"Connect to wifi", 43},
   {"GO button function", 59},
   {"Log to SD", 58},
@@ -403,7 +405,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi) {
     drawMenuList( pwngotchi_menu , 5, 5);
   }
   else if (menuID == 6){
-    drawMenuList( settings_menu , 6, 14);
+    drawMenuList( settings_menu , 6, 15);
   }  
   else if (menuID == 7){
     drawMenuList(wpasec_menu, 7, 3);
@@ -456,6 +458,7 @@ void drawTopCanvas() {
   canvas_top.drawString("UPS " + String(M5.Power.getBatteryLevel()) + "%  UP:" + buffer , display_w, 3);
   canvas_top.drawLine(0, canvas_top_h - 1, display_w, canvas_top_h - 1);
 }
+
 
 void drawBottomCanvas() {
   canvas_bot.fillSprite(bg_color_rgb565);
@@ -525,6 +528,11 @@ void drawMood(String face, String phrase) {
     canvas_main.setTextColor(fg, bg);
     canvas_main.setCursor(3, canvas_h - 40);
     canvas_main.println("> " + phrase);
+    canvas_main.setTextSize(1);
+    canvas_main.setCursor(3, canvas_h - 10);
+    if(getPwngridTotalPeers() > 0){
+      canvas_main.println(getLastPeerFace() + " |||| " + getPwngridLastFriendName() + " (" + String(getPwngridLastSessionPwnedAmount()) + "/" + String(getPwngridLastPwnedAmount()) + ")");
+    }
 }
 
 
@@ -594,7 +602,7 @@ void runApp(uint8_t appID){
     if(appID == 5){drawInfoBox("ERROR", "not implemented", "" ,  true, true);}
     if(appID == 6){
       debounceDelay();
-      drawMenuList(settings_menu ,6  , 14);
+      drawMenuList(settings_menu ,6  , 15);
     }
     if(appID == 7){}
     if(appID == 8){}
@@ -1598,6 +1606,34 @@ void runApp(uint8_t appID){
         saveSettings();
       }
       else{
+        menuID = 0;
+        return;
+      }
+      menuID = 0;
+      return;
+    }
+    else if(appID == 60){
+      String mmenu[3] = {"Enable", "Disable", "Back"};
+      int choice = drawMultiChoice("Advertise pwngrid", mmenu, 3, 6, 0);
+      if (choice == 0) {
+        advertisePwngrid = true;
+        if (saveSettings()) {
+          drawInfoBox("Success", "Pwngrid advertising enabled", "", true, false);
+          menuID = 0;
+          return;
+        } else {
+          drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);
+        }
+      } else if (choice == 1) {
+        advertisePwngrid = false;
+        if (saveSettings()) {
+          drawInfoBox("Success", "Pwngrid advertising disabled", "", true, false);
+          menuID = 0;
+          return;
+        } else {
+          drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);
+        }
+      } else {
         menuID = 0;
         return;
       }

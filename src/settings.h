@@ -14,6 +14,11 @@ void printHeapInfo() {
     }
 }
 
+inline void wifion(){
+    WiFi.mode(WIFI_MODE_APSTA);
+    WiFi.softAP("pwngrid", NULL, 1, 1, 1);
+}
+
 #ifndef CURRENT_VERSION
 #define CURRENT_VERSION "0.4.5"
 #endif
@@ -92,3 +97,5 @@ extern bool toogle_pwnagothi_with_gpio0;
 extern bool lite_mode_wpa_sec_sync_on_startup;
 extern String lastPwnedAP;
 extern bool stealth_mode;
+extern String pwngrid_indentity;
+extern bool advertisePwngrid;

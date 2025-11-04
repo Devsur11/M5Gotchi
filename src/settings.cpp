@@ -25,6 +25,19 @@ bool sd_logging = false;
 bool toogle_pwnagothi_with_gpio0 = false;
 String lastPwnedAP = "";
 bool stealth_mode = false;
+String pwngrid_indentity;
+bool advertisePwngrid = true;
+
+String generatePwngridIdentity() {
+  // Generate a random 32-byte identity in hex format
+  const char hexChars[] = "0123456789abcdef";
+  String identity = "";
+  for (int i = 0; i < 64; i++) {
+    identity += hexChars[random(0, 16)];
+  }
+
+  return identity;
+}
 
 // struct personality{
 //     uint16_t nap_time;
@@ -156,6 +169,7 @@ bool initPersonality(){
 
         if (personalityDoc["client_discovery_timeout"].is<uint16_t>()) pwnagotchi.client_discovery_timeout = personalityDoc["client_discovery_timeout"];
         else personalityChanged = true;
+
     }
     else {
         logMessage("No personality file found, creating with default values");
@@ -314,6 +328,12 @@ bool initVars() {
 
         if(config["stealth_mode"].is<bool>()) stealth_mode = config["stealth_mode"].as<bool>();
         else configChanged = true;
+
+        if(config["pwngrid_indentity"].is<const char*>()) pwngrid_indentity = String(config["pwngrid_indentity"].as<const char*>());
+        else configChanged = true;
+
+        if(config["advertise_pwngrid"].is<bool>()) advertisePwngrid = config["advertise_pwngrid"].as<bool>();
+        else configChanged = true;
     } else {
         logMessage("Conf file not found, creating one");
         configChanged = true;
@@ -336,8 +356,13 @@ bool initVars() {
     config["sd_logging"] = sd_logging;
     config["toogle_pwnagothi_with_gpio0"] = toogle_pwnagothi_with_gpio0;
     config["stealth_mode"] = stealth_mode;
+    String tempIdentity = generatePwngridIdentity();
+    config["pwngrid_indentity"] = tempIdentity;
+    config["advertise_pwngrid"] = advertisePwngrid;
 
     if (configChanged) {
+        pwngrid_indentity = tempIdentity;
+        logMessage("Generated new Pwngrid identity: " + pwngrid_indentity);
         logMessage("Config updated with missing/default values, saving...");
         FConf = SD.open(NEW_CONFIG_FILE, FILE_WRITE, true);
         if (FConf) {
@@ -350,7 +375,7 @@ bool initVars() {
             logMessage("Failed to open config file for writing");
         }
     }
-
+    logMessage("Loaded identity: " + pwngrid_indentity);
     return true;
 }
 
@@ -372,6 +397,8 @@ bool saveSettings(){
     config["sd_logging"] = sd_logging;
     config["toogle_pwnagothi_with_gpio0"] = toogle_pwnagothi_with_gpio0;
     config["stealth_mode"] = stealth_mode;
+    config["pwngrid_indentity"] = pwngrid_indentity;
+    config["advertise_pwngrid"] = advertisePwngrid;
     
     logMessage("JSON data creation successful, proceeding to save");
     FConf = SD.open(NEW_CONFIG_FILE, FILE_WRITE, false);

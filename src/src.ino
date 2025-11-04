@@ -6,6 +6,7 @@
 #include "pwnagothi.h"
 #include "moodLoader.h"
 #include "Arduino.h"
+#include "pwngrid.h"
 #ifdef ENABLE_COREDUMP_LOGGING
 #include "esp_core_dump.h"
 #include <PubSubClient.h>
@@ -222,6 +223,7 @@ void setup() {
   } else {
     logMessage("Pwnagothi mode disabled");
   }
+  initPwngrid();
 }
 
 void wakeUp() {
@@ -234,6 +236,7 @@ void wakeUp() {
 
 
 void loop() {
+  pwngridAdvertise(0, getCurrentMoodFace());
   unsigned long currentMillis = millis();
   M5.update();
   M5Cardputer.update();
@@ -241,6 +244,9 @@ void loop() {
     drawInfoBox("Debugging!", "This mode is for dev!", "Do not report this as bug!", false, false);
     speedScanTestAndPrintResults();
     esp_will_beg_for_its_life();
+  }
+  else if(M5Cardputer.Keyboard.isKeyPressed(KEY_FN)){
+    activity++;
   }
 
   updateUi(true);
