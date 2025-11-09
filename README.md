@@ -55,7 +55,7 @@ M5Gothi brings the powerful Pwnagotchi functions and interface to the M5Cardpute
 |----------------|----------------|--------------------------------|
 | M5Cardputer    | ✅ Supported   | Main target device             |
 | esp32s3 dev    | ✅ Lite version| See instructions below         |
-| M5Cardputer adv| ⏳ Planned     | When M5Store finally delivers it|
+| M5Cardputer adv| ✅ Supported   | Tested And Work Fine           |
 | M5Stack Core2  | ⏳ Planned     | Requires GPIO adaptation       |
 | M5StickC       | ⏳ Planned     | Requires GPIO adaptation       |
 | M5Paper        | ⏳ Planned     | E-ink rendering testing needed |
