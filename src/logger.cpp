@@ -43,4 +43,18 @@ void logMessage(String message) {
     sharedLog.flush(); // optional, but helps if it dies later
 }
 
+#include <stdarg.h>
+
+void fLogMessage(const char *format, ...) {
+    const size_t BUF_SZ = 512;
+    char buf[BUF_SZ];
+
+    va_list args;
+    va_start(args, format);
+    vsnprintf(buf, BUF_SZ, format, args);
+    va_end(args);
+
+    logMessage(String(buf));
+}
+
 

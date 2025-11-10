@@ -7,9 +7,8 @@ uint16_t pwngrid_last_pwned_session_amount = 0;
 uint16_t pwngrid_last_pwned_amount = 0;
 String lastPeerFace = "";
 
-uint16_t getPwngridLastSessionPwnedAmount() { return pwngrid_last_pwned_amount; }
+uint16_t getPwngridLastSessionPwnedAmount() { return pwngrid_last_pwned_session_amount; }
 uint8_t getPwngridTotalPeers() { return pwngrid_friends_tot; }
-uint8_t getPwngridRunTotalPeers() { return pwngrid_friends_tot; }
 String getPwngridLastFriendName() { return pwngrid_last_friend_name; }
 uint16_t getPwngridLastPwnedAmount() { return pwngrid_last_pwned_amount; }
 pwngrid_peer *getPwngridPeers() { return pwngrid_peers; }
@@ -37,6 +36,9 @@ esp_err_t esp_wifi_80211_tx(wifi_interface_t ifx, const void *buffer, int len,
                             bool en_sys_seq);
 
 esp_err_t pwngridAdvertise(uint8_t channel, String face) {
+  if(!(pwngrid_indentity.length() > 10)){
+    return ESP_ERR_NOT_SUPPORTED;
+  }
   if (!advertisePwngrid){
     return ESP_OK;
   }
@@ -102,13 +104,12 @@ esp_err_t pwngridAdvertise(uint8_t channel, String face) {
 void pwngridAddPeer(JsonDocument &json, signed int rssi) {
   String identity = json["identity"].as<String>();
 
+  bool newPeer = true;
+
   for (uint8_t i = 0; i < pwngrid_friends_tot; i++) {
     // Check if peer identity is already in peers array
     if (pwngrid_peers[i].identity == identity) {
-      pwngrid_peers[i].last_ping = millis();
-      pwngrid_peers[i].gone = false;
-      pwngrid_peers[i].rssi = rssi;
-      return;
+      newPeer = false;
     }
   }
 
@@ -132,8 +133,8 @@ void pwngridAddPeer(JsonDocument &json, signed int rssi) {
   lastPeerFace = pwngrid_peers[pwngrid_friends_tot].face;
   pwngrid_last_pwned_amount = pwngrid_peers[pwngrid_friends_tot].pwnd_tot;
   pwngrid_last_pwned_session_amount = pwngrid_peers[pwngrid_friends_tot].pwnd_run;
-  pwngrid_friends_tot++;
-  logMessage("New Pwngrid peer: " + pwngrid_last_friend_name);
+  if(newPeer){pwngrid_friends_tot++;}
+  logMessage("peer detected: " + pwngrid_last_friend_name);
 }
 
 const int away_threshold = 120000;
@@ -147,19 +148,6 @@ void checkPwngridGoneFriends() {
       return;
     }
   }
-}
-
-signed int getPwngridClosestRssi() {
-  signed int closest = -1000;
-
-  for (uint8_t i = 0; i < pwngrid_friends_tot; i++) {
-    // Check if peer is away for more then
-    if (pwngrid_peers[i].gone == false && pwngrid_peers[i].rssi > closest) {
-      closest = pwngrid_peers[i].rssi;
-    }
-  }
-
-  return closest;
 }
 
 typedef struct {

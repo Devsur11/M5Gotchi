@@ -22,6 +22,7 @@
 #include "moodLoader.h"
 #include "wpa_sec.h"
 #include "pwngrid.h"
+#include "api_client.h"
 
 M5Canvas canvas_top(&M5.Display);
 M5Canvas canvas_main(&M5.Display);
@@ -130,6 +131,7 @@ menu main_menu[] = {
     {"IR", 3},
     {"Bad USB", 5},
     #endif
+    {"Pwngrid companion", 7},
     {"Config", 6}
 };
 
@@ -197,6 +199,19 @@ menu settings_menu[] = {
   {"About", 45},
   {"Power off", 46},
   {"Reboot", 56}
+};
+
+//menuID 8
+menu pwngrid_menu[] = {
+  {"Nearby units", 16},
+  {"Messages inbox", 10},
+  {"Send message", 11},
+  {"View identity", 13},
+  {"Reset pwngrid", 15}
+};
+
+menu pwngrid_not_enrolled_menu[] = {
+  {"Enroll with grid", 12}
 };
 
 bool appRunning;
@@ -385,9 +400,9 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi) {
     menu_current_pages = 2;
     menu_len = 6;
     #ifdef USE_EXPERIMENTAL_APPS
-    drawMenuList(main_menu, 1, 7);
+    drawMenuList(main_menu, 1, 8);
     #else
-    drawMenuList(main_menu, 1, 4);
+    drawMenuList(main_menu, 1, 5);
     #endif
   } 
   else if (menuID == 2){
@@ -409,6 +424,9 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi) {
   }  
   else if (menuID == 7){
     drawMenuList(wpasec_menu, 7, 3);
+  }
+  else if (menuID == 8){
+    (pwngrid_indentity.length()>10)? drawMenuList(pwngrid_menu, 8, 5): drawMenuList(pwngrid_not_enrolled_menu, 8, 1);
   }
   else if (menuID == 0)
   {
@@ -604,16 +622,169 @@ void runApp(uint8_t appID){
       debounceDelay();
       drawMenuList(settings_menu ,6  , 15);
     }
-    if(appID == 7){}
+    if(appID == 7){
+      debounceDelay();
+      drawMenuList(pwngrid_menu, 8, 5);
+    }
     if(appID == 8){}
     if(appID == 9){}
     if(appID == 10){}
     if(appID == 11){}
-    if(appID == 12){}
-    if(appID == 13){}
-    if(appID == 14){}
-    if(appID == 15){}
-    if(appID == 16){}
+    if(appID == 12){
+      drawInfoBox("Init", "Initializing keys...", "This may take a while.", false, false);
+      if(api_client::init(KEYS_FILE)){
+        if(!(WiFi.status() == WL_CONNECTED)){
+          drawInfoBox("ERROR!", "Connect to wifi", "to proceed", true, false);
+          menuID = 0;
+          return;
+        }
+        drawInfoBox("Info", "Enroling with pwngrid...", "This may take a while", false, false);
+        if(api_client::enrollWithGrid()){
+          drawInfoBox("Info", "Succesfully enrolled.", "All pwngrid functions enabled.", true, false);
+        }
+        else{
+          drawInfoBox("Error", "Something went wrong", "Try again later.", true, false);
+        }
+        menuID = 0;
+        return;
+      }
+      else{
+        drawInfoBox("Error", "Keygen failed", "Check sd card!", true, false);
+      }
+
+    }
+    if(appID == 13){
+      M5Canvas identity_canvas(&M5.Display);
+      identity_canvas.createSprite(100, canvas_h -22);
+      canvas_main.clear(bg_color_rgb565);
+      canvas_main.setTextColor(tx_color_rgb565);
+      canvas_main.setColor(tx_color_rgb565);
+      canvas_main.qrcode("https://pwnagotchi.ai/pwnfile/#" + pwngrid_indentity, 5, 5);
+      canvas_main.setTextSize(2);
+      canvas_main.setTextDatum(middle_left);
+      canvas_main.drawString("Identity:", 110, 10);
+      identity_canvas.setTextSize(1.5);
+      identity_canvas.setTextColor(tx_color_rgb565);
+      identity_canvas.setColor(bg_color_rgb565);
+      identity_canvas.setTextDatum(top_left);
+      identity_canvas.print(pwngrid_indentity);
+      pushAll();
+      identity_canvas.pushSprite(110, 35);
+      while(true){
+        M5.update();
+        M5Cardputer.update();
+        auto keysState = M5Cardputer.Keyboard.keysState();
+        if(keysState.enter){
+          menuID = 0;
+          return;
+        }
+        for(auto i : keysState.word){
+          if(i=='`'){
+            menuID = 0;
+            return;
+          }
+        }
+      }
+    }
+    if(appID == 14){
+
+    }
+    if(appID == 15){
+      bool confirmation = drawQuestionBox("Reset?", "This will delete all keys,", "messages, frends, identity");
+      if(confirmation){
+        canvas_main.fillScreen(bg_color_rgb565);
+        canvas_main.setTextColor(tx_color_rgb565);
+        canvas_main.clear(bg_color_rgb565);
+        canvas_main.setTextSize(2);
+        canvas_main.setTextDatum(middle_center);
+        canvas_main.drawString("Resetting pwngrid...", canvas_center_x, canvas_h /7);
+        canvas_main.setTextSize(1.2);
+        canvas_main.drawString("Old indentity", canvas_center_x, (canvas_h *2 ) /7);
+        canvas_main.drawString(pwngrid_indentity, canvas_center_x, (canvas_h*3) /7);
+        canvas_main.drawString("New indentity:", canvas_center_x, (canvas_h*4) /7);
+        String new_indetity = "NONE";
+        canvas_main.drawString(new_indetity, canvas_center_x, (canvas_h*5)/7);
+        canvas_main.setTextSize(1);
+        canvas_main.drawString("Deletion in progress, please wait...", canvas_center_x, (canvas_h*6)/7);
+        pushAll();
+        //TODO: Deletion of all pwngrid files
+        SD.remove("/keys/id_rsa");
+        SD.remove("/keys/id_rsa.pub");
+        SD.remove("/token.json");
+        SD.rmdir("/keys");
+        delay(5000);
+        pwngrid_indentity = new_indetity;
+        saveSettings();
+        menuID = 0;
+        return;
+      }
+    }
+    if(appID == 16){
+      uint8_t int_peers = getPwngridTotalPeers();
+      if(int_peers == 0){
+        drawInfoBox("Info", "No nearby pwngrid units", "Try again later", true, false);
+        menuID = 0;
+        return;
+      }
+      pwngrid_peer peers_list[int_peers];// = getPwngridPeers();
+      for(uint8_t i; i<int_peers; i++){
+        peers_list[i] = getPwngridPeers()[i];
+      }
+      String mmenu[int_peers + 1];
+      for(uint8_t i; i<int_peers; i++){
+        mmenu[i] = peers_list[i].face + " | " + peers_list[i].name;
+      }
+      uint8_t choice = drawMultiChoice("Nearby pwngrid units", mmenu, int_peers, 2, 0);
+      //Peer Details and addressbook addition
+      uint8_t current_option;
+      while(true)
+      {
+        drawTopCanvas();
+        drawBottomCanvas();
+        canvas_main.fillScreen(bg_color_rgb565);
+        canvas_main.setTextColor(tx_color_rgb565);
+        canvas_main.clear(bg_color_rgb565);
+        canvas_main.setTextSize(2);
+        canvas_main.setTextDatum(middle_center);
+        canvas_main.drawString(peers_list[choice].face, canvas_center_x, canvas_h / 8);
+        canvas_main.setTextSize(1.5);
+        canvas_main.drawString(peers_list[choice].name, canvas_center_x, (canvas_h * 2)/8);
+        canvas_main.setTextSize(1);
+        canvas_main.drawString(peers_list[choice].identity, canvas_center_x, (canvas_h * 3)/8);
+        canvas_main.setTextSize(1.5);
+        canvas_main.drawString("PWND: " + String(peers_list[choice].pwnd_run) + "/" + String(peers_list[choice].pwnd_tot) + ", RSSI: " + String(peers_list[choice].rssi) , canvas_center_x, (canvas_h*4)/7 );
+        String options[] = {"Add to friends", "Send message", "Back"};
+        canvas_main.setTextSize(1);
+        canvas_main.setTextDatum(middle_left);
+        canvas_main.drawString(options[0] + "   " + options[1] + "   " + options[2], 10, canvas_h - 30);
+        (current_option == 0) ? canvas_main.drawRect(6, canvas_h - 37, 90, 15, tx_color_rgb565): void();
+        (current_option == 1) ? canvas_main.drawRect(108, canvas_h - 37, 80, 15, tx_color_rgb565): void();
+        (current_option == 2) ? canvas_main.drawRect(200, canvas_h - 37, 27, 15, tx_color_rgb565): void();
+        pushAll();
+        M5.update();
+        M5Cardputer.update();
+        auto keys_status = M5Cardputer.Keyboard.keysState();
+        auto keyboard_changed = M5Cardputer.Keyboard.isChange();
+        if(keyboard_changed){Sound(10000, 100, sound);}
+        for(auto i : keys_status.word){
+          if(i == '/'){
+            (current_option == 2)? current_option = 0: current_option++;
+            debounceDelay();
+          }
+          else if(i = ','){
+            (current_option == 0)? current_option == 2: current_option--;
+            debounceDelay();
+          }
+        }
+        if(keys_status.enter){
+          if(current_option == 2){
+            menuID = 0;
+            debounceDelay();
+            return;
+          }
+        }
+      }
+    }
     if(appID == 17){}
     if(appID == 18){}
     if(appID == 19){}
@@ -789,7 +960,6 @@ void runApp(uint8_t appID){
             drawInfoBox("Searching...", "Found "+ String(clientLen)+ " clients", "ENTER for next step", false, false);
             updateM5();
             Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
-            ;
             if(status.enter){
               debounceDelay();
               esp_wifi_set_promiscuous(false);
@@ -815,7 +985,6 @@ void runApp(uint8_t appID){
             }
             updateM5();
             Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
-            ;
             if(status.enter){
               break;
             }

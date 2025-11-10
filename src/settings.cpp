@@ -28,17 +28,6 @@ bool stealth_mode = false;
 String pwngrid_indentity;
 bool advertisePwngrid = true;
 
-String generatePwngridIdentity() {
-  // Generate a random 32-byte identity in hex format
-  const char hexChars[] = "0123456789abcdef";
-  String identity = "";
-  for (int i = 0; i < 64; i++) {
-    identity += hexChars[random(0, 16)];
-  }
-
-  return identity;
-}
-
 // struct personality{
 //     uint16_t nap_time;
 //     uint16_t delay_after_wifi_scan;
@@ -356,13 +345,10 @@ bool initVars() {
     config["sd_logging"] = sd_logging;
     config["toogle_pwnagothi_with_gpio0"] = toogle_pwnagothi_with_gpio0;
     config["stealth_mode"] = stealth_mode;
-    String tempIdentity = generatePwngridIdentity();
-    config["pwngrid_indentity"] = tempIdentity;
+    config["pwngrid_indentity"] = pwngrid_indentity;
     config["advertise_pwngrid"] = advertisePwngrid;
 
     if (configChanged) {
-        pwngrid_indentity = tempIdentity;
-        logMessage("Generated new Pwngrid identity: " + pwngrid_indentity);
         logMessage("Config updated with missing/default values, saving...");
         FConf = SD.open(NEW_CONFIG_FILE, FILE_WRITE, true);
         if (FConf) {

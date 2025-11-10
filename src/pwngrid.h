@@ -26,10 +26,8 @@ typedef struct {
 void initPwngrid();
 esp_err_t pwngridAdvertise(uint8_t channel, String face);
 pwngrid_peer* getPwngridPeers();
-uint8_t getPwngridRunTotalPeers();
 uint8_t getPwngridTotalPeers();
 String getPwngridLastFriendName();
-signed int getPwngridClosestRssi();
 void checkPwngridGoneFriends();
 String getLastPeerFace();
 uint16_t getPwngridLastPwnedAmount();

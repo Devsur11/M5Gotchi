@@ -22,19 +22,20 @@ bool wifion(){
 }
 
 #ifndef CURRENT_VERSION
-#define CURRENT_VERSION "0.4.5"
+#define CURRENT_VERSION "dev"
 #endif
 #ifdef LITE_VERSION
 #undef ENABLE_COREDUMP_LOGGING
 #undef USE_EXPERIMENTAL_APPS
 #endif
 
+#define ADDRES_BOOK_FILE "/contacts.conf"
+#define KEYS_FILE "/crypto.conf"
 #define NORMAL_JSON_URL "https://devsur11.github.io/M5Gotchi/firmware/firmware.json"
 #define LITE_JSON_URL   "https://devsur11.github.io/M5Gotchi/firmware/lite.json"
 #define TEMP_DIR        "/temp"
 #define TEMP_JSON_PATH  TEMP_DIR "/update.json"
 #define TEMP_BIN_PATH   TEMP_DIR "/update.bin"
-#define OLD_CONFIG_FILE "/config.conf"
 #define NEW_CONFIG_FILE "/m5gothi.conf"
 #define PERSONALITY_FILE "/personality.conf"
 //#define LITE_VERSION
