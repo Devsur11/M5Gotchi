@@ -359,6 +359,7 @@ bool initVars() {
             logMessage("Config saved successfully");
         } else {
             logMessage("Failed to open config file for writing");
+            return false;
         }
     }
     logMessage("Loaded identity: " + pwngrid_indentity);

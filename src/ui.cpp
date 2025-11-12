@@ -3,6 +3,7 @@
 #include "lgfx/v1/misc/DataWrapper.hpp"
 #include "HWCDC.h"
 #include "Arduino.h"
+#include <ArduinoJson.h>
 #include "ui.h"
 #include <FS.h>
 #include <SD.h>
@@ -170,6 +171,10 @@ menu IR_menu[] = {
 menu wpasec_menu[] = {
   {"Sync with server", 52},
   {"Check uploads", 53},
+  {"Setup API key", 54}
+};
+
+menu wpasec_setup_menu[] = {
   {"Setup API key", 54}
 };
 
@@ -423,7 +428,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi) {
     drawMenuList( settings_menu , 6, 15);
   }  
   else if (menuID == 7){
-    drawMenuList(wpasec_menu, 7, 3);
+    (wpa_sec_api_key.length()>5)?drawMenuList(wpasec_menu, 7, 3):drawMenuList(wpasec_setup_menu, 7, 1);
   }
   else if (menuID == 8){
     (pwngrid_indentity.length()>10)? drawMenuList(pwngrid_menu, 8, 5): drawMenuList(pwngrid_not_enrolled_menu, 8, 1);
@@ -446,12 +451,6 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi) {
   canvas_main.pushSprite(0, canvas_top_h);
   M5.Display.endWrite();
 }
-
-void drawRightBar() {
-  //TODO
-}
-
-inline void resetSprite(){bar_right.fillSprite(bg_color_rgb565);}
 
 void drawTopCanvas() {
   canvas_top.fillSprite(bg_color_rgb565);
@@ -553,6 +552,16 @@ void drawMood(String face, String phrase) {
     }
 }
 
+struct unit {
+  String name;
+  String fingerprint;
+};
+
+// Function to serialize the `unit` struct to a JsonObject
+void serializeUnit(const unit& u, JsonObject& obj) {
+  obj["name"] = u.name;
+  obj["fingerprint"] = u.fingerprint;
+}
 
 void drawInfoBox(String tittle, String info, String info2, bool canBeQuit, bool isCritical) {
   appRunning = true;
@@ -572,7 +581,7 @@ void drawInfoBox(String tittle, String info, String info2, bool canBeQuit, bool 
     canvas_main.setTextDatum(middle_center);
     canvas_main.drawString(info, canvas_center_x, canvas_h / 2);
     canvas_main.drawString(info2, canvas_center_x, (canvas_h / 2) + 20);
-    drawRightBar();
+    ;
     if(canBeQuit){
       canvas_main.setTextSize(1);
       canvas_main.drawString("To exit press OK", canvas_center_x, canvas_h * 0.9);
@@ -629,7 +638,13 @@ void runApp(uint8_t appID){
     if(appID == 8){}
     if(appID == 9){}
     if(appID == 10){}
-    if(appID == 11){}
+    if(appID == 11){
+      if(!SD.open(ADDRES_BOOK_FILE)){
+        drawInfoBox("ERROR", "No frends found.", "Meet and add one.", true, false);
+      }
+      File contacts = SD.open(ADDRES_BOOK_FILE);
+      api_client::pollInbox();
+    }
     if(appID == 12){
       drawInfoBox("Init", "Initializing keys...", "This may take a while.", false, false);
       if(api_client::init(KEYS_FILE)){
@@ -737,6 +752,7 @@ void runApp(uint8_t appID){
       uint8_t choice = drawMultiChoice("Nearby pwngrid units", mmenu, int_peers, 2, 0);
       //Peer Details and addressbook addition
       uint8_t current_option;
+      debounceDelay();
       while(true)
       {
         drawTopCanvas();
@@ -780,6 +796,83 @@ void runApp(uint8_t appID){
           if(current_option == 2){
             menuID = 0;
             debounceDelay();
+            return;
+          }
+          if(current_option == 0){
+            debounceDelay();
+            // Open contacts file for reading and parse JSON into a vector
+            File contactsFile = SD.open(ADDRES_BOOK_FILE, FILE_READ);
+            unit newPeer = {peers_list[choice].name, peers_list[choice].identity};
+                  
+            if (contactsFile) {
+              JsonDocument doc;  // Use JsonDocument instead of DynamicJsonDocument (since DynamicJsonDocument is deprecated)
+              DeserializationError err = deserializeJson(doc, contactsFile);
+
+              if (!err) {
+                JsonArray arr = doc.as<JsonArray>();
+              
+                // Serialize the newPeer struct into a JsonObject
+                JsonObject obj = arr.createNestedObject();
+                serializeUnit(newPeer, obj);  // Custom serialization function
+
+                // Write updated JSON to file
+                String out;
+                serializeJsonPretty(doc, out);
+                contactsFile.close();  // Close the file first
+              
+                // Reopen the file in write mode to overwrite
+                contactsFile = SD.open(ADDRES_BOOK_FILE, FILE_WRITE);
+                contactsFile.print(out); 
+                contactsFile.flush();
+                contactsFile.close();
+              } else {
+                logMessage("Failed to parse contacts file: " + String(err.c_str()));
+              }
+            } else {
+              // If the file doesn't exist, create it and add the newPeer
+              JsonDocument doc;
+              JsonArray arr = doc.to<JsonArray>();
+            
+              // Serialize the newPeer struct into a JsonObject
+              JsonObject obj = arr.createNestedObject();
+              serializeUnit(newPeer, obj);  // Custom serialization function
+            
+              // Write the new JSON to file
+              String out;
+              serializeJsonPretty(doc, out);
+              contactsFile = SD.open(ADDRES_BOOK_FILE, FILE_WRITE);
+              contactsFile.print(out);
+              contactsFile.flush();
+              contactsFile.close();
+            }
+            drawInfoBox("Sucess", "Unit added to frend", "list, text to it now!", true, false);
+            menuID = 0;
+            return;
+          }
+          if(current_option == 1){
+            if(!(WiFi.status() == WL_CONNECTED)){
+              drawInfoBox("Info", "Network connection needed", "To send messages!", false, false);
+              delay(3000);
+              runApp(43);
+              if(WiFi.status() != WL_CONNECTED){
+                drawInfoBox("ERROR!", "No network connection", "Message send abort", true, false);
+                menuID = 0;
+                return;
+              }
+            }
+            String message = userInput("Message:", "Type message content:", 100);
+            if(!(message.length()>1)){
+              menuID = 0;
+              return;
+            }
+            drawInfoBox("Sending...", "Sneding message", "Please wait", false, false);
+            if(api_client::sendMessageTo("7ce282075ce1e1c4f51ae2fc4f63bfea859bd6bf24bce2b0582256963f70fa93", message)){
+              drawInfoBox("Send", "Message was send", "succesfuly.", true, false);
+            }
+            else{
+              drawInfoBox("Error", "Message not send.", "Something went wrong!", true, false);
+            }
+            menuID = 0;
             return;
           }
         }
@@ -2816,9 +2909,7 @@ void debounceDelay(){
 #ifdef ENABLE_COREDUMP_LOGGING
 #include "esp_core_dump.h"
 #include "esp_system.h"
-#endif
 
-#ifdef ENABLE_COREDUMP_LOGGING
 void sendCrashReport(){
   //inform user of state
   drawInfoBox("Error", "A critical error has", "occurred, sending report...", false, false);

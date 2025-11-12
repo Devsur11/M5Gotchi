@@ -60,6 +60,25 @@ static String normalizePublicPEM(const String &pem_in) {
     return String(s.c_str());
 }
 
+static String deNormalizePublicPEM(const String &pem_in) {
+    std::string s((const char*)pem_in.c_str(), pem_in.length());
+    const std::string in_begin = "-----BEGIN RSA PUBLIC KEY-----";
+    const std::string in_end   = "-----END RSA PUBLIC KEY-----";
+    const std::string out_begin = "-----BEGIN PUBLIC KEY-----";
+    const std::string out_end   = "-----END PUBLIC KEY-----";
+
+    size_t p = s.find(in_begin);
+    if (p != std::string::npos) s.replace(p, in_begin.length(), out_begin);
+    p = s.find(in_end);
+    if (p != std::string::npos) s.replace(p, in_end.length(), out_end);
+
+    // normalize trailing newlines to exactly one '\n'
+    while (!s.empty() && (s.back() == '\n' || s.back() == '\r')) s.pop_back();
+    s.push_back('\n');
+
+    return String(s.c_str());
+}
+
 static String trimString(const String &s) {
     int start = 0;
     int end = s.length() - 1;

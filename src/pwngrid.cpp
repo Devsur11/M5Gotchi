@@ -134,7 +134,6 @@ void pwngridAddPeer(JsonDocument &json, signed int rssi) {
   pwngrid_last_pwned_amount = pwngrid_peers[pwngrid_friends_tot].pwnd_tot;
   pwngrid_last_pwned_session_amount = pwngrid_peers[pwngrid_friends_tot].pwnd_run;
   if(newPeer){pwngrid_friends_tot++;}
-  logMessage("peer detected: " + pwngrid_last_friend_name);
 }
 
 const int away_threshold = 120000;

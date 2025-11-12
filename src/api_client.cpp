@@ -148,7 +148,6 @@ bool api_client::enrollWithGrid() {
 
     String out;
     serializeJsonPretty(body, out); // compact JSON like the script does
-    logMessage(out);
 
     // no auth header
     String resp = httpPostJson(String(Endpoint) + "/unit/enroll", out, false);
@@ -156,7 +155,6 @@ bool api_client::enrollWithGrid() {
         logMessage("enroll: empty response");
         return false;
     }
-    logMessage(resp);
 
     DynamicJsonDocument rdoc(512);
     auto err = deserializeJson(rdoc, resp);
@@ -177,8 +175,8 @@ bool api_client::enrollWithGrid() {
     return false;
 }
 
-
 bool api_client::sendMessageTo(const String &recipientFingerprint, const String &cleartext) {
+    enrollWithGrid();
     // fetch recipient unit
     String r = httpGet(String(Endpoint) + "/unit/" + recipientFingerprint, false);
     if (r.length() == 0) {
@@ -195,14 +193,15 @@ bool api_client::sendMessageTo(const String &recipientFingerprint, const String 
         return false;
     }
     // recipient public_key is base64(pem)
-    String pubB64 = String(rd["public_key"].as<const char*>());
+    String pubB64 = pwngrid::crypto::deNormalizePublicPEM(String(rd["public_key"].as<const char*>()));
+    logMessage("Recepients public key: " + pubB64);
     std::vector<uint8_t> pubPemVec = pwngrid::crypto::base64Decode(pubB64);
     String pubPem = String((const char*)pubPemVec.data(), pubPemVec.size());
 
     // encrypt
     std::vector<uint8_t> clearVec(cleartext.c_str(), cleartext.c_str() + cleartext.length());
     std::vector<uint8_t> encrypted;
-    if (!pwngrid::crypto::encryptFor(clearVec, pubPem, encrypted)) {
+    if (!pwngrid::crypto::encryptFor(clearVec, pubB64, encrypted)) {
         logMessage("encryptFor failed");
         return false;
     }
@@ -223,6 +222,8 @@ bool api_client::sendMessageTo(const String &recipientFingerprint, const String 
     String out; serializeJson(body, out);
 
     String resp = httpPostJson(String(Endpoint) + "/unit/" + recipientFingerprint + "/inbox", out, true);
+    logMessage(resp);
+    
     if (resp.length() == 0) {
         logMessage("send: empty response");
         return false;
@@ -232,7 +233,9 @@ bool api_client::sendMessageTo(const String &recipientFingerprint, const String 
 }
 
 bool api_client::pollInbox() {
+    enrollWithGrid();
     String r = httpGet(String(Endpoint) + "/unit/inbox/?p=1", true);
+    logMessage(r);
     if (r.length() == 0) {
         logMessage("poll: empty response");
         return false;
@@ -249,26 +252,45 @@ bool api_client::pollInbox() {
     }
     JsonArray msgs = rd["messages"].as<JsonArray>();
     for (JsonObject m : msgs) {
-        String sender = m["sender"].as<const char*>(); // fingerprint
-        String dataB64 = m["data"].as<const char*>();
-        String sigB64 = m["signature"].as<const char*>();
+        uint16_t msg_id = m["id"].as<uint16_t>();
+        String sender = m["sender"].as<String>();
+
+        String r2 = httpGet(String(Endpoint) + "/unit/inbox/" + msg_id, true);
+        logMessage(r2);
+        if(r2.length() < 20){
+            logMessage("Error pulling message data!");
+            continue;
+        }
+        
+        JsonDocument data;
+        if(deserializeJson(data, r2)){
+            logMessage("Could not fetch message data!");
+            continue;
+        }
+
+        String dataB64 = data["data"].as<String>();
+        if(dataB64.length() == 0){
+            logMessage("Message empty, skipping.");
+            continue;
+        }
+        String sigB64 = data["signature"].as<String>();
 
         auto encBytes = pwngrid::crypto::base64Decode(dataB64);
         auto sigBytes = pwngrid::crypto::base64Decode(sigB64);
         // get sender public key
-        String r2 = httpGet(String(Endpoint) + "/unit/" + sender, false);
-        if (r2.length() == 0) {
+        String r3 = httpGet(String(Endpoint) + "/unit/" + sender, false);
+        logMessage(r3);
+        if (r3.length() == 0) {
             fLogMessage("poll: could not fetch sender %s\n", sender.c_str());
             continue;
         }
         JsonDocument ud;
-        if (deserializeJson(ud, r2)) continue;
-        String senderPubB64 = ud["public_key"].as<const char*>();
-        auto spubVec = pwngrid::crypto::base64Decode(senderPubB64);
-        String senderPubPEM = String((const char*)spubVec.data(), spubVec.size());
+        if (deserializeJson(ud, r3)) continue;
+        String senderPubB64 = pwngrid::crypto::deNormalizePublicPEM(ud["public_key"].as<String>());
+        logMessage(senderPubB64);
 
         // verify signature
-        if (!pwngrid::crypto::verifyMessageWithPubPEM(encBytes, sigBytes, senderPubPEM)) {
+        if (!pwngrid::crypto::verifyMessageWithPubPEM(encBytes, sigBytes, senderPubB64)) {
             logMessage("poll: signature verify failed");
             continue;
         }

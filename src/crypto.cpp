@@ -31,7 +31,7 @@ using namespace pwngrid::crypto;
 
 static String g_keysPath = "/keys";
 static const int RSA_BITS = 2048;
-static const size_t AES_KEY_LEN = 32; // 256 bits
+static const size_t AES_KEY_LEN = 16;
 static const size_t GCM_NONCE_LEN = 12;
 static const size_t GCM_TAG_LEN = 16;
 static const size_t PRIV_PEM_BUF = 16000; // adjust up if you use 4096-bit keys
@@ -258,102 +258,11 @@ String pwngrid::crypto::publicPEMBase64() {
     return base64Encode(v);
 }
 
-
-// bool pwngrid::crypto::signMessage(const std::vector<uint8_t> &msg, std::vector<uint8_t> &outSig) {
-//     std::vector<uint8_t> priv;
-//     if (!readFileSD(fullPrivatePath(), priv)) {
-//         logMessage("[crypto] signMessage: private key not found");
-//         return false;
-//     }
-//     // ensure null termination for mbedtls parsing
-//     if (priv.empty() || priv.back() != 0) priv.push_back(0);
-
-//     mbedtls_pk_context pk;
-//     mbedtls_pk_init(&pk);
-
-//     mbedtls_entropy_context entropy;
-//     mbedtls_ctr_drbg_context ctr;
-//     mbedtls_entropy_init(&entropy);
-//     mbedtls_ctr_drbg_init(&ctr);
-
-//     const char *pers = "pwngrid_sign";
-//     if (mbedtls_ctr_drbg_seed(&ctr, mbedtls_entropy_func, &entropy, (const unsigned char*)pers, strlen(pers)) != 0) {
-//         logMessage("[crypto] signMessage: ctr_drbg_seed failed");
-//         mbedtls_pk_free(&pk);
-//         mbedtls_ctr_drbg_free(&ctr);
-//         mbedtls_entropy_free(&entropy);
-//         return false;
-//     }
-
-//     if (mbedtls_pk_parse_key(&pk, priv.data(), priv.size(), nullptr, 0) != 0) {
-//         logMessage("[crypto] signMessage: pk_parse_key failed");
-//         mbedtls_pk_free(&pk);
-//         mbedtls_ctr_drbg_free(&ctr);
-//         mbedtls_entropy_free(&entropy);
-//         return false;
-//     }
-
-//     if (!mbedtls_pk_can_do(&pk, MBEDTLS_PK_RSA)) {
-//         logMessage("[crypto] signMessage: key not RSA");
-//         mbedtls_pk_free(&pk);
-//         mbedtls_ctr_drbg_free(&ctr);
-//         mbedtls_entropy_free(&entropy);
-//         return false;
-//     }
-
-//     mbedtls_rsa_context *rsa = mbedtls_pk_rsa(pk);
-
-//     // compute SHA256 of message
-//     unsigned char hash[32];
-//     mbedtls_sha256(msg.data(), msg.size(), hash, 0);
-
-//     // set RSA padding to PSS + SHA256
-//     mbedtls_rsa_set_padding(rsa, MBEDTLS_RSA_PKCS_V21, MBEDTLS_MD_SHA256);
-// #if defined(MBEDTLS_VERSION_NUMBER)
-//     // if rsa->salt_len is available, set it to 16
-//     rsa->salt_len = 16;
-// #endif
-
-//     size_t key_len = mbedtls_pk_get_len(&pk);
-//     outSig.assign(key_len, 0);
-//     size_t olen = 0;
-
-//     int rc = mbedtls_rsa_rsassa_pss_sign(rsa,
-//                                          mbedtls_ctr_drbg_random, &ctr,
-//                                          MBEDTLS_RSA_PRIVATE,
-//                                          MBEDTLS_MD_SHA256,
-//                                          16, // hash length in bytes
-//                                          hash,
-//                                          outSig.data());
-//     if (rc != 0) {
-//         // fallback: try mbedtls_pk_sign (with padding already set) which should honor PKCS_V21
-//         rc = mbedtls_pk_sign(&pk, MBEDTLS_MD_SHA256, hash, 0, outSig.data(), &olen, mbedtls_ctr_drbg_random, &ctr);
-//         if (rc != 0) {
-//             fLogMessage("[crypto] signMessage: signing failed: -0x%04x\n", -rc);
-//             mbedtls_pk_free(&pk);
-//             mbedtls_ctr_drbg_free(&ctr);
-//             mbedtls_entropy_free(&entropy);
-//             return false;
-//         }
-//         outSig.resize(olen);
-//     } else {
-//         // rsa_rsassa_pss_sign fills entire key_len
-//         outSig.resize(key_len);
-//     }
-
-//     mbedtls_pk_free(&pk);
-//     mbedtls_ctr_drbg_free(&ctr);
-//     mbedtls_entropy_free(&entropy);
-//     return true;
- 
-// }
-
-
 bool pwngrid::crypto::verifyMessageWithPubPEM(const std::vector<uint8_t> &msg, const std::vector<uint8_t> &sig, const String &pubPEM) {
     if (pubPEM.length() == 0) return false;
 
     // Normalize header in memory: python client changes header to RSA PUBLIC KEY.
-    String pubNorm = pwngrid::crypto::normalizePublicPEM(pubPEM);
+    String pubNorm = pubPEM;//pwngrid::crypto::normalizePublicPEM(pubPEM);
 
     std::vector<uint8_t> pub(pubNorm.length() + 1);
     memcpy(pub.data(), pubNorm.c_str(), pubNorm.length());
@@ -400,11 +309,6 @@ bool pwngrid::crypto::verifyMessageWithPubPEM(const std::vector<uint8_t> &msg, c
     mbedtls_pk_free(&pk);
     return true;
 }
-
-
-// ---------- EncryptFor: RSA-OAEP encrypt AES key + AES-GCM payload ----------
-// ---------- helper: trim (remove leading/trailing whitespace/newlines) ----------
-
 
 // ---------- signMessage (fixed hashlen and fallback usage) ----------
 bool pwngrid::crypto::signMessage(const std::vector<uint8_t> &msg, std::vector<uint8_t> &outSig) {
