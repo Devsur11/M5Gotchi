@@ -637,13 +637,15 @@ void runApp(uint8_t appID){
     }
     if(appID == 8){}
     if(appID == 9){}
-    if(appID == 10){}
+    if(appID == 10){
+      api_client::pollInbox();
+    }
     if(appID == 11){
       if(!SD.open(ADDRES_BOOK_FILE)){
         drawInfoBox("ERROR", "No frends found.", "Meet and add one.", true, false);
       }
       File contacts = SD.open(ADDRES_BOOK_FILE);
-      api_client::pollInbox();
+      
     }
     if(appID == 12){
       drawInfoBox("Init", "Initializing keys...", "This may take a while.", false, false);
@@ -866,7 +868,7 @@ void runApp(uint8_t appID){
               return;
             }
             drawInfoBox("Sending...", "Sneding message", "Please wait", false, false);
-            if(api_client::sendMessageTo("7ce282075ce1e1c4f51ae2fc4f63bfea859bd6bf24bce2b0582256963f70fa93", message)){
+            if(api_client::sendMessageTo(peers_list[choice].identity, message)){
               drawInfoBox("Send", "Message was send", "succesfuly.", true, false);
             }
             else{

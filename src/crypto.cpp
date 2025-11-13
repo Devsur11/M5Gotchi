@@ -395,8 +395,38 @@ bool pwngrid::crypto::signMessage(const std::vector<uint8_t> &msg, std::vector<u
     mbedtls_entropy_free(&entropy);
     return true;
 }
+// === Helper: try parse public key tolerant to "RSA PUBLIC KEY" vs "PUBLIC KEY" ===
+static int parse_public_key_tolerant(mbedtls_pk_context *pk, const uint8_t *pem, size_t pem_len) {
+    // try raw first
+    int rc = mbedtls_pk_parse_public_key(pk, pem, pem_len);
+    if (rc == 0) return 0;
 
-// ---------- encryptFor: ensure pub buffer is null terminated for parser ----------
+    // try swapping headers if present: "RSA PUBLIC KEY" <-> "PUBLIC KEY"
+    std::string s(reinterpret_cast<const char*>(pem), pem_len);
+    if (s.find("-----BEGIN RSA PUBLIC KEY-----") != std::string::npos) {
+        // convert to "PUBLIC KEY" (SubjectPublicKeyInfo) form that mbedtls sometimes expects
+        std::string s2 = s;
+        size_t p1 = s2.find("-----BEGIN RSA PUBLIC KEY-----");
+        if (p1 != std::string::npos) s2.replace(p1, strlen("-----BEGIN RSA PUBLIC KEY-----"), "-----BEGIN PUBLIC KEY-----");
+        size_t p2 = s2.find("-----END RSA PUBLIC KEY-----");
+        if (p2 != std::string::npos) s2.replace(p2, strlen("-----END RSA PUBLIC KEY-----"), "-----END PUBLIC KEY-----");
+        rc = mbedtls_pk_parse_public_key(pk, (const unsigned char*)s2.c_str(), s2.size() + 1);
+        if (rc == 0) return 0;
+    } else if (s.find("-----BEGIN PUBLIC KEY-----") != std::string::npos) {
+        // try converting to RSA PUBLIC KEY (less likely to help, but harmless)
+        std::string s2 = s;
+        size_t p1 = s2.find("-----BEGIN PUBLIC KEY-----");
+        if (p1 != std::string::npos) s2.replace(p1, strlen("-----BEGIN PUBLIC KEY-----"), "-----BEGIN RSA PUBLIC KEY-----");
+        size_t p2 = s2.find("-----END PUBLIC KEY-----");
+        if (p2 != std::string::npos) s2.replace(p2, strlen("-----END PUBLIC KEY-----"), "-----END RSA PUBLIC KEY-----");
+        rc = mbedtls_pk_parse_public_key(pk, (const unsigned char*)s2.c_str(), s2.size() + 1);
+        if (rc == 0) return 0;
+    }
+
+    return rc;
+}
+
+// ---------- Encrypt (patched) ----------
 bool pwngrid::crypto::encryptFor(const std::vector<uint8_t> &cleartext, const String &recipientPubPEM, std::vector<uint8_t> &out) {
     if (recipientPubPEM.length() == 0) {
         logMessage("[crypto] encryptFor: recipient public key empty");
@@ -410,7 +440,8 @@ bool pwngrid::crypto::encryptFor(const std::vector<uint8_t> &cleartext, const St
 
     mbedtls_pk_context pk;
     mbedtls_pk_init(&pk);
-    if (mbedtls_pk_parse_public_key(&pk, pubbuf.data(), pubbuf.size()) != 0) {
+
+    if (parse_public_key_tolerant(&pk, pubbuf.data(), pubbuf.size()) != 0) {
         logMessage("[crypto] encryptFor: parse public key failed");
         mbedtls_pk_free(&pk);
         return false;
@@ -430,7 +461,7 @@ bool pwngrid::crypto::encryptFor(const std::vector<uint8_t> &cleartext, const St
         return false;
     }
 
-    // generate random AES key
+    // generate random AES key (must match python's 16 bytes)
     std::vector<uint8_t> aesKey(AES_KEY_LEN);
     if (mbedtls_ctr_drbg_random(&ctr, aesKey.data(), AES_KEY_LEN) != 0) {
         logMessage("[crypto] ctr random aesKey failed");
@@ -440,18 +471,42 @@ bool pwngrid::crypto::encryptFor(const std::vector<uint8_t> &cleartext, const St
         return false;
     }
 
-    // RSA-OAEP encrypt AES key
-    std::vector<uint8_t> encKey(mbedtls_pk_get_len(&pk) + 16);
-    size_t encKeyLen = 0;
-    int rc = mbedtls_pk_encrypt(&pk, aesKey.data(), AES_KEY_LEN, encKey.data(), &encKeyLen, encKey.size(), mbedtls_ctr_drbg_random, &ctr);
-    if (rc != 0) {
-        fLogMessage("[crypto] pk_encrypt failed: -0x%04x\n", -rc);
+    // --- RSA-OAEP-SHA256 encrypt AES key explicitly ---
+    // ensure pk is RSA
+    if (!mbedtls_pk_can_do(&pk, MBEDTLS_PK_RSA)) {
+        logMessage("[crypto] encryptFor: public key is not RSA");
         mbedtls_pk_free(&pk);
         mbedtls_ctr_drbg_free(&ctr);
         mbedtls_entropy_free(&entropy);
         return false;
     }
-    encKey.resize(encKeyLen);
+
+    mbedtls_rsa_context *rsa = mbedtls_pk_rsa(pk);
+    // set padding to RSAES-OAEP (PKCS1 v2) and hash to SHA256
+    mbedtls_rsa_set_padding(rsa, MBEDTLS_RSA_PKCS_V21, MBEDTLS_MD_SHA256);
+    // if () {
+    //     logMessage("[crypto] encryptFor: failed to set rsa padding");
+    //     mbedtls_pk_free(&pk);
+    //     mbedtls_ctr_drbg_free(&ctr);
+    //     mbedtls_entropy_free(&entropy);
+    //     return false;
+    // }
+
+    size_t rsa_len = mbedtls_pk_get_len(&pk);
+    std::vector<uint8_t> encKey(rsa_len);
+    int rc = mbedtls_rsa_rsaes_oaep_encrypt(rsa,
+            mbedtls_ctr_drbg_random, &ctr,
+            MBEDTLS_RSA_PUBLIC,
+            nullptr, 0, // label, label_len (python used None)
+            AES_KEY_LEN, aesKey.data(), encKey.data());
+    if (rc != 0) {
+        fLogMessage("[crypto] oaep encrypt failed: -0x%04x\n", -rc);
+        mbedtls_pk_free(&pk);
+        mbedtls_ctr_drbg_free(&ctr);
+        mbedtls_entropy_free(&entropy);
+        return false;
+    }
+    // encKey is rsa_len bytes (full modulus). If you need exact length, use rsa_len.
 
     // prepare nonce
     unsigned char nonce[GCM_NONCE_LEN];
@@ -466,7 +521,7 @@ bool pwngrid::crypto::encryptFor(const std::vector<uint8_t> &cleartext, const St
     // GCM encrypt
     mbedtls_gcm_context gcm;
     mbedtls_gcm_init(&gcm);
-    if (mbedtls_gcm_setkey(&gcm, MBEDTLS_CIPHER_ID_AES, aesKey.data(), AES_KEY_LEN*8) != 0) {
+    if (mbedtls_gcm_setkey(&gcm, MBEDTLS_CIPHER_ID_AES, aesKey.data(), AES_KEY_LEN * 8) != 0) {
         logMessage("[crypto] gcm_setkey failed");
         mbedtls_gcm_free(&gcm);
         mbedtls_pk_free(&pk);
@@ -516,7 +571,7 @@ bool pwngrid::crypto::encryptFor(const std::vector<uint8_t> &cleartext, const St
     return true;
 }
 
-// ---------- Decrypt ----------
+// ---------- Decrypt (patched) ----------
 bool pwngrid::crypto::decrypt(const std::vector<uint8_t> &ciphertext, std::vector<uint8_t> &outCleartext) {
     // layout: nonce(12) + 4 bytes key size + encKey + ciphertext + tag(16)
     size_t minLen = GCM_NONCE_LEN + 4 + GCM_TAG_LEN;
@@ -582,18 +637,43 @@ bool pwngrid::crypto::decrypt(const std::vector<uint8_t> &ciphertext, std::vecto
         return false;
     }
 
-    // decrypt encKey (RSA-OAEP)
-    std::vector<uint8_t> aesKey(512);
-    size_t olen = 0;
-    int rc = mbedtls_pk_decrypt(&pk, encKey.data(), encKey.size(), aesKey.data(), &olen, aesKey.size(), mbedtls_ctr_drbg_random, &ctr);
-    if (rc != 0) {
-        fLogMessage("[crypto] pk_decrypt failed: -0x%04x\n", -rc);
+    // decrypt encKey (RSA-OAEP-SHA256) explicitly
+    if (!mbedtls_pk_can_do(&pk, MBEDTLS_PK_RSA)) {
+        logMessage("[crypto] decrypt: private key is not RSA");
         mbedtls_pk_free(&pk);
         mbedtls_ctr_drbg_free(&ctr);
         mbedtls_entropy_free(&entropy);
         return false;
     }
-    aesKey.resize(olen);
+
+    mbedtls_rsa_context *rsa = mbedtls_pk_rsa(pk);
+    mbedtls_rsa_set_padding(rsa, MBEDTLS_RSA_PKCS_V21, MBEDTLS_MD_SHA256);
+    // if ( != 0) {
+    //     logMessage("[crypto] decrypt: failed to set rsa padding");
+    //     mbedtls_pk_free(&pk);
+    //     mbedtls_ctr_drbg_free(&ctr);
+    //     mbedtls_entropy_free(&entropy);
+    //     return false;
+    // }
+
+    // aesKey output buffer: allocate modulus bytes
+    size_t rsa_len = mbedtls_pk_get_len(&pk);
+    std::vector<uint8_t> aesKey(rsa_len);
+    size_t olen = 0;
+    int rc = mbedtls_rsa_rsaes_oaep_decrypt(rsa,
+            mbedtls_ctr_drbg_random, &ctr,
+            MBEDTLS_RSA_PRIVATE,
+            nullptr, 0,
+            &olen,
+            encKey.data(), aesKey.data(), aesKey.size());
+    if (rc != 0) {
+        fLogMessage("[crypto] oaep decrypt failed: -0x%04x\n", -rc);
+        mbedtls_pk_free(&pk);
+        mbedtls_ctr_drbg_free(&ctr);
+        mbedtls_entropy_free(&entropy);
+        return false;
+    }
+    aesKey.resize(olen); // actual AES key length (should be 16)
 
     // use AES-GCM to decrypt
     mbedtls_gcm_context gcm;
