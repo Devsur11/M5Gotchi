@@ -224,6 +224,7 @@ void setup() {
     logMessage("Pwnagothi mode disabled");
   }
   initPwngrid();
+  logMessage(String(M5.Display.getTextFont()));
 }
 
 void wakeUp() {

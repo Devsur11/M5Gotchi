@@ -210,7 +210,8 @@ menu settings_menu[] = {
 menu pwngrid_menu[] = {
   {"Nearby units", 16},
   {"Messages inbox", 10},
-  {"Send message", 11},
+  {"Quick message", 11},
+  {"Frends list", 17},
   {"View identity", 13},
   {"Reset pwngrid", 15}
 };
@@ -431,7 +432,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi) {
     (wpa_sec_api_key.length()>5)?drawMenuList(wpasec_menu, 7, 3):drawMenuList(wpasec_setup_menu, 7, 1);
   }
   else if (menuID == 8){
-    (pwngrid_indentity.length()>10)? drawMenuList(pwngrid_menu, 8, 5): drawMenuList(pwngrid_not_enrolled_menu, 8, 1);
+    (pwngrid_indentity.length()>10)? drawMenuList(pwngrid_menu, 8, 6): drawMenuList(pwngrid_not_enrolled_menu, 8, 1);
   }
   else if (menuID == 0)
   {
@@ -633,7 +634,7 @@ void runApp(uint8_t appID){
     }
     if(appID == 7){
       debounceDelay();
-      drawMenuList(pwngrid_menu, 8, 5);
+      drawMenuList(pwngrid_menu, 8, 6);
     }
     if(appID == 8){}
     if(appID == 9){}
@@ -641,11 +642,53 @@ void runApp(uint8_t appID){
       api_client::pollInbox();
     }
     if(appID == 11){
+      api_client::init(KEYS_FILE);
+      if(!(WiFi.status() == WL_CONNECTED)){
+        drawInfoBox("Info", "Network connection needed", "To send messages!", false, false);
+        delay(3000);
+        runApp(43);
+        if(WiFi.status() != WL_CONNECTED){
+          drawInfoBox("ERROR!", "No network connection", "Message send abort", true, false);
+          menuID = 0;
+          return;
+        }
+      }
       if(!SD.open(ADDRES_BOOK_FILE)){
         drawInfoBox("ERROR", "No frends found.", "Meet and add one.", true, false);
       }
-      File contacts = SD.open(ADDRES_BOOK_FILE);
-      
+      File contacts = SD.open(ADDRES_BOOK_FILE, FILE_READ, true);
+      JsonDocument contacts_json;
+      DeserializationError err = deserializeJson(contacts_json, contacts);
+
+      if (err) {
+          logMessage("Failed to parse contacts: " + String(err.c_str()));
+          return;
+      }
+
+      JsonArray contacts_arr = contacts_json.as<JsonArray>();
+      logMessage("Array size: " + String(contacts_arr.size()));
+      std::vector<unit> contacts_vector;
+      for (JsonObject obj : contacts_arr) {
+          String name = obj["name"] | "unknown";
+          String fingerprint = obj["fingerprint"] | "none";
+          logMessage("Name: " + name + ", Fingerprint: " + fingerprint);
+          contacts_vector.push_back({name, fingerprint});
+      }
+      String names[contacts_vector.size()+1];
+      for(uint16_t i; i<=contacts_vector.size(); i++){
+        names[i] = contacts_vector[i].name;
+      }
+      int16_t result = drawMultiChoice("Select recepient:", names, contacts_vector.size(), 0, 0);
+      if(result >= 0 && result <= contacts_vector.size()){
+        String message = userInput("Message:", "", 255);
+        drawInfoBox("Sending...", "Sending message, ", "please wait...", false, false);
+        if(api_client::sendMessageTo(contacts_vector[result].fingerprint, message)){
+          drawInfoBox("Sucess", "Message send", "", true, false);
+        }
+        else{
+          drawInfoBox("Error!", "Error sending message", "Try again or check logs", true, false);
+        }
+      }
     }
     if(appID == 12){
       drawInfoBox("Init", "Initializing keys...", "This may take a while.", false, false);
@@ -728,6 +771,7 @@ void runApp(uint8_t appID){
         SD.remove("/keys/id_rsa");
         SD.remove("/keys/id_rsa.pub");
         SD.remove("/token.json");
+        SD.remove(ADDRES_BOOK_FILE);
         SD.rmdir("/keys");
         delay(5000);
         pwngrid_indentity = new_indetity;
@@ -737,13 +781,14 @@ void runApp(uint8_t appID){
       }
     }
     if(appID == 16){
+      api_client::init(KEYS_FILE);
       uint8_t int_peers = getPwngridTotalPeers();
       if(int_peers == 0){
         drawInfoBox("Info", "No nearby pwngrid units", "Try again later", true, false);
         menuID = 0;
         return;
       }
-      pwngrid_peer peers_list[int_peers];// = getPwngridPeers();
+      pwngrid_peer peers_list[int_peers];
       for(uint8_t i; i<int_peers; i++){
         peers_list[i] = getPwngridPeers()[i];
       }
@@ -852,6 +897,7 @@ void runApp(uint8_t appID){
             return;
           }
           if(current_option == 1){
+            api_client::init(KEYS_FILE);
             if(!(WiFi.status() == WL_CONNECTED)){
               drawInfoBox("Info", "Network connection needed", "To send messages!", false, false);
               delay(3000);
@@ -880,7 +926,223 @@ void runApp(uint8_t appID){
         }
       }
     }
-    if(appID == 17){}
+    if(appID == 17){
+      api_client::init(KEYS_FILE);
+      debounceDelay();
+      File contacts = SD.open(ADDRES_BOOK_FILE, FILE_READ, true);
+      JsonDocument contacts_json;
+      DeserializationError err = deserializeJson(contacts_json, contacts);
+
+      if (err) {
+          logMessage("Failed to parse contacts: " + String(err.c_str()));
+          return;
+      }
+
+      JsonArray contacts_arr = contacts_json.as<JsonArray>();
+      logMessage("Array size: " + String(contacts_arr.size()));
+      std::vector<unit> contacts_vector;
+      for (JsonObject obj : contacts_arr) {
+          String name = obj["name"] | "unknown";
+          String fingerprint = obj["fingerprint"] | "none";
+          logMessage("Name: " + name + ", Fingerprint: " + fingerprint);
+          contacts_vector.push_back({name, fingerprint});
+      }
+      String names[contacts_vector.size()+2];
+      for(uint16_t i; i<=contacts_vector.size(); i++){
+        names[i] = contacts_vector[i].name;
+      }
+      names[contacts_vector.size()] = "Add new";
+      int16_t result = drawMultiChoice("Select contact to manage:", names, contacts_vector.size() + 1, 0, 0);
+      if(result<0){
+        menuID = 0;
+        return;
+      }
+      else if(result == contacts_vector.size() ){
+        String fingerprint;
+        String name;
+        String subMenu[3] = {"via keyboard", "via PC/Phone", "back"};
+        result = drawMultiChoice("Type unit fingerprint:", subMenu, 3, 0, 0);
+        if(result==2 || result==-1){
+          menuID = 0;
+          return;
+        }
+        else if(result == 0){
+          api_client::init(KEYS_FILE);
+          if(!(WiFi.status() == WL_CONNECTED)){
+            drawInfoBox("Info", "Network connection needed", "To add unit!", false, false);
+            delay(3000);
+            runApp(43);
+            if(WiFi.status() != WL_CONNECTED){
+              drawInfoBox("ERROR!", "No network connection", "Unit add abort!", true, false);
+              menuID = 0;
+              return;
+            }
+          }
+          fingerprint = userInput("Fingerprint:", "Enter unit fingerprint", 64);
+          drawInfoBox("Info", "Parsing unit name", "Please wait", false, false);
+          name = api_client::getNameFromFingerprint(fingerprint);
+          if(fingerprint.length() < 10){
+            drawInfoBox("ERROR!", "Unit not found", "Check fingerprint!", true, false);
+            menuID = 0;
+            return;
+          }
+        }
+        else if(result == 1){
+          api_client::init(KEYS_FILE);
+          drawInfoBox("Connect:", "Connect to CardputerSetup", "And go to 192.168.4.1", false, false);
+          fingerprint = userInputFromWebServer("Unit fingerprint");
+          if(!(WiFi.status() == WL_CONNECTED)){
+            drawInfoBox("Info", "Network connection needed", "To add unit!", false, false);
+            delay(3000);
+            runApp(43);
+            if(WiFi.status() != WL_CONNECTED){
+              drawInfoBox("ERROR!", "No network connection", "Unit add abort!", true, false);
+              menuID = 0;
+              return;
+            }
+          }
+          drawInfoBox("Info", "Parsing unit name", "Please wait", false, false);
+          name = api_client::getNameFromFingerprint(fingerprint);
+          if(fingerprint.length() < 10 ){
+            drawInfoBox("ERROR!", "Unit not found", "Check fingerprint!", true, false);
+            menuID = 0;
+            return;
+          }
+        }
+        debounceDelay();
+        // Open contacts file for reading and parse JSON into a vector
+        File contactsFile = SD.open(ADDRES_BOOK_FILE, FILE_READ);
+        unit newPeer = {name, fingerprint};
+              
+        if (contactsFile) {
+          JsonDocument doc;  // Use JsonDocument instead of DynamicJsonDocument (since DynamicJsonDocument is deprecated)
+          DeserializationError err = deserializeJson(doc, contactsFile);
+          if (!err) {
+            JsonArray arr = doc.as<JsonArray>();
+          
+            // Serialize the newPeer struct into a JsonObject
+            JsonObject obj = arr.createNestedObject();
+            serializeUnit(newPeer, obj);  // Custom serialization function
+            // Write updated JSON to file
+            String out;
+            serializeJsonPretty(doc, out);
+            contactsFile.close();  // Close the file first
+          
+            // Reopen the file in write mode to overwrite
+            contactsFile = SD.open(ADDRES_BOOK_FILE, FILE_WRITE);
+            contactsFile.print(out); 
+            contactsFile.flush();
+            contactsFile.close();
+          } else {
+            logMessage("Failed to parse contacts file: " + String(err.c_str()));
+          }
+        } else {
+          // If the file doesn't exist, create it and add the newPeer
+          JsonDocument doc;
+          JsonArray arr = doc.to<JsonArray>();
+        
+          // Serialize the newPeer struct into a JsonObject
+          JsonObject obj = arr.createNestedObject();
+          serializeUnit(newPeer, obj);  // Custom serialization function
+        
+          // Write the new JSON to file
+          String out;
+          serializeJsonPretty(doc, out);
+          contactsFile = SD.open(ADDRES_BOOK_FILE, FILE_WRITE);
+          contactsFile.print(out);
+          contactsFile.flush();
+          contactsFile.close();
+        }
+        drawInfoBox("Sucess", "Unit added to frend", "list, text to it now!", true, false);
+        menuID = 0;
+        return;
+      }
+      uint8_t current_option;
+      debounceDelay();
+      while(true){  
+        drawTopCanvas();
+        drawBottomCanvas();
+        canvas_main.fillScreen(bg_color_rgb565);
+        canvas_main.setTextColor(tx_color_rgb565);
+        canvas_main.clear(bg_color_rgb565);
+        canvas_main.setTextSize(2);
+        canvas_main.setTextDatum(middle_center);
+        canvas_main.setTextSize(2);
+        canvas_main.drawString(contacts_vector[result].name, canvas_center_x, (canvas_h)/8);
+        canvas_main.setTextSize(1);
+        canvas_main.drawString(contacts_vector[result].fingerprint, canvas_center_x, (canvas_h * 3)/8);
+        canvas_main.setTextSize(1.5);
+        String options[] = {"Remove from friends", "Back"};
+        canvas_main.setTextSize(1);
+        canvas_main.setTextDatum(middle_left);
+        canvas_main.drawString(options[0] + "      " + options[1], 20, canvas_h - 30);
+        (current_option == 0) ? canvas_main.drawRect(15, canvas_h - 37, 125, 15, tx_color_rgb565): void();
+        (current_option == 1) ? canvas_main.drawRect(165, canvas_h - 37, 35, 15, tx_color_rgb565): void();
+        pushAll();
+        M5.update();
+        M5Cardputer.update();
+        auto keys_status = M5Cardputer.Keyboard.keysState();
+        auto keyboard_changed = M5Cardputer.Keyboard.isChange();
+        if(keyboard_changed){Sound(10000, 100, sound);}
+        for(auto i : keys_status.word){
+          if(i == '/'){
+            (current_option == 1)? current_option = 0: current_option++;
+            debounceDelay();
+          }
+          else if(i = ','){
+            (current_option == 0)? current_option == 1: current_option--;
+            debounceDelay();
+          }
+        }
+        if(keys_status.enter){
+          if(current_option == 1){
+            menuID = 0;
+            return;
+          }
+          if (current_option == 0) {
+            debounceDelay();
+
+            File contactsFile = SD.open(ADDRES_BOOK_FILE, FILE_READ);
+            unit peerToDelete = {contacts_vector[result].name, contacts_vector[result].fingerprint};
+
+            if (contactsFile) {
+                JsonDocument doc;
+                DeserializationError err = deserializeJson(doc, contactsFile);
+                contactsFile.close();
+            
+                if (!err) {
+                    JsonArray arr = doc.as<JsonArray>();
+                
+                    // delete by index like a normal person
+                    for (size_t i = 0; i < arr.size(); i++) {
+                        JsonObject peer = arr[i];
+                        String name = peer["name"] | "";
+                        String fp = peer["fingerprint"] | "";
+                    
+                        if (name == peerToDelete.name && fp == peerToDelete.fingerprint) {
+                            arr.remove(i);
+                            break; 
+                        }
+                    }
+                  
+                    // write back
+                    File outFile = SD.open(ADDRES_BOOK_FILE, FILE_WRITE);
+                    if (outFile) {
+                        serializeJsonPretty(doc, outFile);
+                        outFile.close();
+                    }
+                } else {
+                    logMessage("Failed to parse contacts file: " + String(err.c_str()));
+                }
+            }
+          
+            drawInfoBox("Sucess", "Unit deleted", "bye bye", true, false);
+            menuID = 0;
+            return;
+        }
+        }
+      }
+    }
     if(appID == 18){}
     if(appID == 19){}
     if(appID == 20){

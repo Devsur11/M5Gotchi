@@ -232,6 +232,22 @@ bool api_client::sendMessageTo(const String &recipientFingerprint, const String 
     return true;
 }
 
+String api_client::getNameFromFingerprint(String fingerprint){
+    String r1 = httpGet(String(Endpoint) + "/unit/" + fingerprint, false);
+    logMessage(r1);
+    if (r1.length() == 0) {
+        fLogMessage("poll: could not fetch fingerprint %s\n", fingerprint.c_str());
+        return "";
+    }
+    JsonDocument ud;
+    if(deserializeJson(ud, r1)){
+        return "";
+    }
+    String senderFingerprint = pwngrid::crypto::deNormalizePublicPEM(ud["name"].as<String>());
+    logMessage(senderFingerprint);
+    return senderFingerprint;
+}
+
 bool api_client::pollInbox() {
     enrollWithGrid();
     String r = httpGet(String(Endpoint) + "/unit/inbox/?p=1", true);

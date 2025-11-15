@@ -14,17 +14,23 @@ extern const uint8_t _binary_certs_wpa_sec_root_pem_start[] asm("_binary_certs_w
 extern const uint8_t _binary_certs_wpa_sec_root_pem_end[]   asm("_binary_certs_wpa_sec_root_pem_end");
 
 
+
+
 String userInputFromWebServer(String titleOfEntryToGet) {
     String api_key = "";
     bool api_key_received = false;
     // Create AP
+    DNSServer dnsServer;
+
     WiFi.mode(WIFI_AP);
     WiFi.softAP("CardputerSetup"); // open network, no password
 
     // DNS server for captive portal
-    DNSServer dnsServer;
-    dnsServer.start(53, "*", WiFi.softAPIP());
-
+    
+    if(dnsServer.start(53, "*", WiFi.softAPIP())){
+        delay(100);
+    }
+    
     // AsyncWebServer on port 80
     AsyncWebServer server(80);
 
@@ -59,7 +65,6 @@ String userInputFromWebServer(String titleOfEntryToGet) {
     // Wait for input (blocks until received)
     while (!api_key_received) {
         dnsServer.processNextRequest();
-        delay(10);
     }
 
     server.end();
