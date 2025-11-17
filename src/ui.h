@@ -6,6 +6,7 @@
 #include "networkKit.h"
 #include "src.h"
 #include "logger.h"
+#include "ArduinoJson.h"
 #pragma once
 
 struct menu {
@@ -16,6 +17,14 @@ struct menu {
 extern uint16_t bg_color_rgb565;
 extern uint16_t tx_color_rgb565;
 
+// A tiny in-memory message struct
+struct message {
+  String fromOrTo;           // Name of peer that we're comunicating with
+  uint32_t id;               // server message id (0 for outgoing or local)
+  String text;               // decrypted message
+  uint64_t ts;               // unix timestamp
+  bool outgoing;             // true if sent by us
+};
 
 String multiplyChar(char toMultiply, uint8_t literations);
 void trigger(uint8_t trigID);
@@ -54,6 +63,11 @@ int drawMultiChoiceLonger(String tittle, String toDraw[], uint8_t menuSize , uin
 void IRAM_ATTR handleInterrupt();
 void debounceDelay();
 void esp_will_beg_for_its_life();
+void pwngridMessenger();
+void initTime();
+bool registerNewMessage(message newMess);
+std::vector<message> loadMessageHistory(const String &unitName);
+void renderMessages(M5Canvas &canvas, const std::vector<message> &messages, int scrollOffset);
 #ifdef ENABLE_COREDUMP_LOGGING
 void sendCrashReport();
 #endif

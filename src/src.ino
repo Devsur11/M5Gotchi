@@ -225,6 +225,7 @@ void setup() {
   }
   initPwngrid();
   logMessage(String(M5.Display.getTextFont()));
+  pwngridMessenger();
 }
 
 void wakeUp() {

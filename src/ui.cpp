@@ -607,6 +607,319 @@ void drawInfoBox(String tittle, String info, String info2, bool canBeQuit, bool 
 
 #ifndef LITE_VERSION
 
+#include <esp_sntp.h>
+
+void initTime() {
+    sntp_setoperatingmode(SNTP_OPMODE_POLL);
+    sntp_setservername(0, "pool.ntp.org");
+    sntp_init();
+
+    // wait for sync
+    time_t now = 0;
+    tm timeinfo = {0};
+    while (now < 100000) { // aka "wait until not 1970"
+        delay(200);
+        time(&now);
+        localtime_r(&now, &timeinfo);
+    }
+}
+
+static const char *BASE_DIR = "/pwngrid";
+
+bool registerNewMessage(message newMess) {
+    // fix timestamp if missing
+    if (newMess.ts == 0) {
+        newMess.ts = (uint64_t)time(nullptr);
+    }
+
+    // build file path
+    String path = String(BASE_DIR) + "/" + newMess.fromOrTo;
+
+    // load file or create new JSON
+    JsonDocument doc;
+    File f = SD.open(path, FILE_READ);
+    if (f) {
+        DeserializationError err = deserializeJson(doc, f);
+        f.close();
+        if (err) {
+            // file exists but broken, reset to empty array
+            doc.clear();
+            doc.to<JsonArray>();
+        }
+    } else {
+        // file missing, create array
+        doc.to<JsonArray>();
+    }
+
+    JsonArray arr = doc.as<JsonArray>();
+    JsonObject obj = arr.createNestedObject();
+
+    obj["fromOrTo"] = newMess.fromOrTo;
+    obj["id"] = newMess.id;
+    obj["text"] = newMess.text;
+    obj["ts"] = newMess.ts;
+    obj["outgoing"] = newMess.outgoing;
+
+    // write back
+    File w = SD.open(path, FILE_WRITE);
+    if (!w) return false;
+    serializeJson(doc, w);
+    w.close();
+
+    return true;
+}
+
+std::vector<message> loadMessageHistory(const String &unitName) {
+    std::vector<message> out;
+
+    String path = String(BASE_DIR) + "/" + unitName;
+    File f = SD.open(path, FILE_READ);
+    if (!f) {
+        return out;
+    }
+
+    JsonDocument doc;
+    if (deserializeJson(doc, f)) {
+        f.close();
+        return out;
+    }
+    f.close();
+
+    JsonArray arr = doc.as<JsonArray>();
+    out.reserve(arr.size());
+
+    for (JsonObject obj : arr) {
+        message m;
+        m.fromOrTo = (const char*)obj["fromOrTo"];
+        m.id = obj["id"] | 0;
+        m.text = (const char*)obj["text"];
+        m.ts = obj["ts"] | 0;
+        m.outgoing = obj["outgoing"] | false;
+        out.push_back(m);
+    }
+
+    return out;
+}
+
+int clampMsgWidth(const String &s) {
+    if (s.length() <= 24) return s.length();
+    return 24;
+}
+
+String shortenMsg(String s) {
+    if (s.length() <= 24) return s;
+    return s.substring(0, 21) + "...";
+}
+
+// messages: vector<message>
+// scrollOffset: how many lines up we are scrolled from the newest
+void renderMessages(M5Canvas &canvas, const std::vector<message> &messages, int scrollOffset) {
+    int lineHeight = 12;
+    int maxLines = 4;  // fits into vertical area 20..74 (approx)
+    int startY = 26;
+
+    int total = messages.size();
+    if (total == 0) return;
+
+    // clamp scroll
+    if (scrollOffset < 0) scrollOffset = 0;
+    if (scrollOffset > total - maxLines) scrollOffset = total - maxLines;
+    if (scrollOffset < 0) scrollOffset = 0;
+
+    int startIndex = total - maxLines - scrollOffset;
+    if (startIndex < 0) startIndex = 0;
+
+    for (int i = 0; i < maxLines; i++) {
+        int idx = startIndex + i;
+        if (idx >= total) break;
+
+        const message &m = messages[idx];
+        String txt = shortenMsg(m.text);
+
+        int y = startY + i * lineHeight;
+
+        canvas.setTextSize(1.3);
+        canvas.setTextDatum(middle_left);
+
+        if (!m.outgoing) {
+            // incoming: left→right
+            canvas.drawString(txt, 6, y);
+        } else {
+            // outgoing: right→left
+            int w = canvas.textWidth(txt);
+            canvas.drawString(txt, 240 - w - 6, y);
+        }
+    }
+}
+
+void pwngridMessenger() {
+  debounceDelay();
+  if(!(WiFi.status() == WL_CONNECTED)){
+    drawInfoBox("Info", "Network connection needed", "To open inbox!", false, false);
+    delay(3000);
+    runApp(43);
+    if(WiFi.status() != WL_CONNECTED){
+      drawInfoBox("ERROR!", "No network connection", "Operation abort!", true, false);
+      menuID = 0;
+      return;
+    }
+  }
+  if(!SD.exists("/pwngrid")){
+    SD.mkdir("/pwngrid");
+  }
+  File dir = SD.open("/pwngrid");
+  std::vector<String> chats;
+  while(true){
+    String nextFileName = dir.getNextFileName();
+    if(nextFileName.length()>8){
+      String cutName = nextFileName.substring(9);
+      chats.push_back(cutName);
+    }
+    else{
+      break;
+    }
+  }
+  chats.push_back("New chat");
+  String menuItems[chats.size() + 1];
+  for(uint8_t i = 0; i<(chats.size()); i++){
+    if(!chats[i]){
+      break;
+    }
+    menuItems[i] = chats[i];
+  }
+  int8_t result = drawMultiChoice("Open or create chat:", menuItems, chats.size(), 0, 0);
+  if(result == chats.size()-1){
+    api_client::init(KEYS_FILE);
+    debounceDelay();
+    File contacts = SD.open(ADDRES_BOOK_FILE, FILE_READ, true);
+    if(contacts.size()<5){
+      drawInfoBox("Info", "No frends found.", "Go outside and meet some!", true, false);
+      menuID = 0;
+      return;
+    }
+    JsonDocument contacts_json;
+    DeserializationError err = deserializeJson(contacts_json, contacts);
+
+    if (err) {
+        logMessage("Failed to parse contacts: " + String(err.c_str()));
+        drawInfoBox("ERROR", "Contacts load failed!", "Check SD card.", true, false);
+        menuID = 0;
+        return;
+    }
+
+    JsonArray contacts_arr = contacts_json.as<JsonArray>();
+    logMessage("Array size: " + String(contacts_arr.size()));
+    std::vector<unit> contacts_vector;
+    for (JsonObject obj : contacts_arr) {
+        String name = obj["name"] | "unknown";
+        String fingerprint = obj["fingerprint"] | "none";
+        logMessage("Name: " + name + ", Fingerprint: " + fingerprint);
+        contacts_vector.push_back({name, fingerprint});
+    }
+    String names[contacts_vector.size()+1];
+    
+    uint16_t i = 0;
+    uint8_t namesSize = 0;
+    for(; i < contacts_vector.size(); i++) {
+        bool stringTheSame = false;
+        for(uint8_t y = 0; y < chats.size(); y++) {
+            if(strcmp(chats[y].c_str(), contacts_vector[i].name.c_str()) == 0) {
+                stringTheSame = true;
+                break;
+            }
+        }
+        if(!stringTheSame) {
+            names[namesSize++] = contacts_vector[i].name;
+        }
+    }
+    result = drawMultiChoice("Select chat recepient:", names, namesSize, 0, 0);
+    if(result == -1){
+      menuID=0;
+      return;
+    }
+    File newChat = SD.open("/pwngrid/" + names[result], FILE_WRITE, true);
+    newChat.close();
+  }
+  else if(result == -1){
+    menuID = 0;
+    return;
+  }
+  else{
+    drawInfoBox("Please wait", "Syncing inbox", "with pwngrid...", false, false);
+    initTime();
+    api_client::init(KEYS_FILE);
+    api_client::pollInbox();
+    String textTyped = "";
+    uint8_t temp = 0;
+    bool typingMessage = false;
+    uint8_t status = 0;
+    int16_t scroll = 0;
+    while(true){
+      M5.update();
+      M5Cardputer.update();
+      canvas_main.clear();
+      canvas_main.setColor(bg_color_rgb565);
+      canvas_main.drawRect(5, 75, 230, 20, tx_color_rgb565);
+      canvas_main.drawLine(0, 20, 250, 20, tx_color_rgb565);
+      canvas_main.setTextDatum(middle_left);
+      canvas_main.setTextSize(2);
+      canvas_main.drawString(chats[result] + ">", 5, 10);
+      canvas_main.setTextSize(1.5);
+      canvas_main.drawString(">" + textTyped, 8, 86);
+      canvas_main.setTextSize(1);
+      canvas_main.drawString((!typingMessage)? "[d]elete [`] exit [i]nput [;] up [.] down":" Input mode - ENTER or DEL all to exit", 0, 102);
+      renderMessages(canvas_main, loadMessageHistory(chats[result]), scroll);
+      keyboard_changed = M5Cardputer.Keyboard.isChange();
+      if(keyboard_changed){Sound(10000, 100, sound);}    
+      Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
+      for(auto i : status.word){
+        if (i == ';' && !typingMessage) scroll++;
+        if (i == '.' && !typingMessage) scroll--;
+        if (scroll < 0) scroll = 0;
+        if(i=='`'){
+          return;
+        }
+        if(!typingMessage && i == 'd'){
+          if(drawQuestionBox("Delete chat?", "Are you sure?", "This can't be undone")){
+            dir.close();
+            SD.remove("/pwngrid/" + chats[result]);
+            drawInfoBox("Sucess", "Chat removed", "", true, false);
+            menuID =0;
+            return;
+          }
+        }
+        if(typingMessage && temp<24){
+          textTyped = textTyped + i;
+          temp ++;
+        }
+        if(i=='i'){
+          typingMessage = true;
+        }
+        debounceDelay();
+      }
+      if (status.del && temp >=1) {
+        textTyped.remove(textTyped.length() - 1);
+        temp --;
+        debounceDelay();
+      }
+      else if (status.del && temp ==0){
+        typingMessage = false;
+      }
+      if (status.enter) {
+        message test = {
+          "MiniAstolfo", 182934, textTyped, 82839, true
+        };
+        registerNewMessage(test);
+        typingMessage = false;
+        textTyped = "";
+        temp = 0;
+      }
+      pushAll();
+    };
+  }
+
+} 
+
 inline void trigger(uint8_t trigID){logMessage("Trigger" + String(trigID));}
 
 void runApp(uint8_t appID){
@@ -639,7 +952,7 @@ void runApp(uint8_t appID){
     if(appID == 8){}
     if(appID == 9){}
     if(appID == 10){
-      api_client::pollInbox();
+      pwngridMessenger();
     }
     if(appID == 11){
       api_client::init(KEYS_FILE);
@@ -789,11 +1102,11 @@ void runApp(uint8_t appID){
         return;
       }
       pwngrid_peer peers_list[int_peers];
-      for(uint8_t i; i<int_peers; i++){
+      for(uint8_t i = 0; i<int_peers; i++){
         peers_list[i] = getPwngridPeers()[i];
       }
       String mmenu[int_peers + 1];
-      for(uint8_t i; i<int_peers; i++){
+      for(uint8_t i = 0; i<int_peers; i++){
         mmenu[i] = peers_list[i].face + " | " + peers_list[i].name;
       }
       uint8_t choice = drawMultiChoice("Nearby pwngrid units", mmenu, int_peers, 2, 0);
@@ -2138,7 +2451,7 @@ void runApp(uint8_t appID){
       menuID = 0;
       return;
     }
-    else if(appID == 60){
+    if(appID == 60){
       String mmenu[3] = {"Enable", "Disable", "Back"};
       int choice = drawMultiChoice("Advertise pwngrid", mmenu, 3, 6, 0);
       if (choice == 0) {
