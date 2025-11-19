@@ -20,6 +20,7 @@ extern uint16_t tx_color_rgb565;
 // A tiny in-memory message struct
 struct message {
   String fromOrTo;           // Name of peer that we're comunicating with
+  String fingerprint;        // fingerprint of peer that is sending message
   uint32_t id;               // server message id (0 for outgoing or local)
   String text;               // decrypted message
   uint64_t ts;               // unix timestamp
@@ -64,10 +65,10 @@ void IRAM_ATTR handleInterrupt();
 void debounceDelay();
 void esp_will_beg_for_its_life();
 void pwngridMessenger();
-void initTime();
 bool registerNewMessage(message newMess);
 std::vector<message> loadMessageHistory(const String &unitName);
 void renderMessages(M5Canvas &canvas, const std::vector<message> &messages, int scrollOffset);
+String findIncomingFingerprint(const std::vector<message> &messages);
 #ifdef ENABLE_COREDUMP_LOGGING
 void sendCrashReport();
 #endif

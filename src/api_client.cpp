@@ -6,6 +6,7 @@
 #include <SD.h>
 #include <mbedtls/sha256.h>
 #include "settings.h"
+#include "ui.h"
 
 using namespace api_client;
 using namespace pwngrid::crypto;
@@ -14,6 +15,29 @@ static const char *Endpoint = "https://api.pwnagotchi.ai/api/v1";
 static String token = "";
 static const char *tokenPath = "/token.json";
 static String keysPathGlobal = "/keys";
+
+#include <esp_sntp.h>
+
+bool timeInitialized = false;
+
+void api_client::initTime() {
+    if (timeInitialized) return;   // stop f***ing reinitializing 
+
+    timeInitialized = true;
+
+    delay(150);
+    sntp_setoperatingmode(SNTP_OPMODE_POLL);
+    sntp_setservername(0, "pool.ntp.org");
+    sntp_init();
+
+    time_t now = 0;
+    tm timeinfo = {0};
+    while (now < 100000) {
+        delay(200);
+        time(&now);
+        localtime_r(&now, &timeinfo);
+    }
+}
 
 bool saveToken(const String &t) {
     DynamicJsonDocument doc(512);
@@ -42,6 +66,7 @@ bool loadToken() {
 }
 
 bool api_client::init(const String &keysPath) {
+    initTime();
     keysPathGlobal = keysPath;
     if (!SD.begin(true)) {
         logMessage("SD mount failed");
@@ -65,7 +90,9 @@ static String httpPostJson(const String &url, const String &json, bool auth) {
     if (auth && token.length()) {
         https.addHeader("Authorization", "Bearer " + token);
     }
-    int code = https.POST(json);
+    logMessage("Log before http POST");
+    uint16_t code = https.POST(json);
+    logMessage("Log after http POST");
     String body = "";
     if (code > 0) {
         body = https.getString();
@@ -106,6 +133,11 @@ static String sha256Hex(const String &s) {
 #include "settings.h"
 
 bool api_client::enrollWithGrid() {
+    if(!((uint64_t)time(nullptr) > (lastTokenRefresh+(30*60)))){
+        logMessage("Token refresh skipped, 30 minutes not passed." + String((uint64_t)time(nullptr)) + " > " + String((lastTokenRefresh+(30*60))));
+        return true;
+    }
+
     String pubPEM;
     if (!pwngrid::crypto::loadPublicPEM(pubPEM)) {
         logMessage("no public pem");
@@ -128,6 +160,7 @@ bool api_client::enrollWithGrid() {
         logMessage("sign failed");
         return false;
     }
+    logMessage("Sign succesful, continuing...");
 
     // base64 everything consistently
     String signatureB64 = pwngrid::crypto::base64Encode(signature);
@@ -150,7 +183,9 @@ bool api_client::enrollWithGrid() {
     serializeJsonPretty(body, out); // compact JSON like the script does
 
     // no auth header
+    logMessage("Data for enrol created, sending...");
     String resp = httpPostJson(String(Endpoint) + "/unit/enroll", out, false);
+    logMessage("Response got, proceeding to parse...");
     if (resp.isEmpty()) {
         logMessage("enroll: empty response");
         return false;
@@ -167,6 +202,7 @@ bool api_client::enrollWithGrid() {
         saveToken(t);
         logMessage("enroll: got token");
         pwngrid_indentity = fingerprint;
+        lastTokenRefresh = (uint64_t)time(nullptr);
         saveSettings(); // Save new fingerprint only if enroll sucess
         return true;
     }
@@ -248,6 +284,59 @@ String api_client::getNameFromFingerprint(String fingerprint){
     return senderFingerprint;
 }
 
+// Converts "2019-10-06T22:56:06Z" -> unix timestamp (UTC)
+uint32_t api_client::isoToUnix(const String &iso) {
+    // Expected format: YYYY-MM-DDTHH:MM:SSZ
+    if (iso.length() < 20) return 0;
+
+    struct tm t;
+    memset(&t, 0, sizeof(t));
+
+    t.tm_year = iso.substring(0, 4).toInt() - 1900;
+    t.tm_mon  = iso.substring(5, 7).toInt() - 1;
+    t.tm_mday = iso.substring(8, 10).toInt();
+
+    t.tm_hour = iso.substring(11, 13).toInt();
+    t.tm_min  = iso.substring(14, 16).toInt();
+    t.tm_sec  = iso.substring(17, 19).toInt();
+
+    // This gives seconds since epoch **in UTC**
+    time_t ts = timegm(&t);  
+    return (uint32_t)ts;
+}
+
+time_t api_client::timegm(struct tm* t) {
+    const int daysBeforeMonth[] =
+        {0,31,59,90,120,151,181,212,243,273,304,334};
+
+    int year = t->tm_year + 1900;
+    int month = t->tm_mon;
+    int day = t->tm_mday;
+
+    int y = year - 1970;
+
+    // seconds from years
+    time_t seconds = y * 31536000ULL;
+    // leap days
+    seconds += ((y + 1) / 4) * 86400ULL;
+    seconds -= ((y + 69) / 100) * 86400ULL;
+    seconds += ((y + 369) / 400) * 86400ULL;
+
+    // add days in year
+    seconds += daysBeforeMonth[month] * 86400ULL;
+    // leap year correction for Jan/Feb
+    if (month > 1 && ((year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)))
+        seconds += 86400ULL;
+
+    seconds += (day - 1) * 86400ULL;
+
+    seconds += t->tm_hour * 3600ULL;
+    seconds += t->tm_min * 60ULL;
+    seconds += t->tm_sec;
+
+    return seconds;
+}
+
 bool api_client::pollInbox() {
     enrollWithGrid();
     String r = httpGet(String(Endpoint) + "/unit/inbox/?p=1", true);
@@ -270,16 +359,25 @@ bool api_client::pollInbox() {
     for (JsonObject m : msgs) {
         uint16_t msg_id = m["id"].as<uint16_t>();
         String sender = m["sender"].as<String>();
+        String senderName = m["sender_name"].as<String>();
+        String timestamp = m["created_at"].as<String>();
+        uint16_t unix_timestamp = isoToUnix(timestamp);
+        String seen_at = m["seen_at"].as<String>();
+        logMessage(seen_at);
+        if(seen_at != "null"){
+            logMessage("Message read, skipping");
+            continue;
+        }
 
-        String r2 = httpGet(String(Endpoint) + "/unit/inbox/" + msg_id, true);
-        logMessage(r2);
-        if(r2.length() < 20){
+        r = httpGet(String(Endpoint) + "/unit/inbox/" + msg_id, true);
+        logMessage(r);
+        if(r.length() < 20){
             logMessage("Error pulling message data!");
             continue;
         }
         
         JsonDocument data;
-        if(deserializeJson(data, r2)){
+        if(deserializeJson(data, r)){
             logMessage("Could not fetch message data!");
             continue;
         }
@@ -294,14 +392,14 @@ bool api_client::pollInbox() {
         auto encBytes = pwngrid::crypto::base64Decode(dataB64);
         auto sigBytes = pwngrid::crypto::base64Decode(sigB64);
         // get sender public key
-        String r3 = httpGet(String(Endpoint) + "/unit/" + sender, false);
-        logMessage(r3);
-        if (r3.length() == 0) {
+        String r = httpGet(String(Endpoint) + "/unit/" + sender, false);
+        logMessage(r);
+        if (r.length() == 0) {
             fLogMessage("poll: could not fetch sender %s\n", sender.c_str());
             continue;
         }
         JsonDocument ud;
-        if (deserializeJson(ud, r3)) continue;
+        if (deserializeJson(ud, r)) continue;
         String senderPubB64 = pwngrid::crypto::deNormalizePublicPEM(ud["public_key"].as<String>());
         logMessage(senderPubB64);
 
@@ -318,6 +416,18 @@ bool api_client::pollInbox() {
         }
         String txt((const char*)clear.data(), clear.size());
         fLogMessage("msg from %s: %s\n", sender.c_str(), txt.c_str());
+        message newMessage = {
+            senderName,
+            sender,
+            msg_id,
+            txt,
+            unix_timestamp,
+            false
+        };
+        if(registerNewMessage(newMessage)){
+            r = httpGet(String(Endpoint) + "/unit/inbox/" + msg_id + "/seen", false);
+            logMessage("Set message id as read, response: " + r);
+        }
     }
     return true;
 }

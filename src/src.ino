@@ -7,6 +7,7 @@
 #include "moodLoader.h"
 #include "Arduino.h"
 #include "pwngrid.h"
+#include "api_client.h"
 #ifdef ENABLE_COREDUMP_LOGGING
 #include "esp_core_dump.h"
 #include <PubSubClient.h>
@@ -225,7 +226,6 @@ void setup() {
   }
   initPwngrid();
   logMessage(String(M5.Display.getTextFont()));
-  pwngridMessenger();
 }
 
 void wakeUp() {

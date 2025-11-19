@@ -27,6 +27,7 @@ String lastPwnedAP = "";
 bool stealth_mode = false;
 String pwngrid_indentity;
 bool advertisePwngrid = true;
+uint64_t lastTokenRefresh;
 
 // struct personality{
 //     uint16_t nap_time;
@@ -158,7 +159,7 @@ bool initPersonality(){
 
         if (personalityDoc["client_discovery_timeout"].is<uint16_t>()) pwnagotchi.client_discovery_timeout = personalityDoc["client_discovery_timeout"];
         else personalityChanged = true;
-
+        
     }
     else {
         logMessage("No personality file found, creating with default values");
@@ -323,6 +324,9 @@ bool initVars() {
 
         if(config["advertise_pwngrid"].is<bool>()) advertisePwngrid = config["advertise_pwngrid"].as<bool>();
         else configChanged = true;
+
+        if(config["lastTokenRefresh"].is<uint64_t>()) advertisePwngrid = config["lastTokenRefresh"].as<uint64_t>();
+        else configChanged = true;
     } else {
         logMessage("Conf file not found, creating one");
         configChanged = true;
@@ -347,6 +351,7 @@ bool initVars() {
     config["stealth_mode"] = stealth_mode;
     config["pwngrid_indentity"] = pwngrid_indentity;
     config["advertise_pwngrid"] = advertisePwngrid;
+    config["lastTokenRefresh"] = lastTokenRefresh;
 
     if (configChanged) {
         logMessage("Config updated with missing/default values, saving...");
@@ -386,6 +391,7 @@ bool saveSettings(){
     config["stealth_mode"] = stealth_mode;
     config["pwngrid_indentity"] = pwngrid_indentity;
     config["advertise_pwngrid"] = advertisePwngrid;
+    config["lastTokenRefresh"] = lastTokenRefresh;
     
     logMessage("JSON data creation successful, proceeding to save");
     FConf = SD.open(NEW_CONFIG_FILE, FILE_WRITE, false);

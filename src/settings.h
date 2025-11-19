@@ -102,3 +102,4 @@ extern String lastPwnedAP;
 extern bool stealth_mode;
 extern String pwngrid_indentity;
 extern bool advertisePwngrid;
+extern uint64_t lastTokenRefresh;

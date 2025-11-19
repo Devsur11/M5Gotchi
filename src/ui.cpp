@@ -609,65 +609,53 @@ void drawInfoBox(String tittle, String info, String info2, bool canBeQuit, bool 
 
 #include <esp_sntp.h>
 
-void initTime() {
-    sntp_setoperatingmode(SNTP_OPMODE_POLL);
-    sntp_setservername(0, "pool.ntp.org");
-    sntp_init();
-
-    // wait for sync
-    time_t now = 0;
-    tm timeinfo = {0};
-    while (now < 100000) { // aka "wait until not 1970"
-        delay(200);
-        time(&now);
-        localtime_r(&now, &timeinfo);
-    }
-}
-
 static const char *BASE_DIR = "/pwngrid";
 
 bool registerNewMessage(message newMess) {
-    // fix timestamp if missing
-    if (newMess.ts == 0) {
-        newMess.ts = (uint64_t)time(nullptr);
-    }
+  // fix timestamp if missing
+  if (newMess.ts == 0) {
+      newMess.ts = (uint64_t)time(nullptr);
+  }
 
-    // build file path
-    String path = String(BASE_DIR) + "/" + newMess.fromOrTo;
+  // build file path
+  String path = String(BASE_DIR) + "/" + newMess.fromOrTo;
 
-    // load file or create new JSON
-    JsonDocument doc;
-    File f = SD.open(path, FILE_READ);
-    if (f) {
-        DeserializationError err = deserializeJson(doc, f);
-        f.close();
-        if (err) {
-            // file exists but broken, reset to empty array
-            doc.clear();
-            doc.to<JsonArray>();
-        }
-    } else {
-        // file missing, create array
-        doc.to<JsonArray>();
-    }
+  // load file or create new JSON
+  JsonDocument doc;
+  File f = SD.open(path, FILE_READ);
+  if (f) {
+      DeserializationError err = deserializeJson(doc, f);
+      f.close();
+      if (err) {
+          // file exists but broken, reset to empty array
+          doc.clear();
+          doc.to<JsonArray>();
+      }
+  } else {
+      // file missing, create array
+      doc.to<JsonArray>();
+  }
 
-    JsonArray arr = doc.as<JsonArray>();
-    JsonObject obj = arr.createNestedObject();
+  JsonArray arr = doc.as<JsonArray>();
+  JsonObject obj = arr.createNestedObject();
 
-    obj["fromOrTo"] = newMess.fromOrTo;
-    obj["id"] = newMess.id;
-    obj["text"] = newMess.text;
-    obj["ts"] = newMess.ts;
-    obj["outgoing"] = newMess.outgoing;
+  obj["fromOrTo"] = newMess.fromOrTo;
+  obj["fingerprint"] = newMess.fingerprint;
+  obj["id"] = newMess.id;
+  obj["text"] = newMess.text;
+  obj["ts"] = newMess.ts;
+  obj["outgoing"] = newMess.outgoing;
 
-    // write back
-    File w = SD.open(path, FILE_WRITE);
-    if (!w) return false;
-    serializeJson(doc, w);
-    w.close();
+  // write back
+  File w = SD.open(path, FILE_WRITE);
+  if (!w) return false;
+  serializeJson(doc, w);
+  w.close();
 
-    return true;
+  return true;
 }
+
+#include <algorithm>
 
 std::vector<message> loadMessageHistory(const String &unitName) {
     std::vector<message> out;
@@ -691,12 +679,20 @@ std::vector<message> loadMessageHistory(const String &unitName) {
     for (JsonObject obj : arr) {
         message m;
         m.fromOrTo = (const char*)obj["fromOrTo"];
+        m.fingerprint = (const char*)obj["fingerprint"];
         m.id = obj["id"] | 0;
         m.text = (const char*)obj["text"];
         m.ts = obj["ts"] | 0;
         m.outgoing = obj["outgoing"] | false;
         out.push_back(m);
     }
+
+    // sort by timestamp, oldest first
+    std::sort(out.begin(), out.end(),
+        [](const message &a, const message &b) {
+            return a.ts < b.ts;
+        }
+    );
 
     return out;
 }
@@ -714,42 +710,69 @@ String shortenMsg(String s) {
 // messages: vector<message>
 // scrollOffset: how many lines up we are scrolled from the newest
 void renderMessages(M5Canvas &canvas, const std::vector<message> &messages, int scrollOffset) {
-    int lineHeight = 12;
-    int maxLines = 4;  // fits into vertical area 20..74 (approx)
-    int startY = 26;
+  int lineHeight = 12;
+  int maxLines = 4;  // vertical space fits 4 messages
+  int startY = 26;
 
-    int total = messages.size();
-    if (total == 0) return;
+  int total = messages.size();
+  if (total == 0) return;
 
-    // clamp scroll
-    if (scrollOffset < 0) scrollOffset = 0;
-    if (scrollOffset > total - maxLines) scrollOffset = total - maxLines;
-    if (scrollOffset < 0) scrollOffset = 0;
+  // SCROLL LIMITS
+  int maxScroll = total > maxLines ? (total - maxLines) : 0;
+  if (scrollOffset < 0) scrollOffset = 0;
+  if (scrollOffset > maxScroll) scrollOffset = maxScroll;
 
-    int startIndex = total - maxLines - scrollOffset;
-    if (startIndex < 0) startIndex = 0;
+  int startIndex = total - maxLines - scrollOffset;
+  if (startIndex < 0) startIndex = 0;
 
-    for (int i = 0; i < maxLines; i++) {
-        int idx = startIndex + i;
-        if (idx >= total) break;
+  // DRAW MESSAGES
+  for (int i = 0; i < maxLines; i++) {
+      int idx = startIndex + i;
+      if (idx >= total) break;
 
-        const message &m = messages[idx];
-        String txt = shortenMsg(m.text);
+      const message &m = messages[idx];
+      String txt = shortenMsg(m.text);
 
-        int y = startY + i * lineHeight;
+      int y = startY + i * lineHeight;
 
-        canvas.setTextSize(1.3);
-        canvas.setTextDatum(middle_left);
+      canvas.setTextSize(1.3);
+      canvas.setTextDatum(middle_left);
 
+      if (!m.outgoing) {
+          canvas.drawString(">" +txt, 6, y);
+      } else {
+          int w = canvas.textWidth(txt);
+          canvas.drawString( txt+ "<", 240 - w - 14, y);
+      }
+  }
+
+  // SCROLL BAR -------------------------------------------------
+
+  // bar area: full chat window height
+  int barX = 240 - 3;     // right edge
+  int barY = 22;          // top
+  int barH = maxLines * lineHeight;  // whole scroll area
+
+  if (total > maxLines) {
+    float ratio = (float)maxLines / (float)total;
+    int thumbHeight = (int)(barH * ratio);
+    if (thumbHeight < 6) thumbHeight = 6;
+
+    float posRatio = 1.0f - ((float)scrollOffset / (float)maxScroll);
+
+    int thumbY = barY + (int)((barH - thumbHeight) * posRatio);
+
+    canvas.fillRect(barX, thumbY, 2, thumbHeight, tx_color_rgb565);
+  }
+}
+
+String findIncomingFingerprint(const std::vector<message> &messages) {
+    for (const auto &m : messages) {
         if (!m.outgoing) {
-            // incoming: left→right
-            canvas.drawString(txt, 6, y);
-        } else {
-            // outgoing: right→left
-            int w = canvas.textWidth(txt);
-            canvas.drawString(txt, 240 - w - 6, y);
+            return m.fingerprint;
         }
     }
+    return String(); // nothing found, enjoy your empty string
 }
 
 void pwngridMessenger() {
@@ -768,6 +791,9 @@ void pwngridMessenger() {
     SD.mkdir("/pwngrid");
   }
   File dir = SD.open("/pwngrid");
+  drawInfoBox("Please wait", "Syncing inbox", "with pwngrid...", false, false);
+  api_client::init(KEYS_FILE);
+  api_client::pollInbox();
   std::vector<String> chats;
   while(true){
     String nextFileName = dir.getNextFileName();
@@ -845,15 +871,12 @@ void pwngridMessenger() {
     return;
   }
   else{
-    drawInfoBox("Please wait", "Syncing inbox", "with pwngrid...", false, false);
-    initTime();
-    api_client::init(KEYS_FILE);
-    api_client::pollInbox();
+    debounceDelay();
     String textTyped = "";
     uint8_t temp = 0;
     bool typingMessage = false;
-    uint8_t status = 0;
     int16_t scroll = 0;
+    uint64_t time = millis();
     while(true){
       M5.update();
       M5Cardputer.update();
@@ -866,16 +889,28 @@ void pwngridMessenger() {
       canvas_main.drawString(chats[result] + ">", 5, 10);
       canvas_main.setTextSize(1.5);
       canvas_main.drawString(">" + textTyped, 8, 86);
+      uint64_t timeNow = millis();
+      auto chatHistory = loadMessageHistory(chats[result]);
+      renderMessages(canvas_main, chatHistory, scroll);
       canvas_main.setTextSize(1);
-      canvas_main.drawString((!typingMessage)? "[d]elete [`] exit [i]nput [;] up [.] down":" Input mode - ENTER or DEL all to exit", 0, 102);
-      renderMessages(canvas_main, loadMessageHistory(chats[result]), scroll);
+      if(((timeNow - 10000) > time) && !typingMessage){
+        time = timeNow;
+        canvas_main.drawString(" Syncing inbox... Keyboard is disabled!", 2, 102);
+        pushAll();
+        api_client::pollInbox();
+      }
+      else{
+        canvas_main.drawString((!typingMessage)? "[d]elete [`]exit [i]nput [;]up [.]down":" Input mode - ENTER or DEL all to exit", 2, 102);
+      }
+      int maxScroll = (chatHistory.size() > 4) ? (chatHistory.size() - 4) : 0;
       keyboard_changed = M5Cardputer.Keyboard.isChange();
       if(keyboard_changed){Sound(10000, 100, sound);}    
       Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
       for(auto i : status.word){
-        if (i == ';' && !typingMessage) scroll++;
-        if (i == '.' && !typingMessage) scroll--;
+        if (i == ';' && !typingMessage) scroll++; time = millis();
+        if (i == '.' && !typingMessage) scroll--; time = millis();
         if (scroll < 0) scroll = 0;
+        if (scroll > maxScroll) scroll = maxScroll;
         if(i=='`'){
           return;
         }
@@ -906,10 +941,70 @@ void pwngridMessenger() {
         typingMessage = false;
       }
       if (status.enter) {
+        time = millis();
         message test = {
-          "MiniAstolfo", 182934, textTyped, 82839, true
+          chats[result], pwngrid_indentity, 0, textTyped, 0, true
         };
-        registerNewMessage(test);
+        canvas_main.setTextDatum(middle_center);
+        canvas_main.setTextSize(2);
+        canvas_main.fillRect(0, (canvas_h/2)-10, 250, 20, bg_color_rgb565);
+        canvas_main.drawString("Sending message...", canvas_center_x , canvas_h/2);
+        pushAll();
+        api_client::init(KEYS_FILE);
+        File contacts = SD.open(ADDRES_BOOK_FILE, FILE_READ, true);
+        if(contacts.size()<5){
+          drawInfoBox("ERROR!", "SD card error!.", "Required files not found!", true, false);
+          menuID = 0;
+          return;
+        }
+        JsonDocument contacts_json;
+        DeserializationError err = deserializeJson(contacts_json, contacts);
+
+        if (err) {
+            logMessage("Failed to parse contacts: " + String(err.c_str()));
+            drawInfoBox("ERROR", "Contacts load failed!", "Check SD card.", true, false);
+            menuID = 0;
+            return;
+        }
+
+        JsonArray contacts_arr = contacts_json.as<JsonArray>();
+        
+        String senderFingerprint = "";
+        for (JsonObject obj : contacts_arr) {
+            String name = obj["name"] | "unknown";
+            String fingerprint = obj["fingerprint"] | "none";
+            logMessage("Name: " + name + ", Fingerprint: " + fingerprint);
+            if(name == chats[result]){
+              logMessage("Found sender fingerprint, continuing to send...");
+              senderFingerprint = fingerprint;
+              break;
+            }
+        }
+
+        if(senderFingerprint.length()<10)
+        {
+          senderFingerprint = findIncomingFingerprint(chatHistory);
+        }
+        
+
+        logMessage("Found fingerprint from chat: " + senderFingerprint);
+
+        if(senderFingerprint.length()<10){
+          drawInfoBox("ERROR!", "Sender fingerprint not", "found, send abort!", true, false);
+        }
+        else{
+          if(api_client::sendMessageTo(senderFingerprint, textTyped)){
+            registerNewMessage(test);
+          }
+          else{
+            canvas_main.setTextDatum(middle_center);
+            canvas_main.setTextSize(2);
+            canvas_main.fillRect(0, (canvas_h/2)-10, 250, 20, bg_color_rgb565);
+            canvas_main.drawString("Send failed!", canvas_center_x , canvas_h/2);
+            pushAll();
+            delay(3000);
+          }
+        }
         typingMessage = false;
         textTyped = "";
         temp = 0;
