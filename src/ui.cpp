@@ -1936,12 +1936,15 @@ void runApp(uint8_t appID){
           else{
             stealth_mode = false;
           }
-          drawInfoBox("INITIALIZING", "Pwnagothi mode initialization", "please wait...", false, true);
+          drawInfoBox("INITIALIZING", "Pwnagothi mode initialization", "please wait...", false, false);
+          menuID = 0;
           if(pwnagothiBegin()){
             pwnagothiMode = true;
+            menuID = 0;
+            return;
           }
           else{
-            drawInfoBox("ERROR", "Pwnagothi init failed!", "", true, true);
+            drawInfoBox("ERROR", "Pwnagothi init failed!", "", true, false);
             pwnagothiMode = false;
           }
           menuID = 0;
@@ -2910,18 +2913,8 @@ int drawMultiChoice(String tittle, String toDraw[], uint8_t menuSize , uint8_t p
       }
     }
     if(!singlePage){
-      if(menu_current_opt < 4 && menu_current_page != 1){
-        menu_current_page = 1;
-      } 
-      else if(menu_current_opt >= 4 && menu_current_page != 2 && menu_current_opt <8){
-        menu_current_page = 2;
-      }
-      else if(menu_current_opt >= 8 && menu_current_page != 3 && menu_current_opt <12){
-        menu_current_page = 3;
-      }
-      else if(menu_current_opt >= 12 && menu_current_page != 4 && menu_current_opt <=16){
-        menu_current_page = 4;
-      }
+      float temp = 1+(menu_current_opt/4);
+      menu_current_page = temp;
     }
     if(isOkPressed()){
       Sound(10000, 100, sound);
@@ -2960,11 +2953,15 @@ int drawMultiChoiceLonger(String tittle, String toDraw[], uint8_t menuSize , uin
     canvas_main.println(tittle);
     canvas_main.setTextSize(1);
     char display_str[100] = "";
-    for (uint8_t j = 0; j < (menu_len - ((menu_current_page - 1) * 8)) ; j++) {
-      sprintf(display_str, "%s %s", (tempOpt == j+( (menu_current_page - 1) * 8 ) ) ? ">" : " ",
-             toDraw[j+ ( (menu_current_page - 1) * 8)].c_str());
-      int y = 8 + (j * 20 / 2) + 20;
-      canvas_main.drawString(display_str, 0, y);
+    uint16_t start = (menu_current_page - 1) * 8;
+    uint16_t end = start + 8;
+    if (end > menu_len) end = menu_len;
+
+    for (uint16_t j = start; j < end; j++) {
+        sprintf(display_str, "%s %s", (tempOpt == j) ? ">" : " ",
+                toDraw[j].c_str());
+        int y = 8 + ((j - start) * 10) + 20;
+        canvas_main.drawString(display_str, 0, y);
     }
     pushAll();
 
@@ -2998,18 +2995,8 @@ int drawMultiChoiceLonger(String tittle, String toDraw[], uint8_t menuSize , uin
       }
     }
     if(!singlePage){
-      if(menu_current_opt < 8 && menu_current_page != 1){
-        menu_current_page = 1;
-      } 
-      else if(menu_current_opt >= 8 && menu_current_page != 2 && menu_current_opt <16){
-        menu_current_page = 2;
-      }
-      else if(menu_current_opt >= 16 && menu_current_page != 3 && menu_current_opt <24){
-        menu_current_page = 3;
-      }
-      else if(menu_current_opt >= 24 && menu_current_page != 4 && menu_current_opt <=16){
-        menu_current_page = 4;
-      }
+      float temp = 1+(menu_current_opt/8);
+      menu_current_page = temp;
     }
     if(isOkPressed()){
       Sound(10000, 100, sound);

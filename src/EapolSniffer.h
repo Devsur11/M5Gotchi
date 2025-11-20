@@ -29,6 +29,6 @@ bool isNewHandshake();
 bool isEapolFrame(const uint8_t *data, uint16_t len);
 static inline int ieee80211_hdrlen(uint16_t fc);
 uint8_t getEAPOLOrder(uint8_t* buf);
-void setTargetAP(uint8_t* bssid);
+void setTargetAP(uint8_t* bssid, String apName1 = " ");
 void clearTargetAP();
 int SnifferPendingPackets();

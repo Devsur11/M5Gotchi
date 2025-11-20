@@ -131,7 +131,6 @@ bool pwnagothiBegin(){
     }   
     setMood(1, "(o_o)", "3 seconds for auto mode start... ESC to cancel");
     updateUi(true, false);
-    WiFi.disconnect();
     uint32_t start = millis();
     while(millis() - start < 3000){
         M5.update();
@@ -145,7 +144,6 @@ bool pwnagothiBegin(){
             }
         }
     }
-    WiFi.scanNetworks(true, true);
     logMessage("Pwnagothi auto mode init!");
     parseWhitelist();
     pwnagothiMode = true;
@@ -306,7 +304,7 @@ void pwnagothiLoop(){
         pwngridAdvertise(1, "(@_@)");
         logMessage("(@_@) WELL, Everyone is OUT!");
         updateUi(true, false);
-        setTargetAP(&entry.bssid[0]);
+        setTargetAP(&entry.bssid[0], attackVector);
 
         uint16_t targetChannel = entry.channel ? entry.channel : 1;
         if(pwnagotchi.activate_sniffer_on_deauth){

@@ -155,15 +155,19 @@ void IRAM_ATTR wifi_sniffer_cb(void *buf, wifi_promiscuous_pkt_type_t type) {
     }
 }
 
-void setTargetAP(uint8_t* bssid) {
-    logMessage("Target for sniffer set to: " + macToString(bssid));
+String apTargetedName;
+
+void setTargetAP(uint8_t* bssid, String apName1) {
+    logMessage("Target for sniffer set to: " + macToString(bssid) + ", " + apName1);
     memcpy(targetBSSID, bssid, 6);
+    apTargetedName = apName1;
     targetAPSet = true;
 }
 
 void clearTargetAP() {
     logMessage("Target for sniffer cleared");
     memset(targetBSSID, 0, 6);
+    apTargetedName = "";
     targetAPSet = false;
 }
 
@@ -488,8 +492,13 @@ void SnifferDebugMode(){
 String getSSIDFromMac(const uint8_t* mac) {
     logMessage("Searching SSID for MAC: " + String(mac[0], HEX) + ":" + String(mac[1], HEX) + ":" +
                String(mac[2], HEX) + ":" + String(mac[3], HEX) + ":" + String(mac[4], HEX) + ":" + String(mac[5], HEX));
-    char ssid[18];
+    char ssid[20];
     
+    if(apTargetedName.length()>=1){
+        logMessage("Speed scan active, returning gives ssid: " + apTargetedName);
+        return apTargetedName;
+    }
+
     // wifion();
     // WiFi.scanNetworks(true);
     while(WiFi.scanComplete() == WIFI_SCAN_RUNNING) {
