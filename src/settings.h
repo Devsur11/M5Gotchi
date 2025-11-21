@@ -29,7 +29,7 @@ bool wifion(){
 #undef USE_EXPERIMENTAL_APPS
 #endif
 
-#define ADDRES_BOOK_FILE "/contacts.conf"
+#define ADDRES_BOOK_FILE "/pwngrid/contacts.conf"
 #define KEYS_FILE "/crypto.conf"
 #define NORMAL_JSON_URL "https://devsur11.github.io/M5Gotchi/firmware/firmware.json"
 #define LITE_JSON_URL   "https://devsur11.github.io/M5Gotchi/firmware/lite.json"

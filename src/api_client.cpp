@@ -13,8 +13,8 @@ using namespace pwngrid::crypto;
 
 static const char *Endpoint = "https://api.pwnagotchi.ai/api/v1";
 static String token = "";
-static const char *tokenPath = "/token.json";
-static String keysPathGlobal = "/keys";
+static const char *tokenPath = "/pwngrid/token.json";
+static String keysPathGlobal = "/pwngrid/keys";
 
 #include <esp_sntp.h>
 

@@ -138,7 +138,6 @@ menu main_menu[] = {
 
 //menuID 2
 menu wifi_menu[] = {
-    {"Turn on/off", 47},
     {"Select Networks", 20},
     {"Clone & Details", 21},
     {"Acces point", 22},
@@ -181,7 +180,6 @@ menu wpasec_setup_menu[] = {
 //menuID 5
 menu pwngotchi_menu[] = {
     {"Turn on", 36},
-    {"Turn off", 37},
     {"Whitelist", 38},
     {"Handshakes", 39},
     {"Personality", 57}
@@ -412,7 +410,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi) {
     #endif
   } 
   else if (menuID == 2){
-    drawMenuList( wifi_menu , 2, 6);
+    drawMenuList( wifi_menu , 2, 5);
   }
   #ifdef USE_EXPERIMENTAL_APPS
   else if (menuID == 3){
@@ -423,7 +421,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi) {
   }
   #endif
   else if (menuID == 5){
-    drawMenuList( pwngotchi_menu , 5, 5);
+    drawMenuList( pwngotchi_menu , 5, 4);
   }
   else if (menuID == 6){
     drawMenuList( settings_menu , 6, 15);
@@ -609,7 +607,7 @@ void drawInfoBox(String tittle, String info, String info2, bool canBeQuit, bool 
 
 #include <esp_sntp.h>
 
-static const char *BASE_DIR = "/pwngrid";
+static const char *BASE_DIR = "/pwngrid/chats";
 
 bool registerNewMessage(message newMess) {
   // fix timestamp if missing
@@ -787,10 +785,10 @@ void pwngridMessenger() {
       return;
     }
   }
-  if(!SD.exists("/pwngrid")){
-    SD.mkdir("/pwngrid");
+  if(!SD.exists("/pwngrid/chats")){
+    SD.mkdir("/pwngrid/chats");
   }
-  File dir = SD.open("/pwngrid");
+  File dir = SD.open("/pwngrid/chats");
   drawInfoBox("Please wait", "Syncing inbox", "with pwngrid...", false, false);
   api_client::init(KEYS_FILE);
   api_client::pollInbox();
@@ -798,7 +796,7 @@ void pwngridMessenger() {
   while(true){
     String nextFileName = dir.getNextFileName();
     if(nextFileName.length()>8){
-      String cutName = nextFileName.substring(9);
+      String cutName = nextFileName.substring(14);
       chats.push_back(cutName);
     }
     else{
@@ -1335,7 +1333,7 @@ void runApp(uint8_t appID){
       }
     }
     if(appID == 17){
-      api_client::init(KEYS_FILE);
+      //api_client::init(KEYS_FILE);
       debounceDelay();
       File contacts = SD.open(ADDRES_BOOK_FILE, FILE_READ, true);
       JsonDocument contacts_json;
@@ -1375,7 +1373,6 @@ void runApp(uint8_t appID){
           return;
         }
         else if(result == 0){
-          api_client::init(KEYS_FILE);
           if(!(WiFi.status() == WL_CONNECTED)){
             drawInfoBox("Info", "Network connection needed", "To add unit!", false, false);
             delay(3000);
@@ -1388,6 +1385,7 @@ void runApp(uint8_t appID){
           }
           fingerprint = userInput("Fingerprint:", "Enter unit fingerprint", 64);
           drawInfoBox("Info", "Parsing unit name", "Please wait", false, false);
+          api_client::init(KEYS_FILE);
           name = api_client::getNameFromFingerprint(fingerprint);
           if(fingerprint.length() < 10){
             drawInfoBox("ERROR!", "Unit not found", "Check fingerprint!", true, false);
@@ -1396,7 +1394,6 @@ void runApp(uint8_t appID){
           }
         }
         else if(result == 1){
-          api_client::init(KEYS_FILE);
           drawInfoBox("Connect:", "Connect to CardputerSetup", "And go to 192.168.4.1", false, false);
           fingerprint = userInputFromWebServer("Unit fingerprint");
           if(!(WiFi.status() == WL_CONNECTED)){
@@ -1410,6 +1407,7 @@ void runApp(uint8_t appID){
             }
           }
           drawInfoBox("Info", "Parsing unit name", "Please wait", false, false);
+          api_client::init(KEYS_FILE);
           name = api_client::getNameFromFingerprint(fingerprint);
           if(fingerprint.length() < 10 ){
             drawInfoBox("ERROR!", "Unit not found", "Check fingerprint!", true, false);

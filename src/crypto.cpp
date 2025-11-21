@@ -29,7 +29,7 @@
 
 using namespace pwngrid::crypto;
 
-static String g_keysPath = "/keys";
+static String g_keysPath = "/pwngrid/keys";
 static const int RSA_BITS = 2048;
 static const size_t AES_KEY_LEN = 16;
 static const size_t GCM_NONCE_LEN = 12;
