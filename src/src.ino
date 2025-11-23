@@ -8,6 +8,7 @@
 #include "Arduino.h"
 #include "pwngrid.h"
 #include "api_client.h"
+#include "esp_task_wdt.h"
 #ifdef ENABLE_COREDUMP_LOGGING
 #include "esp_core_dump.h"
 #include <PubSubClient.h>
@@ -28,6 +29,34 @@ bool firstSoundEnable;
 bool isSoundPlayed = false;
 uint32_t last_mood_switch = 10001;
 uint8_t wakeUpList[] = {0, 1, 2};
+
+
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "esp_task_wdt.h"
+
+void wdt_petter(void *arg) {
+    // register this task with the watchdog
+    esp_task_wdt_add(NULL);
+
+    while (true) {
+        esp_task_wdt_reset();        // beep boop my beloved watchdog pls don’t murder the system
+        vTaskDelay(pdMS_TO_TICKS(500));
+    }
+}
+
+void fuck_you_watchdog() {
+
+    xTaskCreatePinnedToCore(
+        wdt_petter,
+        "wdt_petter",
+        2048,
+        NULL,
+        5,
+        NULL,
+        1 // core 1
+    );
+}
 
 #ifdef ENABLE_COREDUMP_LOGGING
 
@@ -225,7 +254,8 @@ void setup() {
     logMessage("Pwnagothi mode disabled");
   }
   initPwngrid();
-  logMessage(String(M5.Display.getTextFont()));
+  esp_task_wdt_deinit();
+  esp_task_wdt_init(60, false); 
 }
 
 void wakeUp() {

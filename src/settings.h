@@ -30,7 +30,7 @@ bool wifion(){
 #endif
 
 #define ADDRES_BOOK_FILE "/pwngrid/contacts.conf"
-#define KEYS_FILE "/crypto.conf"
+#define KEYS_FILE "/pwngrid/keys"
 #define NORMAL_JSON_URL "https://devsur11.github.io/M5Gotchi/firmware/firmware.json"
 #define LITE_JSON_URL   "https://devsur11.github.io/M5Gotchi/firmware/lite.json"
 #define TEMP_DIR        "/temp"

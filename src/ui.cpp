@@ -796,7 +796,7 @@ void pwngridMessenger() {
   while(true){
     String nextFileName = dir.getNextFileName();
     if(nextFileName.length()>8){
-      String cutName = nextFileName.substring(14);
+      String cutName = nextFileName.substring(15);
       chats.push_back(cutName);
     }
     else{
@@ -815,7 +815,7 @@ void pwngridMessenger() {
   if(result == chats.size()-1){
     api_client::init(KEYS_FILE);
     debounceDelay();
-    File contacts = SD.open(ADDRES_BOOK_FILE, FILE_READ, true);
+    File contacts = SD.open(ADDRES_BOOK_FILE, FILE_READ, false);
     if(contacts.size()<5){
       drawInfoBox("Info", "No frends found.", "Go outside and meet some!", true, false);
       menuID = 0;
@@ -861,7 +861,7 @@ void pwngridMessenger() {
       menuID=0;
       return;
     }
-    File newChat = SD.open("/pwngrid/" + names[result], FILE_WRITE, true);
+    File newChat = SD.open("/pwngrid/chats/" + names[result], FILE_WRITE, true);
     newChat.close();
   }
   else if(result == -1){
@@ -949,7 +949,7 @@ void pwngridMessenger() {
         canvas_main.drawString("Sending message...", canvas_center_x , canvas_h/2);
         pushAll();
         api_client::init(KEYS_FILE);
-        File contacts = SD.open(ADDRES_BOOK_FILE, FILE_READ, true);
+        File contacts = SD.open(ADDRES_BOOK_FILE, FILE_READ, false);
         if(contacts.size()<5){
           drawInfoBox("ERROR!", "SD card error!.", "Required files not found!", true, false);
           menuID = 0;
@@ -1048,7 +1048,7 @@ void runApp(uint8_t appID){
       pwngridMessenger();
     }
     if(appID == 11){
-      api_client::init(KEYS_FILE);
+      drawInfoBox("Info", "Please wait", "", false, false);
       if(!(WiFi.status() == WL_CONNECTED)){
         drawInfoBox("Info", "Network connection needed", "To send messages!", false, false);
         delay(3000);
@@ -1059,10 +1059,11 @@ void runApp(uint8_t appID){
           return;
         }
       }
+      api_client::init(KEYS_FILE);
+      File contacts = SD.open(ADDRES_BOOK_FILE, FILE_READ);
       if(!SD.open(ADDRES_BOOK_FILE)){
         drawInfoBox("ERROR", "No frends found.", "Meet and add one.", true, false);
       }
-      File contacts = SD.open(ADDRES_BOOK_FILE, FILE_READ, true);
       JsonDocument contacts_json;
       DeserializationError err = deserializeJson(contacts_json, contacts);
 
@@ -1073,6 +1074,11 @@ void runApp(uint8_t appID){
 
       JsonArray contacts_arr = contacts_json.as<JsonArray>();
       logMessage("Array size: " + String(contacts_arr.size()));
+      if(contacts_arr.size() == 0){
+        drawInfoBox("Info", "No frends found", "Add to text them", true, false);
+        menuID = 0;
+        return;
+      }
       std::vector<unit> contacts_vector;
       for (JsonObject obj : contacts_arr) {
           String name = obj["name"] | "unknown";
@@ -1097,7 +1103,25 @@ void runApp(uint8_t appID){
       }
     }
     if(appID == 12){
+      if(!(WiFi.status() == WL_CONNECTED)){
+        drawInfoBox("Info", "Network connection needed", "To enroll!", false, false);
+        delay(3000);
+        runApp(43);
+        if(WiFi.status() != WL_CONNECTED){
+          drawInfoBox("ERROR!", "No network connection", "Enrol abort", true, false);
+          menuID = 0;
+          return;
+        }
+      }
       drawInfoBox("Init", "Initializing keys...", "This may take a while.", false, false);
+      SD.mkdir("/pwngrid");
+      SD.mkdir("/pwngrid/keys");
+      SD.mkdir("/pwngrid/chats");
+      File cont = SD.open(ADDRES_BOOK_FILE, FILE_WRITE);
+      cont.print("[]");
+      cont.flush();
+      cont.close();
+
       if(api_client::init(KEYS_FILE)){
         if(!(WiFi.status() == WL_CONNECTED)){
           drawInfoBox("ERROR!", "Connect to wifi", "to proceed", true, false);
@@ -1131,7 +1155,7 @@ void runApp(uint8_t appID){
       canvas_main.drawString("Identity:", 110, 10);
       identity_canvas.setTextSize(1.5);
       identity_canvas.setTextColor(tx_color_rgb565);
-      identity_canvas.setColor(bg_color_rgb565);
+      identity_canvas.clear(bg_color_rgb565);
       identity_canvas.setTextDatum(top_left);
       identity_canvas.print(pwngrid_indentity);
       pushAll();
@@ -1174,11 +1198,13 @@ void runApp(uint8_t appID){
         canvas_main.drawString("Deletion in progress, please wait...", canvas_center_x, (canvas_h*6)/7);
         pushAll();
         //TODO: Deletion of all pwngrid files
-        SD.remove("/keys/id_rsa");
-        SD.remove("/keys/id_rsa.pub");
-        SD.remove("/token.json");
+        SD.remove("/pwngrid/keys/id_rsa");
+        SD.remove("/pwngrid/keys/id_rsa.pub");
+        SD.remove("/pwngrid/token.json");
         SD.remove(ADDRES_BOOK_FILE);
-        SD.rmdir("/keys");
+        SD.rmdir("/pwngrid/keys");
+        SD.rmdir("/pwngrid/chats");
+        SD.rmdir("/pwngrid");
         delay(5000);
         pwngrid_indentity = new_indetity;
         saveSettings();
@@ -1187,7 +1213,6 @@ void runApp(uint8_t appID){
       }
     }
     if(appID == 16){
-      api_client::init(KEYS_FILE);
       uint8_t int_peers = getPwngridTotalPeers();
       if(int_peers == 0){
         drawInfoBox("Info", "No nearby pwngrid units", "Try again later", true, false);
@@ -1202,7 +1227,11 @@ void runApp(uint8_t appID){
       for(uint8_t i = 0; i<int_peers; i++){
         mmenu[i] = peers_list[i].face + " | " + peers_list[i].name;
       }
-      uint8_t choice = drawMultiChoice("Nearby pwngrid units", mmenu, int_peers, 2, 0);
+      int8_t choice = drawMultiChoice("Nearby pwngrid units", mmenu, int_peers, 2, 0);
+      if(choice == -1){
+        menuID = 0;
+        return;
+      }
       //Peer Details and addressbook addition
       uint8_t current_option;
       debounceDelay();
@@ -1333,7 +1362,6 @@ void runApp(uint8_t appID){
       }
     }
     if(appID == 17){
-      //api_client::init(KEYS_FILE);
       debounceDelay();
       File contacts = SD.open(ADDRES_BOOK_FILE, FILE_READ, true);
       JsonDocument contacts_json;
@@ -1346,19 +1374,26 @@ void runApp(uint8_t appID){
 
       JsonArray contacts_arr = contacts_json.as<JsonArray>();
       logMessage("Array size: " + String(contacts_arr.size()));
+      uint16_t arrSize = contacts_arr.size();
       std::vector<unit> contacts_vector;
-      for (JsonObject obj : contacts_arr) {
+      if(arrSize!=0)
+      {   for (JsonObject obj : contacts_arr) {
           String name = obj["name"] | "unknown";
           String fingerprint = obj["fingerprint"] | "none";
           logMessage("Name: " + name + ", Fingerprint: " + fingerprint);
           contacts_vector.push_back({name, fingerprint});
+      }}
+      else{
+        drawInfoBox("Info", "No frends found", "Adding one now", false, false);
+        delay(5000);
       }
       String names[contacts_vector.size()+2];
-      for(uint16_t i; i<=contacts_vector.size(); i++){
+      if(arrSize!=0)
+      {for(uint16_t i; i<=contacts_vector.size(); i++){
         names[i] = contacts_vector[i].name;
-      }
+      }}
       names[contacts_vector.size()] = "Add new";
-      int16_t result = drawMultiChoice("Select contact to manage:", names, contacts_vector.size() + 1, 0, 0);
+      int16_t result = (arrSize!=0)? drawMultiChoice("Select contact to manage:", names, contacts_vector.size() + 1, 0, 0): 0;
       if(result<0){
         menuID = 0;
         return;

@@ -9,12 +9,11 @@
 #include <WiFi.h>
 #include <ESPAsyncWebServer.h>
 #include <DNSServer.h>
+#include "esp_sntp.h"
+#include "settings.h"
 
 extern const uint8_t _binary_certs_wpa_sec_root_pem_start[] asm("_binary_certs_wpa_sec_root_pem_start");
 extern const uint8_t _binary_certs_wpa_sec_root_pem_end[]   asm("_binary_certs_wpa_sec_root_pem_end");
-
-
-
 
 String userInputFromWebServer(String titleOfEntryToGet) {
     String api_key = "";
@@ -65,10 +64,13 @@ String userInputFromWebServer(String titleOfEntryToGet) {
     // Wait for input (blocks until received)
     while (!api_key_received) {
         dnsServer.processNextRequest();
+        delay(10);
     }
-
+    sntp_stop();
+    delay(100);
     server.end();
     WiFi.softAPdisconnect(true);
+    wifion();
 
     return api_key;
 }

@@ -4,7 +4,7 @@
 #include "logger.h"
 #include "pwnagothi.h"
 
-String hostname = "M5";
+String hostname = "M5Gotchi";
 bool sound = true;
 int brightness = 150;
 uint16_t pwned_ap;
