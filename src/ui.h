@@ -10,7 +10,7 @@
 #pragma once
 
 struct menu {
-  char name[25];
+  char name[256];
   int command;
 };
 
