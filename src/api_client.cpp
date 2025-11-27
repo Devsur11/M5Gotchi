@@ -427,6 +427,12 @@ bool api_client::pollInbox() {
         if(registerNewMessage(newMessage)){
             r = httpGet(String(Endpoint) + "/unit/inbox/" + msg_id + "/seen", false);
             logMessage("Set message id as read, response: " + r);
+            if (r == "{\"result\":\"success\"}") {
+                logMessage("Message marked as read on server.");
+            } else {
+                logMessage("Failed to mark message as read on server.");
+            }
+            //TODO: Only register message when the server confirms read status
         }
     }
     return true;

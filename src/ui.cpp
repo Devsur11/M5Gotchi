@@ -133,6 +133,7 @@ menu main_menu[] = {
     {"Bad USB", 5},
     #endif
     {"Pwngrid companion", 7},
+    {"Wardriving companion", 8},
     {"Config", 6}
 };
 
@@ -216,6 +217,24 @@ menu pwngrid_menu[] = {
 
 menu pwngrid_not_enrolled_menu[] = {
   {"Enroll with Pwngrid", 12}
+};
+
+//menuID 9 
+
+menu wardrivingMenuWithWiggle[] = {
+  {"Wardriving mode", 18},
+  {"View captures", 19},
+  {"Set up Wiggle.net uploader", 20},
+  {"Upload to Wiggle.net", 21},
+  {"Preferences", 22},
+  {"Reset Wiggle.net config", 23}
+};
+
+menu wardrivingMenuWithWiggle[] = {
+  {"Wardriving mode", 18},
+  {"View captures", 19},
+  {"Set up Wiggle.net uploader", 20},
+  {"Preferences", 22}
 };
 
 bool appRunning;
@@ -406,7 +425,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi) {
     #ifdef USE_EXPERIMENTAL_APPS
     drawMenuList(main_menu, 1, 8);
     #else
-    drawMenuList(main_menu, 1, 5);
+    drawMenuList(main_menu, 1, 6);
     #endif
   } 
   else if (menuID == 2){
@@ -1043,7 +1062,10 @@ void runApp(uint8_t appID){
       debounceDelay();
       drawMenuList(pwngrid_menu, 8, 6);
     }
-    if(appID == 8){}
+    if(appID == 8){
+      debounceDelay();
+      drawMenuList(wardrivingMenuWithWiggle, 9, 6);
+    }
     if(appID == 9){}
     if(appID == 10){
       pwngridMessenger();
