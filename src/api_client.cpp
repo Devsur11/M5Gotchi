@@ -40,7 +40,7 @@ void api_client::initTime() {
 }
 
 bool saveToken(const String &t) {
-    DynamicJsonDocument doc(512);
+    JsonDocument doc;
     doc["token"] = t;
     String s;
     serializeJson(doc, s);
@@ -56,7 +56,7 @@ bool loadToken() {
     File f = SD.open(tokenPath, "r");
     if (!f) return false;
     String s = f.readString(); f.close();
-    DynamicJsonDocument doc(512);
+    JsonDocument doc;
     if (deserializeJson(doc, s)) return false;
     if (doc.containsKey("token")) {
         token = String(doc["token"].as<const char*>());
@@ -65,7 +65,20 @@ bool loadToken() {
     return false;
 }
 
-bool api_client::init(const String &keysPath) {
+static TaskHandle_t initTaskHandle = nullptr;
+static bool initResult = false;
+static SemaphoreHandle_t initDone = nullptr;
+
+void apiInitTask(void *arg) {
+    String *path = (String *)arg;
+    initResult = api_client::sub_init(*path);
+    xSemaphoreGive(initDone);
+    delete path;
+    initTaskHandle = nullptr;
+    vTaskDelete(nullptr);
+}
+
+bool api_client::sub_init(const String &keysPath) {
     initTime();
     keysPathGlobal = keysPath;
     if (!SD.begin(true)) {
@@ -79,6 +92,45 @@ bool api_client::init(const String &keysPath) {
     loadToken();
     return true;
 }
+
+bool api_client::init(const String &keysPath) {
+    initDone = xSemaphoreCreateBinary();
+    if (!initDone) return false;
+
+    // copy because passing String by pointer into tasks is cursed otherwise
+    String *param = new String(keysPath);
+
+    xTaskCreatePinnedToCore(
+        apiInitTask,
+        "apiInitTask",
+        8192,
+        param,
+        1,
+        &initTaskHandle,
+        0
+    );
+
+    if (!initTaskHandle) {
+        delete param;
+        return false;
+    }
+
+    // wait for up to timeout
+    if (xSemaphoreTake(initDone, pdMS_TO_TICKS(60000)) == pdTRUE) {
+        // finished normally
+        vSemaphoreDelete(initDone);
+        initDone = nullptr;
+        return initResult;
+    }
+
+    // timeout... time to commit a war crime
+    vTaskDelete(initTaskHandle);
+    initTaskHandle = nullptr;
+    vSemaphoreDelete(initDone);
+    initDone = nullptr;
+    return false;
+}
+
 
 // helper: http POST json -> returns body string or empty on error
 static String httpPostJson(const String &url, const String &json, bool auth) {
@@ -170,7 +222,7 @@ bool api_client::enrollWithGrid() {
     String pubPEMB64 = pwngrid::crypto::base64Encode(pubVec);
 
     // payload: identity + pub + sig + data (server expects 'data' to be an object)
-    StaticJsonDocument<512> body;
+    JsonDocument body;
     body["identity"] = identity;
     body["public_key"] = pubPEMB64;
     body["signature"] = signatureB64;
@@ -191,7 +243,7 @@ bool api_client::enrollWithGrid() {
         return false;
     }
 
-    DynamicJsonDocument rdoc(512);
+    JsonDocument rdoc;
     auto err = deserializeJson(rdoc, resp);
     if (err) {
         logMessage("enroll: invalid json response");
@@ -301,7 +353,7 @@ uint32_t api_client::isoToUnix(const String &iso) {
     t.tm_sec  = iso.substring(17, 19).toInt();
 
     // This gives seconds since epoch **in UTC**
-    time_t ts = timegm(&t);  
+    time_t ts = timegm(&t);
     return (uint32_t)ts;
 }
 
@@ -361,7 +413,8 @@ bool api_client::pollInbox() {
         String sender = m["sender"].as<String>();
         String senderName = m["sender_name"].as<String>();
         String timestamp = m["created_at"].as<String>();
-        uint16_t unix_timestamp = isoToUnix(timestamp);
+        uint32_t unix_timestamp = isoToUnix(timestamp);
+        logMessage("Timestamp converted: " + String(unix_timestamp) + " from " + timestamp);
         String seen_at = m["seen_at"].as<String>();
         logMessage(seen_at);
         if(seen_at != "null"){
@@ -425,7 +478,7 @@ bool api_client::pollInbox() {
             false
         };
         if(registerNewMessage(newMessage)){
-            r = httpGet(String(Endpoint) + "/unit/inbox/" + msg_id + "/seen", false);
+            r = httpGet(String(Endpoint) + "/unit/inbox/" + msg_id + "/seen", true);
             logMessage("Set message id as read, response: " + r);
             if (r == "{\"result\":\"success\"}") {
                 logMessage("Message marked as read on server.");

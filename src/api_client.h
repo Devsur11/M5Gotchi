@@ -26,4 +26,5 @@ String getNameFromFingerprint(String fingerprint);
 time_t timegm(struct tm* t);
 uint32_t isoToUnix(const String &iso);
 void initTime();
+bool sub_init(const String &keysPath);
 }

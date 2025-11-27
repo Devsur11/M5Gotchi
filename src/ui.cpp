@@ -188,7 +188,7 @@ menu pwngotchi_menu[] = {
 
 //menuID 6
 menu settings_menu[] = {
-  {"Pwnagothi auto mode on boot", 48},
+  {"M5Gotchi auto mode on boot", 48},
   {"Change Hostname/name", 40},
   {"UI Theme", 50},
   {"Skip EAPOL integrity check", 49},
@@ -809,7 +809,11 @@ void pwngridMessenger() {
   }
   File dir = SD.open("/pwngrid/chats");
   drawInfoBox("Please wait", "Syncing inbox", "with pwngrid...", false, false);
-  api_client::init(KEYS_FILE);
+  if(api_client::init(KEYS_FILE) == false){
+    drawInfoBox("ERROR!", "Pwngrid init failed!", "Try restarting!", true, false);
+    menuID = 0;
+    return;
+  }
   api_client::pollInbox();
   std::vector<String> chats;
   while(true){
@@ -913,6 +917,7 @@ void pwngridMessenger() {
       if(((timeNow - 10000) > time) && !typingMessage){
         time = timeNow;
         canvas_main.drawString(" Syncing inbox... Keyboard is disabled!", 2, 102);
+        printHeapInfo();
         pushAll();
         api_client::pollInbox();
       }
@@ -934,7 +939,7 @@ void pwngridMessenger() {
         if(!typingMessage && i == 'd'){
           if(drawQuestionBox("Delete chat?", "Are you sure?", "This can't be undone")){
             dir.close();
-            SD.remove("/pwngrid/" + chats[result]);
+            SD.remove("/pwngrid/chats/" + chats[result]);
             drawInfoBox("Sucess", "Chat removed", "", true, false);
             menuID =0;
             return;
@@ -1162,7 +1167,7 @@ void runApp(uint8_t appID){
         return;
       }
       else{
-        drawInfoBox("Error", "Keygen failed", "Check sd card!", true, false);
+        drawInfoBox("Error", "Keygen failed", "Try restarting!", true, false);
       }
 
     }
@@ -1228,6 +1233,21 @@ void runApp(uint8_t appID){
         SD.rmdir("/pwngrid/keys");
         SD.rmdir("/pwngrid/chats");
         SD.rmdir("/pwngrid");
+
+        File chatsDis = SD.open("/pwngrid/chats");
+        while(true){
+          String nextFileName = chatsDis.getNextFileName();
+          if(nextFileName.length()>8){
+            SD.remove("/pwngrid/chats/" + nextFileName);
+          }
+          else{
+            break;
+          }
+        }
+        chatsDis.close();
+
+        lastTokenRefresh = 0;
+
         delay(5000);
         pwngrid_indentity = new_indetity;
         saveSettings();
@@ -1355,7 +1375,6 @@ void runApp(uint8_t appID){
             return;
           }
           if(current_option == 1){
-            api_client::init(KEYS_FILE);
             if(!(WiFi.status() == WL_CONNECTED)){
               drawInfoBox("Info", "Network connection needed", "To send messages!", false, false);
               delay(3000);
@@ -1365,6 +1384,11 @@ void runApp(uint8_t appID){
                 menuID = 0;
                 return;
               }
+            }
+            if(api_client::init(KEYS_FILE) == false){
+              drawInfoBox("ERROR!", "Pwngrid init failed!", "Try restarting!", true, false);
+              menuID = 0;
+              return;
             }
             String message = userInput("Message:", "Type message content:", 100);
             if(!(message.length()>1)){
@@ -1465,7 +1489,11 @@ void runApp(uint8_t appID){
             }
           }
           drawInfoBox("Info", "Parsing unit name", "Please wait", false, false);
-          api_client::init(KEYS_FILE);
+          if(api_client::init(KEYS_FILE) == false){
+            drawInfoBox("ERROR!", "Key init failed", "Try restarting!", true, false);
+            menuID = 0;
+            return;
+          }
           name = api_client::getNameFromFingerprint(fingerprint);
           if(fingerprint.length() < 10 ){
             drawInfoBox("ERROR!", "Unit not found", "Check fingerprint!", true, false);
