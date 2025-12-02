@@ -19,6 +19,7 @@ static String keysPathGlobal = "/pwngrid/keys";
 #include <esp_sntp.h>
 
 bool timeInitialized = false;
+bool inited = false;
 
 void api_client::initTime() {
     if (timeInitialized) return;   // stop f***ing reinitializing 
@@ -79,6 +80,9 @@ void apiInitTask(void *arg) {
 }
 
 bool api_client::sub_init(const String &keysPath) {
+    if(inited){
+        return enrollWithGrid();
+    }
     initTime();
     keysPathGlobal = keysPath;
     if (!SD.begin(true)) {
@@ -90,6 +94,11 @@ bool api_client::sub_init(const String &keysPath) {
         return false;
     }
     loadToken();
+    if (!enrollWithGrid()) {
+        logMessage("Enroll failed");
+        return false;
+    }
+    inited = true;
     return true;
 }
 
@@ -103,9 +112,9 @@ bool api_client::init(const String &keysPath) {
     xTaskCreatePinnedToCore(
         apiInitTask,
         "apiInitTask",
-        8192,
+        16384,   // increased stack: HTTPClient + mbedtls can require significantly more stack
         param,
-        1,
+        2,       // slightly higher priority to avoid preemption during heavy init
         &initTaskHandle,
         0
     );
@@ -390,9 +399,9 @@ time_t api_client::timegm(struct tm* t) {
 }
 
 bool api_client::pollInbox() {
+    logMessage("Polling inbox...");
     enrollWithGrid();
     String r = httpGet(String(Endpoint) + "/unit/inbox/?p=1", true);
-    logMessage(r);
     if (r.length() == 0) {
         logMessage("poll: empty response");
         return false;
@@ -414,16 +423,12 @@ bool api_client::pollInbox() {
         String senderName = m["sender_name"].as<String>();
         String timestamp = m["created_at"].as<String>();
         uint32_t unix_timestamp = isoToUnix(timestamp);
-        logMessage("Timestamp converted: " + String(unix_timestamp) + " from " + timestamp);
         String seen_at = m["seen_at"].as<String>();
-        logMessage(seen_at);
         if(seen_at != "null"){
-            logMessage("Message read, skipping");
             continue;
         }
 
         r = httpGet(String(Endpoint) + "/unit/inbox/" + msg_id, true);
-        logMessage(r);
         if(r.length() < 20){
             logMessage("Error pulling message data!");
             continue;
@@ -446,7 +451,6 @@ bool api_client::pollInbox() {
         auto sigBytes = pwngrid::crypto::base64Decode(sigB64);
         // get sender public key
         String r = httpGet(String(Endpoint) + "/unit/" + sender, false);
-        logMessage(r);
         if (r.length() == 0) {
             fLogMessage("poll: could not fetch sender %s\n", sender.c_str());
             continue;
@@ -477,11 +481,12 @@ bool api_client::pollInbox() {
             unix_timestamp,
             false
         };
-        if(registerNewMessage(newMessage)){
+        if(true){
             r = httpGet(String(Endpoint) + "/unit/inbox/" + msg_id + "/seen", true);
             logMessage("Set message id as read, response: " + r);
-            if (r == "{\"result\":\"success\"}") {
+            if (r == "{\"success\":true}") {
                 logMessage("Message marked as read on server.");
+                registerNewMessage(newMessage);
             } else {
                 logMessage("Failed to mark message as read on server.");
             }

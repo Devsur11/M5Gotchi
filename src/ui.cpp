@@ -230,7 +230,7 @@ menu wardrivingMenuWithWiggle[] = {
   {"Reset Wiggle.net config", 23}
 };
 
-menu wardrivingMenuWithWiggle[] = {
+menu wardrivingMenuWithWiggleUnsett[] = {
   {"Wardriving mode", 18},
   {"View captures", 19},
   {"Set up Wiggle.net uploader", 20},
@@ -1020,6 +1020,14 @@ void pwngridMessenger() {
             registerNewMessage(test);
           }
           else{
+            for(uint8_t retries = 0; retries < 3; retries++){
+              logMessage("Retrying to send message, attempt " + String(retries+1));
+              if(api_client::sendMessageTo(senderFingerprint, textTyped)){
+                registerNewMessage(test);
+                break;
+              }
+              delay(1000);
+            }
             canvas_main.setTextDatum(middle_center);
             canvas_main.setTextSize(2);
             canvas_main.fillRect(0, (canvas_h/2)-10, 250, 20, bg_color_rgb565);
