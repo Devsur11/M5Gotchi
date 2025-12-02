@@ -59,7 +59,7 @@ bool loadToken() {
     String s = f.readString(); f.close();
     JsonDocument doc;
     if (deserializeJson(doc, s)) return false;
-    if (doc.containsKey("token")) {
+    if (doc["token"].is<String>()) {
         token = String(doc["token"].as<const char*>());
         return true;
     }
@@ -235,8 +235,8 @@ bool api_client::enrollWithGrid() {
     body["identity"] = identity;
     body["public_key"] = pubPEMB64;
     body["signature"] = signatureB64;
-    JsonObject data = body.createNestedObject("data");
-    JsonObject session = data.createNestedObject("session");
+    JsonObject data = body["data"].to<JsonObject>();
+    JsonObject session = body["session"].to<JsonObject>();
     session["epochs"] = 0;
     data["extra"] = "test";
 
@@ -258,7 +258,7 @@ bool api_client::enrollWithGrid() {
         logMessage("enroll: invalid json response");
         return false;
     }
-    if (rdoc.containsKey("token")) {
+    if (rdoc["token"].is<String>()) {
         String t = rdoc["token"].as<String>();
         saveToken(t);
         logMessage("enroll: got token");
@@ -285,7 +285,7 @@ bool api_client::sendMessageTo(const String &recipientFingerprint, const String 
         logMessage("send: parse unit json failed");
         return false;
     }
-    if (!rd.containsKey("public_key")) {
+    if (!rd["public_key"].is<String>()) {
         logMessage("send: recipient public_key missing");
         return false;
     }
@@ -412,7 +412,7 @@ bool api_client::pollInbox() {
         return false;
     }
     // Expect "messages" array in response like server. Format may vary.
-    if (!rd.containsKey("messages")) {
+    if (!rd["messages"].is<String>()) {
         logMessage("poll: no messages");
         return true;
     }
@@ -495,3 +495,112 @@ bool api_client::pollInbox() {
     }
     return true;
 }
+
+// helper: ensures /pwngrid dir exists and returns cache file path
+static String getPwngridCachePath() {
+    const char *p = "/pwngrid";
+    if (!SD.exists(p)) SD.mkdir(p);
+    return String("/pwngrid/cracks.conf");
+}
+
+// Add an AP to the cache for later upload. Appends to a JSON array of objects {"essid":"..","bssid":".."}
+bool api_client::queueAPForUpload(const String &essid, const String &bssid) {
+    String path = getPwngridCachePath();
+
+    JsonDocument doc;
+    JsonArray arr = doc.to<JsonArray>();
+
+    if (SD.exists(path)) {
+        File f = SD.open(path, FILE_READ);
+        if (f) {
+            String s = f.readString();
+            f.close();
+            if (s.length() > 0) {
+                DeserializationError err = deserializeJson(doc, s);
+                if (!err && doc.is<JsonArray>()) {
+                    arr = doc.as<JsonArray>();
+                }
+            }
+        }
+    }
+
+    JsonObject item = arr.add<JsonObject>();
+    item["essid"] = essid;
+    item["bssid"] = bssid;
+
+    // write back
+    String out;
+    serializeJson(arr, out);
+    File wf = SD.open(path, FILE_WRITE);
+    if (!wf) {
+        logMessage("queueAP: could not open cache for writing");
+        return false;
+    }
+    wf.print(out);
+    wf.close();
+    logMessage("queueAP: saved to cache: " + essid + " / " + bssid);
+    return true;
+}
+
+// Upload cached APs to /unit/report/aps. On success, clears the cache file.
+bool api_client::uploadCachedAPs() {
+    enrollWithGrid();
+    String path = getPwngridCachePath();
+    if (!SD.exists(path)) {
+        logMessage("uploadCachedAPs: nothing to upload");
+        return true; // nothing to do
+    }
+
+    File f = SD.open(path, FILE_READ);
+    if (!f) {
+        logMessage("uploadCachedAPs: failed to open cache");
+        return false;
+    }
+    String s = f.readString();
+    f.close();
+    if (s.length() == 0) {
+        logMessage("uploadCachedAPs: cache empty");
+        return true;
+    }
+
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, s);
+    if (err) {
+        logMessage("uploadCachedAPs: invalid cache json, clearing");
+        // clear corrupted file
+        File wf = SD.open(path, FILE_WRITE);
+        if (wf) { wf.print("[]"); wf.close(); }
+        return false;
+    }
+    JsonArray arr = doc.as<JsonArray>();
+    if (!doc.is<JsonArray>() || arr.size() == 0) {
+        logMessage("uploadCachedAPs: no entries to upload");
+        return true;
+    }
+
+    // Build request body as array of objects with essid and bssid
+    String body;
+    serializeJson(arr, body);
+
+    String url = String(Endpoint) + "/unit/report/aps";
+    logMessage("uploadCachedAPs: uploading " + String(arr.size()) + " APs");
+    String resp = httpPostJson(url, body, true);
+    if (resp.length() == 0) {
+        logMessage("uploadCachedAPs: upload failed or empty response");
+        return false;
+    }
+
+    // On success, clear cache file
+    File wf = SD.open(path, FILE_WRITE);
+    if (wf) {
+        wf.print("[]");
+        wf.close();
+        logMessage("uploadCachedAPs: upload successful, cache cleared");
+        return true;
+    }
+
+    logMessage("uploadCachedAPs: uploaded but failed to clear cache");
+    return true;
+}
+
+

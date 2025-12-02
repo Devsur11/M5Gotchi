@@ -654,7 +654,7 @@ bool registerNewMessage(message newMess) {
   }
 
   JsonArray arr = doc.as<JsonArray>();
-  JsonObject obj = arr.createNestedObject();
+  JsonObject obj = arr.add<JsonObject>();
 
   obj["fromOrTo"] = newMess.fromOrTo;
   obj["fingerprint"] = newMess.fingerprint;
@@ -1345,7 +1345,7 @@ void runApp(uint8_t appID){
                 JsonArray arr = doc.as<JsonArray>();
               
                 // Serialize the newPeer struct into a JsonObject
-                JsonObject obj = arr.createNestedObject();
+                JsonObject obj = arr.add<JsonObject>();
                 serializeUnit(newPeer, obj);  // Custom serialization function
 
                 // Write updated JSON to file
@@ -1367,7 +1367,7 @@ void runApp(uint8_t appID){
               JsonArray arr = doc.to<JsonArray>();
             
               // Serialize the newPeer struct into a JsonObject
-              JsonObject obj = arr.createNestedObject();
+              JsonObject obj = arr.add<JsonObject>();
               serializeUnit(newPeer, obj);  // Custom serialization function
             
               // Write the new JSON to file
@@ -1521,7 +1521,7 @@ void runApp(uint8_t appID){
             JsonArray arr = doc.as<JsonArray>();
           
             // Serialize the newPeer struct into a JsonObject
-            JsonObject obj = arr.createNestedObject();
+            JsonObject obj = arr.add<JsonObject>();
             serializeUnit(newPeer, obj);  // Custom serialization function
             // Write updated JSON to file
             String out;
@@ -1542,7 +1542,7 @@ void runApp(uint8_t appID){
           JsonArray arr = doc.to<JsonArray>();
         
           // Serialize the newPeer struct into a JsonObject
-          JsonObject obj = arr.createNestedObject();
+          JsonObject obj = arr.add<JsonObject>();
           serializeUnit(newPeer, obj);  // Custom serialization function
         
           // Write the new JSON to file

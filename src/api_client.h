@@ -27,4 +27,8 @@ time_t timegm(struct tm* t);
 uint32_t isoToUnix(const String &iso);
 void initTime();
 bool sub_init(const String &keysPath);
+// Queue an AP (essid + bssid) for later upload. Stored in `/pwngrid/cracks.conf`.
+bool queueAPForUpload(const String &essid, const String &bssid);
+// Upload cached APs from `/pwngrid/cracks.conf` to the server endpoint.
+bool uploadCachedAPs();
 }
