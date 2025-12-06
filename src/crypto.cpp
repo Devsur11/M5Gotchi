@@ -26,6 +26,7 @@
 #include "settings.h"
 #include "esp_heap_caps.h"
 #include "esp_system.h"
+#include "freertos/semphr.h"
 
 using namespace pwngrid::crypto;
 
@@ -42,6 +43,39 @@ static String fullPrivatePath() { return g_keysPath + "/id_rsa"; }
 static String fullPublicPath()  { return g_keysPath + "/id_rsa.pub"; }
 static String tokenPath()       { return g_keysPath + "/../token.json"; } // convenience
 static SemaphoreHandle_t keygenDone = nullptr;
+static SemaphoreHandle_t cryptoMutex = nullptr;
+
+// Guard that ensures mbedTLS/crypto calls are serialized across tasks
+struct CryptoGuard {
+    CryptoGuard() {
+        if (!cryptoMutex) cryptoMutex = xSemaphoreCreateMutex();
+        if (cryptoMutex) xSemaphoreTake(cryptoMutex, portMAX_DELAY);
+    }
+    ~CryptoGuard() {
+        if (cryptoMutex) xSemaphoreGive(cryptoMutex);
+    }
+};
+
+// Global entropy + CTR-DRBG to be initialized once and reused across crypto ops.
+static mbedtls_entropy_context global_entropy;
+static mbedtls_ctr_drbg_context global_ctr;
+static bool global_drbg_initialized = false;
+
+static void init_global_drbg_once() {
+    if (global_drbg_initialized) return;
+    mbedtls_entropy_init(&global_entropy);
+    mbedtls_ctr_drbg_init(&global_ctr);
+    const char *pers = "esp32_global_drbg";
+    int rc = mbedtls_ctr_drbg_seed(&global_ctr, mbedtls_entropy_func, &global_entropy,
+                                   (const unsigned char*)pers, strlen(pers));
+    if (rc != 0) {
+        fLogMessage("[crypto] global drbg seed failed: -0x%04x\n", -rc);
+        // even on failure we mark initialized to avoid retry storms; functions will still check rc when used
+    } else {
+        fLogMessage("[crypto] global drbg seeded\n");
+    }
+    global_drbg_initialized = true;
+}
 // forward declarations for SD helpers defined later in this file
 static bool writeFileSD(const String &path, const uint8_t *data, size_t len);
 static bool readFileSD(const String &path, std::vector<uint8_t> &out);
@@ -50,6 +84,7 @@ static bool readFileSD(const String &path, std::vector<uint8_t> &out);
 
 
 void keygenTask(void *arg) {
+    CryptoGuard guard;
     String privPath = fullPrivatePath();
     String pubPath  = fullPublicPath();
 
@@ -227,6 +262,8 @@ std::vector<uint8_t> pwngrid::crypto::base64Decode(const String &b64) {
 
 // ---------- key generation / load ----------
 bool pwngrid::crypto::ensureKeys(const String &keysPath) {
+    // ensure global DRBG is seeded once before any crypto op
+    init_global_drbg_once();
     keygenDone = xSemaphoreCreateBinary();
     xTaskCreatePinnedToCore(keygenTask, "keygen", 32768, NULL, 1, NULL, 0);
     while(xSemaphoreTake(keygenDone, 0) == pdFALSE){
@@ -259,6 +296,7 @@ String pwngrid::crypto::publicPEMBase64() {
 }
 
 bool pwngrid::crypto::verifyMessageWithPubPEM(const std::vector<uint8_t> &msg, const std::vector<uint8_t> &sig, const String &pubPEM) {
+    CryptoGuard guard;
     if (pubPEM.length() == 0) return false;
 
     // Normalize header in memory: python client changes header to RSA PUBLIC KEY.
@@ -321,37 +359,20 @@ bool pwngrid::crypto::signMessage(const std::vector<uint8_t> &msg, std::vector<u
     if (priv.empty() || priv.back() != 0) priv.push_back(0);
 
     mbedtls_pk_context pk;
-    mbedtls_entropy_context entropy;
-    mbedtls_ctr_drbg_context ctr;
-
     mbedtls_pk_init(&pk);
-    mbedtls_entropy_init(&entropy);
-    mbedtls_ctr_drbg_init(&ctr);
 
     const char *pers = "pwngrid_sign";
-    int rc = mbedtls_ctr_drbg_seed(&ctr, mbedtls_entropy_func, &entropy, (const unsigned char*)pers, strlen(pers));
-    if (rc != 0) {
-        fLogMessage("[crypto] signMessage: ctr_drbg_seed failed: -0x%04x\n", -rc);
-        mbedtls_pk_free(&pk);
-        mbedtls_ctr_drbg_free(&ctr);
-        mbedtls_entropy_free(&entropy);
-        return false;
-    }
 
-    rc = mbedtls_pk_parse_key(&pk, priv.data(), priv.size(), nullptr, 0);
+    int rc = mbedtls_pk_parse_key(&pk, priv.data(), priv.size(), nullptr, 0);
     if (rc != 0) {
         fLogMessage("[crypto] signMessage: pk_parse_key failed: -0x%04x\n", -rc);
         mbedtls_pk_free(&pk);
-        mbedtls_ctr_drbg_free(&ctr);
-        mbedtls_entropy_free(&entropy);
         return false;
     }
 
     if (!mbedtls_pk_can_do(&pk, MBEDTLS_PK_RSA)) {
         logMessage("[crypto] signMessage: key not RSA");
         mbedtls_pk_free(&pk);
-        mbedtls_ctr_drbg_free(&ctr);
-        mbedtls_entropy_free(&entropy);
         return false;
     }
 
@@ -373,26 +394,21 @@ bool pwngrid::crypto::signMessage(const std::vector<uint8_t> &msg, std::vector<u
     rc = mbedtls_rsa_rsassa_pss_sign_ext(
         rsa,                       // The rsa context
         mbedtls_ctr_drbg_random,   // RNG function
-        &ctr,                      // RNG context
+        &global_ctr,               // RNG context (global)
         MBEDTLS_MD_SHA256,         // The hash algorithm *of the message*
         32,                        // The hash length (SHA256)
         hash,                      // The pre-computed hash
         16,                        // Explicit salt length
         outSig.data()              // The output signature buffer
     );
-
     if (rc != 0) {
         fLogMessage("[crypto] signMessage: mbedtls_rsa_rsassa_pss_sign_ext failed: -0x%04x\n", -rc);
         mbedtls_pk_free(&pk);
-        mbedtls_ctr_drbg_free(&ctr);
-        mbedtls_entropy_free(&entropy);
         return false;
     }
     
     // Success. cleanup and return true.
     mbedtls_pk_free(&pk);
-    mbedtls_ctr_drbg_free(&ctr);
-    mbedtls_entropy_free(&entropy);
     return true;
 }
 // === Helper: try parse public key tolerant to "RSA PUBLIC KEY" vs "PUBLIC KEY" ===
@@ -428,6 +444,7 @@ static int parse_public_key_tolerant(mbedtls_pk_context *pk, const uint8_t *pem,
 
 // ---------- Encrypt (patched) ----------
 bool pwngrid::crypto::encryptFor(const std::vector<uint8_t> &cleartext, const String &recipientPubPEM, std::vector<uint8_t> &out) {
+    CryptoGuard guard;
     if (recipientPubPEM.length() == 0) {
         logMessage("[crypto] encryptFor: recipient public key empty");
         return false;
@@ -447,27 +464,19 @@ bool pwngrid::crypto::encryptFor(const std::vector<uint8_t> &cleartext, const St
         return false;
     }
 
-    // CTR DRBG for randomness
-    mbedtls_ctr_drbg_context ctr;
-    mbedtls_entropy_context entropy;
-    mbedtls_ctr_drbg_init(&ctr);
-    mbedtls_entropy_init(&entropy);
-    const char *pers = "enc_aes";
-    if (mbedtls_ctr_drbg_seed(&ctr, mbedtls_entropy_func, &entropy, (const unsigned char*)pers, strlen(pers)) != 0) {
-        logMessage("[crypto] ctr seed failed");
+    // ensure global DRBG is ready and use it for randomness
+    init_global_drbg_once();
+    if (!global_drbg_initialized) {
+        logMessage("[crypto] encryptFor: global DRBG not initialized");
         mbedtls_pk_free(&pk);
-        mbedtls_ctr_drbg_free(&ctr);
-        mbedtls_entropy_free(&entropy);
         return false;
     }
 
     // generate random AES key (must match python's 16 bytes)
     std::vector<uint8_t> aesKey(AES_KEY_LEN);
-    if (mbedtls_ctr_drbg_random(&ctr, aesKey.data(), AES_KEY_LEN) != 0) {
+    if (mbedtls_ctr_drbg_random(&global_ctr, aesKey.data(), AES_KEY_LEN) != 0) {
         logMessage("[crypto] ctr random aesKey failed");
         mbedtls_pk_free(&pk);
-        mbedtls_ctr_drbg_free(&ctr);
-        mbedtls_entropy_free(&entropy);
         return false;
     }
 
@@ -476,8 +485,6 @@ bool pwngrid::crypto::encryptFor(const std::vector<uint8_t> &cleartext, const St
     if (!mbedtls_pk_can_do(&pk, MBEDTLS_PK_RSA)) {
         logMessage("[crypto] encryptFor: public key is not RSA");
         mbedtls_pk_free(&pk);
-        mbedtls_ctr_drbg_free(&ctr);
-        mbedtls_entropy_free(&entropy);
         return false;
     }
 
@@ -494,27 +501,23 @@ bool pwngrid::crypto::encryptFor(const std::vector<uint8_t> &cleartext, const St
 
     size_t rsa_len = mbedtls_pk_get_len(&pk);
     std::vector<uint8_t> encKey(rsa_len);
-    int rc = mbedtls_rsa_rsaes_oaep_encrypt(rsa,
-            mbedtls_ctr_drbg_random, &ctr,
+        int rc = mbedtls_rsa_rsaes_oaep_encrypt(rsa,
+            mbedtls_ctr_drbg_random, &global_ctr,
             MBEDTLS_RSA_PUBLIC,
             nullptr, 0, // label, label_len (python used None)
             AES_KEY_LEN, aesKey.data(), encKey.data());
     if (rc != 0) {
         fLogMessage("[crypto] oaep encrypt failed: -0x%04x\n", -rc);
         mbedtls_pk_free(&pk);
-        mbedtls_ctr_drbg_free(&ctr);
-        mbedtls_entropy_free(&entropy);
         return false;
     }
     // encKey is rsa_len bytes (full modulus). If you need exact length, use rsa_len.
 
     // prepare nonce
     unsigned char nonce[GCM_NONCE_LEN];
-    if (mbedtls_ctr_drbg_random(&ctr, nonce, GCM_NONCE_LEN) != 0) {
+    if (mbedtls_ctr_drbg_random(&global_ctr, nonce, GCM_NONCE_LEN) != 0) {
         logMessage("[crypto] ctr random nonce failed");
         mbedtls_pk_free(&pk);
-        mbedtls_ctr_drbg_free(&ctr);
-        mbedtls_entropy_free(&entropy);
         return false;
     }
 
@@ -525,8 +528,6 @@ bool pwngrid::crypto::encryptFor(const std::vector<uint8_t> &cleartext, const St
         logMessage("[crypto] gcm_setkey failed");
         mbedtls_gcm_free(&gcm);
         mbedtls_pk_free(&pk);
-        mbedtls_ctr_drbg_free(&ctr);
-        mbedtls_entropy_free(&entropy);
         return false;
     }
 
@@ -543,8 +544,6 @@ bool pwngrid::crypto::encryptFor(const std::vector<uint8_t> &cleartext, const St
         fLogMessage("[crypto] gcm_crypt_and_tag failed: -0x%04x\n", -rc);
         mbedtls_gcm_free(&gcm);
         mbedtls_pk_free(&pk);
-        mbedtls_ctr_drbg_free(&ctr);
-        mbedtls_entropy_free(&entropy);
         return false;
     }
 
@@ -565,14 +564,13 @@ bool pwngrid::crypto::encryptFor(const std::vector<uint8_t> &cleartext, const St
     // cleanup
     mbedtls_gcm_free(&gcm);
     mbedtls_pk_free(&pk);
-    mbedtls_ctr_drbg_free(&ctr);
-    mbedtls_entropy_free(&entropy);
 
     return true;
 }
 
 // ---------- Decrypt (patched) ----------
 bool pwngrid::crypto::decrypt(const std::vector<uint8_t> &ciphertext, std::vector<uint8_t> &outCleartext) {
+    CryptoGuard guard;
     // layout: nonce(12) + 4 bytes key size + encKey + ciphertext + tag(16)
     size_t minLen = GCM_NONCE_LEN + 4 + GCM_TAG_LEN;
     if (ciphertext.size() < minLen) {
@@ -616,24 +614,17 @@ bool pwngrid::crypto::decrypt(const std::vector<uint8_t> &ciphertext, std::vecto
 
     mbedtls_pk_context pk;
     mbedtls_pk_init(&pk);
-    mbedtls_entropy_context entropy;
-    mbedtls_ctr_drbg_context ctr;
-    mbedtls_ctr_drbg_init(&ctr);
-    mbedtls_entropy_init(&entropy);
-    const char *pers = "rsa_dec";
-    if (mbedtls_ctr_drbg_seed(&ctr, mbedtls_entropy_func, &entropy, (const unsigned char*)pers, strlen(pers)) != 0) {
-        logMessage("[crypto] ctr seed failed decrypt");
-        mbedtls_pk_free(&pk);
-        mbedtls_ctr_drbg_free(&ctr);
-        mbedtls_entropy_free(&entropy);
-        return false;
-    }
+        // ensure global DRBG is ready
+        init_global_drbg_once();
+        if (!global_drbg_initialized) {
+            logMessage("[crypto] decrypt: global DRBG not initialized");
+            mbedtls_pk_free(&pk);
+            return false;
+        }
 
     if (mbedtls_pk_parse_key(&pk, priv.data(), priv.size(), nullptr, 0) != 0) {
         logMessage("[crypto] decrypt: parse private key failed");
         mbedtls_pk_free(&pk);
-        mbedtls_ctr_drbg_free(&ctr);
-        mbedtls_entropy_free(&entropy);
         return false;
     }
 
@@ -641,8 +632,6 @@ bool pwngrid::crypto::decrypt(const std::vector<uint8_t> &ciphertext, std::vecto
     if (!mbedtls_pk_can_do(&pk, MBEDTLS_PK_RSA)) {
         logMessage("[crypto] decrypt: private key is not RSA");
         mbedtls_pk_free(&pk);
-        mbedtls_ctr_drbg_free(&ctr);
-        mbedtls_entropy_free(&entropy);
         return false;
     }
 
@@ -661,7 +650,7 @@ bool pwngrid::crypto::decrypt(const std::vector<uint8_t> &ciphertext, std::vecto
     std::vector<uint8_t> aesKey(rsa_len);
     size_t olen = 0;
     int rc = mbedtls_rsa_rsaes_oaep_decrypt(rsa,
-            mbedtls_ctr_drbg_random, &ctr,
+                mbedtls_ctr_drbg_random, &global_ctr,
             MBEDTLS_RSA_PRIVATE,
             nullptr, 0,
             &olen,
@@ -669,8 +658,6 @@ bool pwngrid::crypto::decrypt(const std::vector<uint8_t> &ciphertext, std::vecto
     if (rc != 0) {
         fLogMessage("[crypto] oaep decrypt failed: -0x%04x\n", -rc);
         mbedtls_pk_free(&pk);
-        mbedtls_ctr_drbg_free(&ctr);
-        mbedtls_entropy_free(&entropy);
         return false;
     }
     aesKey.resize(olen); // actual AES key length (should be 16)
@@ -682,8 +669,6 @@ bool pwngrid::crypto::decrypt(const std::vector<uint8_t> &ciphertext, std::vecto
         logMessage("[crypto] gcm_setkey failed decrypt");
         mbedtls_gcm_free(&gcm);
         mbedtls_pk_free(&pk);
-        mbedtls_ctr_drbg_free(&ctr);
-        mbedtls_entropy_free(&entropy);
         return false;
     }
 
@@ -693,15 +678,11 @@ bool pwngrid::crypto::decrypt(const std::vector<uint8_t> &ciphertext, std::vecto
         fLogMessage("[crypto] gcm_auth_decrypt failed: -0x%04x\n", -rc);
         mbedtls_gcm_free(&gcm);
         mbedtls_pk_free(&pk);
-        mbedtls_ctr_drbg_free(&ctr);
-        mbedtls_entropy_free(&entropy);
         return false;
     }
 
     // cleanup
     mbedtls_gcm_free(&gcm);
     mbedtls_pk_free(&pk);
-    mbedtls_ctr_drbg_free(&ctr);
-    mbedtls_entropy_free(&entropy);
     return true;
 }

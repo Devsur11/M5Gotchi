@@ -28,19 +28,8 @@
 //     #endif
 // }
 
-static File sharedLog;
-
-void enableSharedLog() {
-    if (!SD.begin()) return;
-    sharedLog = SD.open("/log.txt", FILE_APPEND);
-}
-
 void logMessage(String message) {
     printf("[%lu][I][logger.cpp:11] %s\n", millis(), message.c_str());
-    if (!sd_logging) return;
-    if (!sharedLog) return;
-    sharedLog.printf("[%lu][I][logger.cpp:11] %s\n", millis(), message.c_str());
-    sharedLog.flush(); // optional, but helps if it dies later
 }
 
 #include <stdarg.h>

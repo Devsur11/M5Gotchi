@@ -15,6 +15,8 @@ extern "C" {
 
 // Function declaration for broadcasting fake SSIDs
 void broadcastFakeSSIDs(String ssidList[], int ssidCount, bool sound);
+// Optimized overload accepting C-style string lists (no dynamic String allocations)
+void broadcastFakeSSIDs(const char * const ssidList[], int ssidCount, bool sound);
 bool send_deauth_packets(String &client_mac, int count, int delay_ms = 150);
 void deauth_promiscuous_rx_cb(void* buf, wifi_promiscuous_pkt_type_t type);
 bool is_client_known(uint8_t *mac);

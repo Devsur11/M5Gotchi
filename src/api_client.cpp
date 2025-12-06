@@ -7,6 +7,7 @@
 #include <mbedtls/sha256.h>
 #include "settings.h"
 #include "ui.h"
+#include "esp_heap_caps.h"
 
 using namespace api_client;
 using namespace pwngrid::crypto;
@@ -143,6 +144,11 @@ bool api_client::init(const String &keysPath) {
 
 // helper: http POST json -> returns body string or empty on error
 static String httpPostJson(const String &url, const String &json, bool auth) {
+    size_t free_heap = esp_get_free_heap_size();
+    if (free_heap < 40000) {
+        fLogMessage("Not enough heap for SSL connect: %u\n", (unsigned)free_heap);
+        return String();
+    }
     WiFiClientSecure *client = new WiFiClientSecure();
     client->setInsecure(); // TODO: replace with cert verification
     HTTPClient https;
@@ -165,6 +171,11 @@ static String httpPostJson(const String &url, const String &json, bool auth) {
 }
 
 static String httpGet(const String &url, bool auth) {
+    size_t free_heap = esp_get_free_heap_size();
+    if (free_heap < 40000) {
+        fLogMessage("Not enough heap for SSL connect (GET): %u\n", (unsigned)free_heap);
+        return String();
+    }
     WiFiClientSecure *client = new WiFiClientSecure();
     client->setInsecure();
     HTTPClient https;
@@ -245,8 +256,10 @@ bool api_client::enrollWithGrid() {
 
     // no auth header
     logMessage("Data for enrol created, sending...");
+    logMessage("Enroll payload: " + out);
     String resp = httpPostJson(String(Endpoint) + "/unit/enroll", out, false);
     logMessage("Response got, proceeding to parse...");
+    logMessage("Enroll response: " + resp);
     if (resp.isEmpty()) {
         logMessage("enroll: empty response");
         return false;
@@ -585,10 +598,11 @@ bool api_client::uploadCachedAPs() {
     String url = String(Endpoint) + "/unit/report/aps";
     logMessage("uploadCachedAPs: uploading " + String(arr.size()) + " APs");
     String resp = httpPostJson(url, body, true);
-    if (resp.length() == 0) {
+    if (!strcmp(resp.c_str(), "{\"success\":true}")) {
         logMessage("uploadCachedAPs: upload failed or empty response");
         return false;
     }
+    logMessage("uploadCachedAPs: server response: " + resp);
 
     // On success, clear cache file
     File wf = SD.open(path, FILE_WRITE);

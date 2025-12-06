@@ -47,6 +47,7 @@ bool wifion(){
 #define SD_MOSI  14  // G14
 #define SD_SCK   40  // G40
 #define SD_MISO  39  // G39
+#define LORA_RST  3 // G3
 #define MAX_PKT_SIZE 3000
 #define ROW_SIZE 40
 #define PADDING 10
@@ -103,3 +104,5 @@ extern bool stealth_mode;
 extern String pwngrid_indentity;
 extern bool advertisePwngrid;
 extern uint64_t lastTokenRefresh;
+extern String wiggle_api_key;
+extern bool cardputer_adv;

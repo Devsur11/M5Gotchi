@@ -8,14 +8,18 @@
 
 #include <Arduino.h>
 #include <vector>
+#include "pwnagothi.h"
 
-// Simple representation of a scanned WiFi network used by wardrive()
-struct wifiSpeedScan {
-    String ssid;
-    int rssi;
-    int channel;
-    bool secure;
-    uint8_t bssid[6];
+struct wardriveStatus{
+    bool success;
+    bool gpsFixAcquired;
+    double latitude;
+    double longitude;
+    float hdop;
+    float altitude;
+    String timestampIso;
+    uint16_t networksLogged;
+    uint8_t networksNow;
 };
 
 // Append one CSV row per network to an SD file using a recent GPS fix read from Serial2.
@@ -23,7 +27,7 @@ struct wifiSpeedScan {
 // - timeoutMs: how long to wait for a valid GPS fix (reads Serial2)
 // - filename: path on SD to append rows (default: "/wardrive.csv")
 // Returns true if at least one row was written successfully.
-bool wardrive(const std::vector<wifiSpeedScan>& networks,
+wardriveStatus wardrive(const std::vector<wifiSpeedScan>& networks,
               unsigned long timeoutMs = 10000,
               const char* filename = "/wardrive.csv");
 

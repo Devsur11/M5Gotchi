@@ -24,6 +24,9 @@
 #include "wpa_sec.h"
 #include "pwngrid.h"
 #include "api_client.h"
+#include "sdmanager.h"
+#include <vector>
+#include "wardrive.h"
 
 M5Canvas canvas_top(&M5.Display);
 M5Canvas canvas_main(&M5.Display);
@@ -34,7 +37,7 @@ M5Canvas bar_right3(&M5.Display);
 M5Canvas bar_right4(&M5.Display);
 
 #ifndef LITE_VERSION
-String funny_ssids[] = {
+static const char * const funny_ssids[] = {
   "Mom Use This One",
   "Abraham Linksys",
   "Benjamin FrankLAN",
@@ -87,7 +90,7 @@ String funny_ssids[] = {
   "Ye Olde Internet"
 };
 
-String rickroll_ssids[]{
+static const char * const rickroll_ssids[]{
   "01 Never gona give you up",
   "02 Never gona let you down",
   "03 Never gona run around",
@@ -98,7 +101,7 @@ String rickroll_ssids[]{
   "08 and hurt you",
 };
 
-String broken_ssids[]{
+static const char * const broken_ssids[]{
   "Broken_Wi-Fi",
   "Unstable_Network",
   "Corrupted_AP",
@@ -134,6 +137,7 @@ menu main_menu[] = {
     #endif
     {"Pwngrid companion", 7},
     {"Wardriving companion", 8},
+    {"File manager", 70},
     {"Config", 6}
 };
 
@@ -211,6 +215,7 @@ menu pwngrid_menu[] = {
   {"Messages inbox", 10},
   {"Quick message", 11},
   {"Frends list", 17},
+  {"No new captured networks to send", 0},
   {"View identity/fingerprint", 13},
   {"Reset pwngrid/fingerprint", 15}
 };
@@ -220,21 +225,17 @@ menu pwngrid_not_enrolled_menu[] = {
 };
 
 //menuID 9 
-
 menu wardrivingMenuWithWiggle[] = {
   {"Wardriving mode", 18},
-  {"View captures", 19},
-  {"Set up Wiggle.net uploader", 20},
-  {"Upload to Wiggle.net", 21},
-  {"Preferences", 22},
-  {"Reset Wiggle.net config", 23}
+  {"View logs", 19},
+  {"Upload to Wiggle.net", 26},
+  {"Reset Wiggle.net config", 27}
 };
 
 menu wardrivingMenuWithWiggleUnsett[] = {
-  {"Wardriving mode", 18},
-  {"View captures", 19},
-  {"Set up Wiggle.net uploader", 20},
-  {"Preferences", 22}
+  {"Local wardriving mode", 18},
+  {"View logs", 19},
+  {"Set up Wiggle.net api key", 25},
 };
 
 bool appRunning;
@@ -425,7 +426,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi) {
     #ifdef USE_EXPERIMENTAL_APPS
     drawMenuList(main_menu, 1, 8);
     #else
-    drawMenuList(main_menu, 1, 6);
+    drawMenuList(main_menu, 1, 7);
     #endif
   } 
   else if (menuID == 2){
@@ -449,7 +450,28 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi) {
     (wpa_sec_api_key.length()>5)?drawMenuList(wpasec_menu, 7, 3):drawMenuList(wpasec_setup_menu, 7, 1);
   }
   else if (menuID == 8){
-    (pwngrid_indentity.length()>10)? drawMenuList(pwngrid_menu, 8, 6): drawMenuList(pwngrid_not_enrolled_menu, 8, 1);
+    File toUpload = SD.open("/pwngrid/cracks.conf");
+    if(toUpload && toUpload.size() > 3){ 
+      menu temp[7] =  { 
+        {"Units met", 16},
+        {"Messages inbox", 10},
+        {"Quick message", 11},
+        {"Frends list", 17},
+        {"Send captured networks to pwngrid", 26},
+        {"View identity/fingerprint", 13},
+        {"Reset pwngrid/fingerprint", 15}
+      };
+      drawMenuList(temp, 8, 7);
+    }
+    else (pwngrid_indentity.length()>10)? drawMenuList(pwngrid_menu, 8, 7): drawMenuList(pwngrid_menu, 8, 1);
+  }
+  else if (menuID == 9){
+    if(wiggle_api_key.length() > 5){
+      drawMenuList(wardrivingMenuWithWiggle, 9, 4);
+    }
+    else{
+      drawMenuList(wardrivingMenuWithWiggleUnsett, 9, 3);
+    }
   }
   else if (menuID == 0)
   {
@@ -1048,6 +1070,17 @@ void pwngridMessenger() {
 
 inline void trigger(uint8_t trigID){logMessage("Trigger" + String(trigID));}
 
+String isoTimestampToDateTimeString(String isoTimestamp) {
+    if (isoTimestamp.length() < 19) {
+        return "Invalid Timestamp";
+    }
+
+    String date = isoTimestamp.substring(0, 10); // YYYY-MM-DD
+    String time = isoTimestamp.substring(11, 19); // HH:MM:SS
+
+    return date + " " + time;
+}
+
 void runApp(uint8_t appID){
   logMessage("App started running, ID:"+ String(appID));
   menu_current_opt = 0;
@@ -1073,7 +1106,7 @@ void runApp(uint8_t appID){
     }
     if(appID == 7){
       debounceDelay();
-      drawMenuList(pwngrid_menu, 8, 6);
+      drawMenuList(pwngrid_menu, 8, 7);
     }
     if(appID == 8){
       debounceDelay();
@@ -1212,9 +1245,11 @@ void runApp(uint8_t appID){
         }
       }
     }
-    if(appID == 14){
-
+    if(appID == 70){
+      debounceDelay();
+      sdmanager::runFileManager();
     }
+    if(appID == 14){}
     if(appID == 15){
       bool confirmation = drawQuestionBox("Reset?", "This will delete all keys,", "messages, frends, identity");
       if(confirmation){
@@ -1643,9 +1678,431 @@ void runApp(uint8_t appID){
         }
       }
     }
-    if(appID == 18){}
-    if(appID == 19){}
-    if(appID == 20){
+    if(appID == 18){
+      drawInfoBox("Insert cap!", "Instert lora cap now", "then press enter.", true, false);
+      logMessage("Starting wardriver!");
+      canvas_main.fillScreen(bg_color_rgb565);
+      canvas_main.setTextColor(tx_color_rgb565);
+      canvas_main.clear(bg_color_rgb565);
+      canvas_main.setTextSize(1.5);
+      canvas_main.setTextDatum(middle_left);
+      canvas_main.drawString("Wardriving mode active...", 5, 8);
+      canvas_main.setTextSize(1);
+      canvas_main.drawString("Hold \"ESC\" to stop", 5, 18);
+      pushAll();
+      while(true){
+        M5.update();
+        M5Cardputer.update();
+        auto keysState = M5Cardputer.Keyboard.keysState();
+        for(auto i : keysState.word){
+          if(i=='`')
+          {logMessage("Wardriver stopped by user");
+          menuID = 0;
+          return;}
+        }
+        speedScan();
+        canvas_main.drawString("Scan complete, getting GPS fix...", 5, 27);
+        std::vector<wifiSpeedScan> results = getSpeedScanResults();
+        wardriveStatus status = wardrive(results, 10000);
+        canvas_main.fillRect(5, 23, 230, 8, bg_color_rgb565);
+        canvas_main.drawString("Networks found: " + String(status.networksNow) + " Total in run: " + String(status.networksLogged), 5, 27);
+        canvas_main.fillRect(5, 90, 230, 20, bg_color_rgb565);
+        if(status.gpsFixAcquired){
+          canvas_main.fillRect(0, (canvas_h/2)-10, 250, 100, bg_color_rgb565);
+          canvas_main.drawString("GPS fix acquired!", 5, 37);
+          canvas_main.drawString("Lat: " + String(status.latitude, 6), 5, 47);
+          canvas_main.drawString("Lon: " + String(status.longitude, 6), 5, 57);
+          canvas_main.drawString("Alt: " + String(status.altitude, 2) + "m", 5, 67);
+          canvas_main.drawString(String(isoTimestampToDateTimeString(status.timestampIso)), 5, 77);
+        }
+        else{
+          canvas_main.setTextSize(1.5);
+          canvas_main.drawString("No GPS lock!", 2, (canvas_h/2) + 10);
+          canvas_main.setTextSize(1);
+          canvas_main.setTextDatum(middle_left);
+        }
+        canvas_main.drawString("Networks found:", canvas_center_x, 37);
+        if(results.size() != 0){
+          uint8_t padding = 10;
+          for(uint8_t i = 0; i<10; i++){
+            canvas_main.fillRect(canvas_center_x, 45 + (i*8) - padding/2, 120, padding, bg_color_rgb565);
+            canvas_main.drawString((i<results.size())? results[i].ssid : " ", canvas_center_x, 45 + (i*8));
+          }
+        }
+        else{
+          canvas_main.drawString("No networks found!", canvas_center_x, 45);
+        }
+        pushAll();
+        delay(1000);
+
+      }
+    }
+    if(appID == 19){
+      drawInfoBox("Info", "Loading CSV...", "", false, false);
+      // Wardriving CSV viewer with search function
+      File csvFile = SD.open("/wardrive.csv", FILE_READ);
+      if (!csvFile) {
+      drawInfoBox("Error", "wardrive.csv not found", "Not wardrived yet?", true, false);
+      menuID = 0;
+      return;
+      }
+      
+      // Count total lines without storing them all
+      uint32_t totalLines = 0;
+      csvFile.seek(0);
+      char c;
+      while (csvFile.available()) {
+        c = csvFile.read();
+        if (c == '\n') totalLines++;
+      }
+      if (csvFile.size() > 0 && c != '\n') totalLines++; // Account for last line without newline
+      csvFile.close();
+
+      if (totalLines < 3) {
+      drawInfoBox("Info", "CSV file is empty or invalid", "", true, false);
+      menuID = 0;
+      return;
+      }
+      
+      // Function to read a specific line from file without storing all lines
+      auto readLineAtIndex = [](uint32_t lineIndex) -> String {
+        String result = "";
+        File f = SD.open("/wardrive.csv", FILE_READ);
+        if (!f) return result;
+        
+        uint32_t currentLine = 0;
+        char c;
+        while (f.available() && currentLine <= lineIndex) {
+          c = f.read();
+          if (currentLine == lineIndex) {
+            if (c == '\n' || c == '\r') {
+              if (result.length() > 0) break;
+            } else {
+              result += c;
+            }
+          } else if (c == '\n') {
+            currentLine++;
+          }
+        }
+        f.close();
+        return result;
+      };
+
+      // Parse CSV helper function
+      auto parseCSVLine = [](const String& csvLine) -> std::vector<String> {
+      std::vector<String> fields;
+      String field = "";
+      bool inQuotes = false;
+      for (size_t i = 0; i < csvLine.length(); i++) {
+        char c = csvLine[i];
+        if (c == '"') {
+        inQuotes = !inQuotes;
+        } else if (c == ',' && !inQuotes) {
+        fields.push_back(field);
+        field = "";
+        } else {
+        field += c;
+        }
+      }
+      fields.push_back(field);
+      return fields;
+      };
+
+      String searchTerm = "";
+      std::vector<int> filteredIndices;
+      bool searching = false;
+      uint16_t displayIndex = 0;
+      uint16_t selectedIndex = 0;
+      uint32_t lastSearchTime = 0;
+      const uint32_t SEARCH_DELAY_MS = 300;
+      
+      int displayW = M5.Display.width();
+      int displayH = M5.Display.height();
+      int tableWidth = displayW - 20;
+      int sectionH = 70;
+
+      while (true) {
+      M5.update();
+      M5Cardputer.update();
+      
+      if (searching) {
+        drawTopCanvas();
+        drawBottomCanvas();
+        canvas_main.fillSprite(bg_color_rgb565);
+        canvas_main.setTextSize(2);
+        canvas_main.setTextColor(tx_color_rgb565);
+        canvas_main.setTextDatum(middle_center);
+        canvas_main.drawString("Search CSV", canvas_center_x, canvas_h / 6);
+        canvas_main.setTextSize(1.2);
+        canvas_main.drawString("SSID/BSSID:", canvas_center_x, canvas_h / 3);
+        canvas_main.setTextSize(1.5);
+        canvas_main.drawString(searchTerm, canvas_center_x, canvas_h / 2);
+        canvas_main.setTextSize(1);
+        canvas_main.drawString("[DEL] clear, [ENTER] search, [`] cancel", canvas_center_x, canvas_h * 0.9);
+        pushAll();
+        
+        keyboard_changed = M5Cardputer.Keyboard.isChange();
+        if(keyboard_changed){Sound(10000, 100, sound);}
+        Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
+        uint32_t now = millis();
+        
+        for (auto k : status.word) {
+          if (k == '`') {
+            searching = false;
+            debounceDelay();
+            break;
+          }
+          searchTerm += k;
+          lastSearchTime = now;
+          debounceDelay();
+        }
+        if (status.del && searchTerm.length() > 0) {
+          searchTerm.remove(searchTerm.length() - 1);
+          lastSearchTime = now;
+          debounceDelay();
+        }
+        if (status.enter) {
+          drawInfoBox("Searching...", "Filtering results", "Please wait", false, false);
+          filteredIndices.clear();
+          String lowerSearch = searchTerm;
+          lowerSearch.toLowerCase();
+          
+          // Optimized: Read file once and parse line by line
+          File csvFile = SD.open("/wardrive.csv", FILE_READ);
+          if (csvFile) {
+            uint32_t currentLine = 0;
+            String line = "";
+            char c;
+            
+            while (csvFile.available()) {
+              c = csvFile.read();
+              
+              if (c == '\n' || c == '\r') {
+                // Process complete line
+                if (currentLine >= 2 && line.length() > 0) {
+                  String lowerLine = line;
+                  lowerLine.toLowerCase();
+                  if (lowerLine.indexOf(lowerSearch) >= 0) {
+                    filteredIndices.push_back(currentLine);
+                  }
+                }
+                line = "";
+                currentLine++;
+                
+                // Skip extra newlines/carriage returns
+                if (c == '\r' && csvFile.available() && csvFile.peek() == '\n') {
+                  csvFile.read();
+                }
+              } else {
+                line += c;
+              }
+            }
+            
+            // Don't forget the last line if file doesn't end with newline
+            if (line.length() > 0 && currentLine >= 2) {
+              String lowerLine = line;
+              lowerLine.toLowerCase();
+              if (lowerLine.indexOf(lowerSearch) >= 0) {
+                filteredIndices.push_back(currentLine);
+              }
+            }
+            
+            csvFile.close();
+          }
+          
+          displayIndex = 0;
+          selectedIndex = 0;
+          searching = false;
+          debounceDelay();
+        }
+      } else {
+        drawTopCanvas();
+        drawBottomCanvas();
+        canvas_main.fillSprite(bg_color_rgb565);
+        canvas_main.setTextSize(1);
+        canvas_main.setTextColor(tx_color_rgb565);
+        canvas_main.setTextDatum(top_left);
+        
+        int totalEntries = filteredIndices.empty() ? (totalLines - 2) : filteredIndices.size();
+        int currentPage = (displayIndex / 4) + 1;
+        int totalPages = (totalEntries + 3) / 4;
+        canvas_main.setTextSize(2);
+        canvas_main.drawString("Wardriving db viewer", 1, 3);
+        canvas_main.setTextSize(1);
+        canvas_main.setTextDatum(middle_center);
+        canvas_main.drawString("Page " + String(currentPage) + "/" + String(totalPages) + " | Entries: " + String(totalEntries), canvas_center_x, canvas_h - 18);
+        canvas_main.setTextDatum(top_left);
+        // Draw table header
+        canvas_main.setTextSize(1);
+        int headerY = 22;
+        int col1X = 5;
+        int col2X = 85;
+        int col3X = 165;
+        int scrollbarX = displayW - 8;
+        canvas_main.drawLine(col1X, headerY + 12, displayW - 15, headerY + 12, tx_color_rgb565);
+        canvas_main.drawString("SSID", col1X, headerY);
+        canvas_main.drawString("BSSID", col2X, headerY);
+        
+        // Draw entries
+        int rowHeight = 12;
+        int rowY = headerY + 16;
+        int visibleRows = 4;
+        
+        for (int i = 0; i < visibleRows && (displayIndex + i) < totalEntries; i++) {
+        int csvIdx = filteredIndices.empty() ? (displayIndex + i + 2) : filteredIndices[displayIndex + i];
+        String csvLine = readLineAtIndex(csvIdx);
+        auto fields = parseCSVLine(csvLine);
+        
+        if (fields.size() < 6) continue;
+        
+        String ssid = fields[1];
+        String mac = fields[0];
+        
+        // Truncate SSID for display
+        if (ssid.length() > 18) ssid = ssid.substring(0, 15) + "...";
+        // Truncate MAC for display
+        if (mac.length() > 17) mac = mac.substring(0, 14) + "...";
+        
+        // Highlight selected row
+        if (selectedIndex == (displayIndex + i)) {
+          canvas_main.fillRect(col1X - 3, rowY - 2, displayW - 15, rowHeight + 2, tx_color_rgb565);
+          canvas_main.setTextColor(bg_color_rgb565);
+          canvas_main.drawString(">", col1X - 5, rowY);
+          canvas_main.drawString(ssid, col1X, rowY);
+          canvas_main.drawString(mac, col2X, rowY);
+          canvas_main.setTextColor(tx_color_rgb565);
+        } else {
+          canvas_main.drawString(ssid, col1X, rowY);
+          canvas_main.drawString(mac, col2X, rowY);
+        }
+        
+        rowY += rowHeight;
+        }
+        
+        // Draw scrollbar
+        int scrollbarY = headerY + 14;
+        int scrollbarHeight = visibleRows * rowHeight;
+        canvas_main.drawLine(scrollbarX, scrollbarY, scrollbarX, scrollbarY + scrollbarHeight, tx_color_rgb565);
+        
+        if (totalEntries > visibleRows) {
+          float scrollRatio = (float)displayIndex / (totalEntries - visibleRows);
+          int thumbHeight = max(5, (scrollbarHeight * visibleRows) / totalEntries);
+          int thumbY = scrollbarY + (int)((scrollbarHeight - thumbHeight) * scrollRatio);
+          canvas_main.fillRect(scrollbarX - 2, thumbY, 4, thumbHeight, tx_color_rgb565);
+        }
+        
+        canvas_main.drawString("[/]next [,]prev [S]search [ENTER]details [`]back", 0, canvas_h - 10);
+        pushAll();
+        
+        keyboard_changed = M5Cardputer.Keyboard.isChange();
+        if(keyboard_changed){Sound(10000, 100, sound);}
+        Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
+        
+        for (auto k : status.word) {
+        if (k == 's' || k == 'S') {
+          searchTerm = "";
+          searching = true;
+          lastSearchTime = millis();
+          debounceDelay();
+          break;
+        }
+        if (k == '`') {
+          menuID = 0;
+          return;
+        }
+        }
+        
+        if (status.word.size() > 0) {
+        for (auto k : status.word) {
+          if (k == '/') {
+          if ((displayIndex + 4) < totalEntries) {
+        displayIndex += 4;
+        selectedIndex = displayIndex;
+          }
+          debounceDelay();
+          }
+          if (k == ',') {
+          if (displayIndex > 0) {
+        displayIndex = (displayIndex >= 4) ? displayIndex - 4 : 0;
+        selectedIndex = displayIndex;
+          }
+          debounceDelay();
+          }
+          if (k == '.') {
+          if (selectedIndex < (totalEntries - 1)) {
+        selectedIndex++;
+        if (selectedIndex >= (displayIndex + 4)) displayIndex = selectedIndex - 3;
+          }
+          debounceDelay();
+          }
+          if (k == ';') {
+          if (selectedIndex > 0) {
+        selectedIndex--;
+        if (selectedIndex < displayIndex) displayIndex = selectedIndex;
+          }
+          debounceDelay();
+          }
+        }
+        }
+        
+        if (status.enter) {
+        int csvIdx = filteredIndices.empty() ? (selectedIndex + 2) : filteredIndices[selectedIndex];
+        String csvLine = readLineAtIndex(csvIdx);
+        auto fields = parseCSVLine(csvLine);
+        
+        if (fields.size() >= 9) {
+          String ssid = fields[1];
+          String bssid = fields[0];
+          String authMode = (fields.size() > 2) ? fields[2] : "N/A";
+          String channel = (fields.size() > 4) ? fields[4] : "N/A";
+          String rssi = (fields.size() > 5) ? fields[5] : "N/A";
+          String lat = (fields.size() > 6) ? fields[6] : "N/A";
+          String lon = (fields.size() > 7) ? fields[7] : "N/A";
+          
+          debounceDelay();
+            drawTopCanvas();
+            drawBottomCanvas();
+            canvas_main.fillSprite(bg_color_rgb565);
+            canvas_main.setTextSize(2);
+            canvas_main.setTextColor(tx_color_rgb565);
+            canvas_main.setTextDatum(middle_center);
+            canvas_main.drawString(ssid, canvas_center_x, 15);
+            
+            canvas_main.setTextSize(1);
+            canvas_main.setTextDatum(top_left);
+            canvas_main.drawString("BSSID: " + bssid, 5, 25);
+            canvas_main.drawString("Channel: " + channel, 5, 35);
+            canvas_main.drawString("RSSI: " + rssi + " dBm", 5, 45);
+            
+            if(fields.size() > 2) canvas_main.drawString("Auth: " + authMode, 5, 55);
+            if(fields.size() > 6) {
+            canvas_main.drawString("Lat: " + lat, 5, 65);
+            canvas_main.drawString("Lon: " + lon, 5, 75);
+            }
+            
+            canvas_main.setTextSize(1);
+            canvas_main.setTextDatum(middle_center);
+            canvas_main.drawString("[ENTER] back to list", canvas_center_x, canvas_h - 10);
+            
+            pushAll();
+            
+            while(true) {
+            M5.update();
+            M5Cardputer.update();
+            keyboard_changed = M5Cardputer.Keyboard.isChange();
+            if(keyboard_changed){Sound(10000, 100, sound);}
+            Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
+            if(status.enter) break;
+            for(auto k : status.word) {
+              if(k == '`') break;
+            }
+            delay(50);
+            }
+        }
+        debounceDelay();
+        }
+      }
+      }}if(appID == 20){
       wifion();
       drawInfoBox("Info", "Scanning for wifi...", "Please wait", false, false);
       int numNetworks = WiFi.scanNetworks();
@@ -2021,8 +2478,62 @@ void runApp(uint8_t appID){
       }
       updateActivity(true);
     }
-    if(appID == 25){}
-    if(appID == 26){}
+    if(appID == 25){
+      String new_wiggle_api_key = "";
+      String mmenu[] = {"With keyboard", "Via PC/Phone", "Back"};
+      uint8_t answerrr = drawMultiChoice("Set new key:", mmenu, 3, 2, 2);
+      if(answerrr==0){
+        new_wiggle_api_key = userInput("Wiggle.net API key", "Enter new Wiggle API key", 64);
+      }
+      else if(answerrr==1){
+        drawInfoBox("Connect:", "Connect to CardputerSetup", "And go to 192.168.4.1", false, false);
+        new_wiggle_api_key = userInputFromWebServer("Wiggle.net API key");
+      }
+      else{
+        menuID = 0;
+        return;
+      }
+      if(new_wiggle_api_key.length() <10){
+        drawInfoBox("Error", "Key too short", "Operation abort", true, false);
+        menuID = 0;
+        return;
+      }
+      wiggle_api_key = new_wiggle_api_key;
+      if(saveSettings()){
+        drawInfoBox("Succes", "Wiggle API key", "was changed", true, false);
+        menuID = 0;
+        return;
+      }
+      else{
+        drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);
+        menuID = 0;
+        return;
+      }
+    }
+    if(appID == 26){
+      drawInfoBox("Info", "Please wait", "", false, false);
+      if(!(WiFi.status() == WL_CONNECTED)){
+        drawInfoBox("Info", "Network connection needed", "To send messages!", false, false);
+        delay(3000);
+        runApp(43);
+        if(WiFi.status() != WL_CONNECTED){
+          drawInfoBox("ERROR!", "No network connection", "Message send abort", true, false);
+          menuID = 0;
+          return;
+        }
+      }
+      drawInfoBox("Uploading", "Please wait", "This may take some time...", false, false);
+      api_client::init(KEYS_FILE);
+      bool result = api_client::uploadCachedAPs();
+      if(result){
+        drawInfoBox("Succes", "Stats uploaded", "To pwngrid", true, false);
+      }
+      else{
+        drawInfoBox("ERROR!", "Upload failed!", "Check network!", true, false);
+      }
+      menuID = 0;
+      return; 
+    }
     if(appID == 27){}
     if(appID == 28){}
     if(appID == 29){}
@@ -2078,6 +2589,7 @@ void runApp(uint8_t appID){
       menuID = 0;
     }
     if(appID == 39){
+      drawInfoBox("Info", "Reading SD card...", "Please wait", false, false);
       if(!SD.begin(SD_CS, sdSPI, 1000000)) {
         drawInfoBox("Error", "Cannot open SD card", "Check SD card!", true, true);
         menuID = 0;
@@ -3387,28 +3899,12 @@ void drawMenuList(menu toDraw[], uint8_t menuIDPriv, uint8_t menu_size) {
   const uint32_t MARQUEE_DELAY_MS = 300; // speed of marquee
 
   // ============================================================
-  // Build wrapped buffer for NON-selected items, but record
-  // the selected item index BEFORE wrapping
+  // Simplified menu rendering: avoid heap allocations by not building
+  // a wrapped string vector. Each menu entry is treated as a single
+  // logical line to minimize dynamic String usage.
   // ============================================================
-  std::vector<String> wrapped;
-  int selectedLineIndex = 0;
-
-  for (uint8_t i = 0; i < menu_len; i++) {
-    bool isSel = (menu_current_opt == i);
-    String full = toDraw[i].name;
-
-    if (!isSel) {
-      // wrap normally
-      wrapped.push_back("  " + full);
-    } else {
-      // selected item occupies exactly one line in wrapped list,
-      // but we add only a placeholder so line calculation works
-      selectedLineIndex = wrapped.size();
-      wrapped.push_back("SELECTED_LINE"); // placeholder
-    }
-  }
-
-  int totalLines = wrapped.size();
+  int selectedLineIndex = menu_current_opt;
+  int totalLines = menu_len;
   int linesPerPage = maxH / lineH;
 
   // ============================================================
@@ -3440,10 +3936,10 @@ void drawMenuList(menu toDraw[], uint8_t menuIDPriv, uint8_t menu_size) {
   for (int i = 0; i < totalLines; i++) {
     int y = yOffset + i * lineH;
     if (y < -lineH || y > maxH) continue;
-
     if (i != selectedLineIndex) {
-      // normal wrapped item
-      canvas_main.drawString(wrapped[i], 0, y);
+      // normal non-selected item: draw prefix + name without allocating
+      canvas_main.drawString("  ", 0, y);
+      canvas_main.drawString(toDraw[i].name, 18, y);
       continue;
     }
 

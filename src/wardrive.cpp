@@ -16,20 +16,14 @@
 #include <Arduino.h>
 #include <vector>
 #include <SD.h>
-#include <SD_MMC.h>
-
-struct wifiSpeedScan {
-    String ssid;
-    int rssi;
-    int channel;
-    bool secure;
-    uint8_t bssid[6];
-};
+#include "wardrive.h"
+#include "logger.h"
 
 // GPS serial pins (GPIO numbers)
-static const int GPS_RX_PIN = 13; // AT6H TX -> ESP RX
-static const int GPS_TX_PIN = 15; // AT6H RX <- ESP TX
-static const int GPS_BAUD = 9600;
+static const int GPS_RX_PIN = 15; // AT6H TX -> ESP RX
+static const int GPS_TX_PIN = 13; // AT6H RX <- ESP TX
+static const int GPS_BAUD = 115200;
+int tot_observed_networks = 0;
 
 // Internal representation of a parsed fix
 struct GpsFix {
@@ -79,8 +73,8 @@ static String makeIsoTimestamp(const String& timestr, const String& datestr) {
 
 // Parse a single NMEA sentence (line) for GPRMC or GPGGA fix data; merges into provided GpsFix if more info found
 static void parseNmeaLine(const String& line, GpsFix& fix) {
-    if (line.length() < 6) return;
-    if (!(line.startsWith("$GPRMC") || line.startsWith("$GNRMC") || line.startsWith("$GPGGA") || line.startsWith("$GNGGA"))) return;
+    if (line.length() < 5) return;
+    if (!(line.startsWith("$GPRMC") || line.startsWith("$GNRMC") || line.startsWith("$GPGGA") || line.startsWith("$GNGGA") || line.startsWith("$GNZDA")))return;
 
     // Split by commas (simple)
     std::vector<String> fields;
@@ -154,6 +148,30 @@ static void parseNmeaLine(const String& line, GpsFix& fix) {
                 }
             }
         }
+    } else if (line.startsWith("$GNZDA")) {
+        logMessage("Parsing GNZDA line for time...");
+        logMessage(line);
+        // fields: 1=time,2=day,3=month,4=year,...
+        if (true) {
+            String timeStr = fields[1];
+            String dayStr = fields[2];
+            String monthStr = fields[3];
+            String yearStr = fields[4];
+
+            if (timeStr.length() >= 6 && dayStr.length() >= 1 && monthStr.length() >= 1 && yearStr.length() >= 4) {
+                int day = dayStr.toInt();
+                int month = monthStr.toInt();
+                int year = yearStr.toInt();
+                int hour = timeStr.substring(0,2).toInt();
+                int minute = timeStr.substring(2,4).toInt();
+                int second = timeStr.substring(4,6).toInt();
+
+                char buf[64];
+                snprintf(buf, sizeof(buf), "%04d-%02d-%02dT%02d:%02d:%02dZ", year, month, day, hour, minute, second);
+                logMessage("Parsed ZDA timestamp: " + String(buf));
+                fix.timeIso = String(buf);
+            }
+        }
     }
 }
 
@@ -169,8 +187,8 @@ static String bssidToString(const uint8_t bssid[6]) {
 // - timeoutMs: how long to wait for a valid GPS fix (reads Serial2)
 // - filename: path on SD to append rows
 // Returns true if write succeeded for at least one network (SD available and operation ok).
-bool wardrive(const std::vector<wifiSpeedScan>& networks, unsigned long timeoutMs = 10000, const char* filename = "/wardrive.csv") {
-    if (networks.empty()) return false;
+wardriveStatus wardrive(const std::vector<wifiSpeedScan>& networks, unsigned long timeoutMs, const char* filename) {
+    if (networks.empty()) return {false, false, 0.0, 0.0, 0.0, 0.0, String(), 0, 0};
 
     // Initialize GPS serial (Serial2)
     Serial2.begin(GPS_BAUD, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
@@ -215,56 +233,73 @@ bool wardrive(const std::vector<wifiSpeedScan>& networks, unsigned long timeoutM
         }
         delay(5);
     }
+    fLogMessage("Best GPS fix: valid=%d lat=%.6f lon=%.6f hdop=%.2f alt=%.2f time=%s",
+               bestFix.valid, bestFix.lat, bestFix.lon, bestFix.hdop, bestFix.alt, bestFix.timeIso.c_str());
 
 
 
     // Open file for append
     File f = SD.open(filename, FILE_APPEND);
     if (!f) {
-        return false;
+        return {false, bestFix.valid, bestFix.lat, bestFix.lon, bestFix.hdop, bestFix.alt, bestFix.timeIso, 0, 0};
     }
 
-    // If file empty, add header (attempt to detect by size)
+    // Wigle header, only if file is empty
     if (f.size() == 0) {
-        f.println("ts_iso,lat,lon,fix_type,hdop,alt,ssid,bssid,rssi,channel,secure");
+        f.println("WigleWifi-1.4,appRelease=M5Gotchi,model=ESP32,release=1");
+        f.println("\"MAC\",\"SSID\",\"AuthMode\",\"FirstSeen\",\"Channel\",\"RSSI\",\"CurrentLatitude\",\"CurrentLongitude\",\"AltitudeMeters\",\"AccuracyMeters\",\"Type\"");
     }
 
-    // Build a line per network
     for (const auto& net : networks) {
-        String ts = bestFix.timeIso.length() ? bestFix.timeIso : String("T00:00:00Z");
-        String latStr = bestFix.valid ? String(bestFix.lat, 6) : String("NA");
-        String lonStr = bestFix.valid ? String(bestFix.lon, 6) : String("NA");
-        String fixType = bestFix.valid ? bestFix.fixType : String("NONE");
-        String hdopStr = (bestFix.hdop > 0.0) ? String(bestFix.hdop, 2) : String("");
-        String altStr = (bestFix.alt != 0.0) ? String(bestFix.alt, 2) : String("");
+        //check if gps is locked, if not, skip adding gps data
+        if (!bestFix.valid) {
+            fLogMessage("No valid GPS fix; skipping network logging for SSID: %s", net.ssid.c_str());
+            continue;
+        }
 
+        // Timestamp in Wigle format
+        String ts = bestFix.timeIso.length() ? bestFix.timeIso : "1970-01-01T00:00:00Z";
+
+        // SSID escape
         String ssidEsc = net.ssid;
-        // simple CSV escape: wrap in double quotes and escape internal quotes
         ssidEsc.replace("\"", "\"\"");
+        
+        // BSSID
+        String macStr = bssidToString(net.bssid);
 
-        String bssidStr = bssidToString(net.bssid);
+        // AuthMode conversion (Wigle wants strings)
+        String authMode;
+        if (!net.secure) authMode = "OPN";
+        else {
+            // guess only WPA2/WPA/WEP based on RSSI… or just pick WPA2 because Wigle doesn't reject it
+            authMode = "WPA2";
+        }
 
-        // secure -> 1/0
-        int secureFlag = net.secure ? 1 : 0;
+        // Lat/lon/alt defaults
+        String latStr = bestFix.valid ? String(bestFix.lat, 6) : "";
+        String lonStr = bestFix.valid ? String(bestFix.lon, 6) : "";
+        String altStr = (bestFix.valid && bestFix.alt != 0.0) ? String(bestFix.alt, 2) : "";
+        String accStr = (bestFix.valid && bestFix.hdop > 0) ? String(bestFix.hdop, 2) : "";
 
-        // Compose CSV: ensure fields with commas are quoted
+        // Build final Wigle CSV line
         char buf[1024];
-        snprintf(buf, sizeof(buf), "\"%s\",%s,%s,%s,%s,%s,\"%s\",%s,%d,%d,%d",
-                 ts.c_str(),
-                 latStr.c_str(),
-                 lonStr.c_str(),
-                 fixType.c_str(),
-                 hdopStr.c_str(),
-                 altStr.c_str(),
-                 ssidEsc.c_str(),
-                 bssidStr.c_str(),
-                 net.rssi,
-                 net.channel,
-                 secureFlag);
+        snprintf(buf, sizeof(buf),
+                "\"%s\",\"%s\",\"%s\",\"%s\",%d,%d,%s,%s,%s,%s,\"WIFI\"",
+                macStr.c_str(),
+                ssidEsc.c_str(),
+                authMode.c_str(),
+                ts.c_str(),
+                net.channel,
+                net.rssi,
+                latStr.c_str(),
+                lonStr.c_str(),
+                altStr.c_str(),
+                accStr.c_str());
 
         f.println(buf);
     }
 
     f.close();
-    return true;
+    tot_observed_networks += networks.size();
+    return {true, bestFix.valid, bestFix.lat, bestFix.lon, bestFix.hdop, bestFix.alt, bestFix.timeIso, tot_observed_networks, (uint8_t)networks.size()};
 }

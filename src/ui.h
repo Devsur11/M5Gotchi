@@ -10,7 +10,7 @@
 #pragma once
 
 struct menu {
-  char name[256];
+  const char *name;
   int command;
 };
 

@@ -9,20 +9,17 @@
 #include "ui.h"
 #include <vector>
 #include "pwngrid.h"
+#include "api_client.h"
 
 bool pwnagothiModeEnabled;
 bool pwnagothiScan = true;
 bool nextWiFiCheck = false;
 
-struct wifiSpeedScan{
-    String ssid;
-    int rssi;
-    int channel;
-    bool secure;
-    uint8_t bssid[6];
-};
-
 std::vector<wifiSpeedScan> g_speedScanResults;
+
+std::vector<wifiSpeedScan> getSpeedScanResults(){
+    return g_speedScanResults;
+}
 
 void speedScanCallback(void* buf, wifi_promiscuous_pkt_type_t type){
     if(type != WIFI_PKT_MGMT){
@@ -347,6 +344,7 @@ void pwnagothiLoop(){
                 }
                 setMood(1, "(^_^)", "Got new handshake!!!" );
                 logMessage("(^_^) Got new handshake!!!");
+                api_client::queueAPForUpload(attackVector, String(entry.bssid[0], HEX) + ":" + String(entry.bssid[1], HEX) + ":" + String(entry.bssid[2], HEX) + ":" + String(entry.bssid[3], HEX) + ":" + String(entry.bssid[4], HEX) + ":" + String(entry.bssid[5], HEX));
                 pwngridAdvertise(1, "(^_^)");
                 lastPwnedAP = attackVector;
                 updateUi(true, false);

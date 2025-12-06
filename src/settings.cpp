@@ -28,6 +28,8 @@ bool stealth_mode = false;
 String pwngrid_indentity;
 bool advertisePwngrid = true;
 uint64_t lastTokenRefresh;
+String wiggle_api_key = "";
+bool cardputer_adv = false;
 
 // struct personality{
 //     uint16_t nap_time;
@@ -327,6 +329,9 @@ bool initVars() {
 
         if(config["lastTokenRefresh"].is<uint64_t>()) advertisePwngrid = config["lastTokenRefresh"].as<uint64_t>();
         else configChanged = true;
+
+        if(config["wiggle_api_key"].is<const char*>()) wiggle_api_key = String(config["wiggle_api_key"].as<const char*>());
+        else configChanged = true;
     } else {
         logMessage("Conf file not found, creating one");
         configChanged = true;
@@ -352,6 +357,7 @@ bool initVars() {
     config["pwngrid_indentity"] = pwngrid_indentity;
     config["advertise_pwngrid"] = advertisePwngrid;
     config["lastTokenRefresh"] = lastTokenRefresh;
+    config["wiggle_api_key"] = wiggle_api_key;
 
     if (configChanged) {
         logMessage("Config updated with missing/default values, saving...");
@@ -392,6 +398,7 @@ bool saveSettings(){
     config["pwngrid_indentity"] = pwngrid_indentity;
     config["advertise_pwngrid"] = advertisePwngrid;
     config["lastTokenRefresh"] = lastTokenRefresh;
+    config["wiggle_api_key"] = wiggle_api_key;
     
     logMessage("JSON data creation successful, proceeding to save");
     FConf = SD.open(NEW_CONFIG_FILE, FILE_WRITE, false);

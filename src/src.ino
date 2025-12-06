@@ -30,34 +30,6 @@ bool isSoundPlayed = false;
 uint32_t last_mood_switch = 10001;
 uint8_t wakeUpList[] = {0, 1, 2};
 
-
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "esp_task_wdt.h"
-
-void wdt_petter(void *arg) {
-    // register this task with the watchdog
-    esp_task_wdt_add(NULL);
-
-    while (true) {
-        esp_task_wdt_reset();        // beep boop my beloved watchdog pls don’t murder the system
-        vTaskDelay(pdMS_TO_TICKS(500));
-    }
-}
-
-void fuck_you_watchdog() {
-
-    xTaskCreatePinnedToCore(
-        wdt_petter,
-        "wdt_petter",
-        2048,
-        NULL,
-        5,
-        NULL,
-        1 // core 1
-    );
-}
-
 #ifdef ENABLE_COREDUMP_LOGGING
 
 extern const char emqxsl_root_cert_pem_start[] asm("_binary_certs_emqxsl_ca_pem_start");
@@ -184,14 +156,22 @@ void initM5() {
 
 void setup() {
   Serial.begin(115200);
+  logMessage("System booting...");
+  initM5();
+  logMessage("Board ID: " + String(M5.getBoard()));
+  if(M5.getBoard() == m5::board_t::board_M5CardputerADV){
+    cardputer_adv = true;
+    logMessage("Cardputer ADV detected, enabling ADV features");
+    pinMode(LORA_RST, OUTPUT);
+    digitalWrite(LORA_RST, LOW);   // hold SX1262 in reset - this will ensure it doesn't interfere with SD card init
+    delay(50);
+  }
   wifion();
   sdSPI.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);  
-  logMessage("System booting...");
   #ifdef ENABLE_COREDUMP_LOGGING
   esp_core_dump_init();
 
   #endif
-  initM5();
   initVars();
   M5.Display.setBrightness(brightness);
   initColorSettings();

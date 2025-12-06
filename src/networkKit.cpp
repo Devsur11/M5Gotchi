@@ -125,9 +125,10 @@ void broadcastFakeSSIDs(String ssidList[], int ssidCount, bool sound) {
       nextChannel();
 
       for (int ssidIndex = 0; ssidIndex < ssidCount; ssidIndex++) {
-        //if(ssidList[ssidIndex].compareTo("")){ssidIndex++;}
-        String ssid = ssidList[ssidIndex];
-        int ssidLen = ssid.length();
+        // avoid copying String objects to reduce heap churn
+        const String &ssidRef = ssidList[ssidIndex];
+        const char *ssid_cstr = ssidRef.c_str();
+        int ssidLen = ssidRef.length();
 
         // Randomize MAC address for each SSID
         randomMac();
@@ -141,7 +142,7 @@ void broadcastFakeSSIDs(String ssidList[], int ssidCount, bool sound) {
         memcpy(&beaconPacket[38], emptySSID, 32);
 
         // Copy the actual SSID into the beacon frame
-        memcpy(&beaconPacket[38], ssid.c_str(), ssidLen);
+        memcpy(&beaconPacket[38], ssid_cstr, ssidLen);
 
         // Set the current channel in the beacon frame
         beaconPacket[82] = wifi_channel;
@@ -154,24 +155,130 @@ void broadcastFakeSSIDs(String ssidList[], int ssidCount, bool sound) {
           }
         } else {
           uint16_t tmpPacketSize = (109 - 32) + ssidLen;
-          uint8_t* tmpPacket = new uint8_t[tmpPacketSize];
-
-          // Copy the first part of the beacon packet
-          memcpy(&tmpPacket[0], &beaconPacket[0], 37 + ssidLen);
-          tmpPacket[37] = ssidLen; // Update SSID length
+          // use a stack buffer to avoid heap allocation
+          uint8_t tmpPacket[256];
+          // Copy the first part of the beacon packet (up to SSID length field)
+          memcpy(&tmpPacket[0], &beaconPacket[0], 37);
+          tmpPacket[37] = (uint8_t)ssidLen; // Update SSID length
+          // copy SSID
+          memcpy(&tmpPacket[38], ssid_cstr, ssidLen);
+          // copy rest of tail
           memcpy(&tmpPacket[38 + ssidLen], &beaconPacket[70], 39);
 
           for (int k = 0; k < 3; k++) {
             packetCounter += esp_wifi_80211_tx(WIFI_IF_STA, tmpPacket, tmpPacketSize, 0) == 0;
             delay(1);
           }
-
-          delete tmpPacket;
         }
       }
     }
 
     // Output packet rate every second
+    if (currentTime - packetRateTime > 1000) {
+      packetRateTime = currentTime;
+      drawInfoBox("Beacon spam", "Packets/sec: " + String(packetCounter) , "Press ENTER to stop", false, false);
+      logMessage("Packets/s: ");
+      logMessage(String(packetCounter));
+      packetCounter = 0;
+    }
+  }
+}
+
+// Optimized version accepting C-style strings to avoid constructing Arduino Strings
+void broadcastFakeSSIDs(const char * const ssidList[], int ssidCount, bool sound) {
+  const uint8_t channels[] = {1, 6, 11};
+  const bool wpa2 = true;
+  const bool appendSpaces = true;
+
+  char emptySSID[32];
+  uint8_t channelIndex = 0;
+  uint8_t macAddr[6];
+  uint8_t wifi_channel = 1;
+  uint32_t currentTime = 0;
+  uint32_t packetSize = 0;
+  uint32_t packetCounter = 0;
+  uint32_t attackTime = 0;
+  uint32_t packetRateTime = 0;
+
+  uint8_t beaconPacket[109] = {
+    0x80, 0x00, 0x00, 0x00,
+    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+    0x01, 0x02, 0x03, 0x04, 0x05, 0x06,
+    0x01, 0x02, 0x03, 0x04, 0x05, 0x06,
+    0x00, 0x00,
+    0x83, 0x51, 0xf7, 0x8f, 0x0f, 0x00, 0x00, 0x00,
+    0xe8, 0x03,
+    0x31, 0x00,
+    0x00, 0x20,
+  };
+  // Fill 32 spaces
+  for (int i = 0; i < 32; i++) emptySSID[i] = ' ';
+  packetSize = sizeof(beaconPacket);
+  if (!wpa2) {
+    beaconPacket[34] = 0x21;
+    packetSize -= 26;
+  }
+
+  auto randomMac = [&macAddr]() {
+    for (int i = 0; i < 6; i++) macAddr[i] = random(256);
+  };
+
+  auto nextChannel = [&wifi_channel, &channelIndex, &channels]() {
+    if (sizeof(channels) > 1) {
+      uint8_t ch = channels[channelIndex];
+      channelIndex = (channelIndex + 1) % (sizeof(channels));
+      wifi_channel = ch;
+      esp_wifi_set_channel(wifi_channel, WIFI_SECOND_CHAN_NONE);
+    }
+  };
+
+  logMessage("Hello, NodeMCU! Broadcasting fake SSIDs... (C-list)");
+  wifion();
+  esp_wifi_set_channel(channels[0], WIFI_SECOND_CHAN_NONE);
+
+  while (true) {
+    M5.update();
+    M5Cardputer.update();
+    if(M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER)) return ;
+    bool keyboard_changed = M5Cardputer.Keyboard.isChange();
+    if(keyboard_changed) { Sound(10000, 100, sound); }
+    currentTime = millis();
+
+    if (currentTime - attackTime > 100) {
+      attackTime = currentTime;
+      nextChannel();
+
+      for (int ssidIndex = 0; ssidIndex < ssidCount; ssidIndex++) {
+        const char *ssid = ssidList[ssidIndex];
+        int ssidLen = strlen(ssid);
+        randomMac();
+        macAddr[5] = ssidIndex;
+        memcpy(&beaconPacket[10], macAddr, 6);
+        memcpy(&beaconPacket[16], macAddr, 6);
+        memcpy(&beaconPacket[38], emptySSID, 32);
+        memcpy(&beaconPacket[38], ssid, ssidLen);
+        beaconPacket[82] = wifi_channel;
+
+        if (appendSpaces) {
+          for (int k = 0; k < 3; k++) {
+            packetCounter += esp_wifi_80211_tx(WIFI_IF_STA, beaconPacket, packetSize, 0) == 0;
+            delay(1);
+          }
+        } else {
+          uint16_t tmpPacketSize = (109 - 32) + ssidLen;
+          uint8_t tmpPacket[256];
+          memcpy(&tmpPacket[0], &beaconPacket[0], 37);
+          tmpPacket[37] = (uint8_t)ssidLen;
+          memcpy(&tmpPacket[38], ssid, ssidLen);
+          memcpy(&tmpPacket[38 + ssidLen], &beaconPacket[70], 39);
+          for (int k = 0; k < 3; k++) {
+            packetCounter += esp_wifi_80211_tx(WIFI_IF_STA, tmpPacket, tmpPacketSize, 0) == 0;
+            delay(1);
+          }
+        }
+      }
+    }
+
     if (currentTime - packetRateTime > 1000) {
       packetRateTime = currentTime;
       drawInfoBox("Beacon spam", "Packets/sec: " + String(packetCounter) , "Press ENTER to stop", false, false);
