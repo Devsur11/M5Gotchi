@@ -17,6 +17,49 @@ struct Entry {
   bool isDir;
 };
 
+// List of protected critical files and folders
+static const char* PROTECTED_FILES[] = {
+  "m5gothi.conf",
+  "personality.conf",
+  "uploaded.json",
+  "cracked.json"
+};
+
+static const char* PROTECTED_FOLDERS[] = {
+  "pwngrid"
+};
+
+static const int NUM_PROTECTED_FILES = 4;
+static const int NUM_PROTECTED_FOLDERS = 1;
+
+// Check if a file/folder path is protected
+static bool isPathProtected(const String &path) {
+  // Get the last component of the path
+  int lastSlash = path.lastIndexOf('/');
+  String name = (lastSlash >= 0) ? path.substring(lastSlash + 1) : path;
+  
+  // Check protected files
+  for (int i = 0; i < NUM_PROTECTED_FILES; i++) {
+    if (name.equals(PROTECTED_FILES[i])) {
+      return true;
+    }
+  }
+  
+  // Check protected folders
+  for (int i = 0; i < NUM_PROTECTED_FOLDERS; i++) {
+    if (name.equals(PROTECTED_FOLDERS[i])) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+// Check if developer mode is enabled (CTRL + FN pressed together)
+static bool isDeveloperMode() {
+  return M5Cardputer.Keyboard.isKeyPressed(KEY_LEFT_CTRL) && M5Cardputer.Keyboard.isKeyPressed(KEY_FN);
+}
+
 static void listDirectory(const String &path, std::vector<Entry> &out) {
   out.clear();
   File dir = SD.open(path.c_str());
@@ -573,9 +616,24 @@ void sdmanager::runFileManager() {
           M5.update();
           M5Cardputer.update();
           if (M5Cardputer.Keyboard.isKeyPressed('v')) { debounceDelay(); viewFile(full); break; }
-          if (M5Cardputer.Keyboard.isKeyPressed('e')) { debounceDelay(); editFile(full); break; }
+          if (M5Cardputer.Keyboard.isKeyPressed('e')) {
+            debounceDelay();
+            // Check if file is protected
+            if (isPathProtected(full)) {
+              // Show protection warning and ask for developer mode
+              drawInfoBox("PROTECTED", "Press CTRL+FN to edit", "critical firmware files", true, true);
+              break;
+            }
+            editFile(full);
+            break;
+          }
           if (M5Cardputer.Keyboard.isKeyPressed('m')) {
             debounceDelay();
+            // Check if file is protected
+            if (isPathProtected(full)) {
+              drawInfoBox("PROTECTED", "Cannot move/rename", "critical firmware files", true, true);
+              break;
+            }
             String newname = userInput("Move/rename to:", name, 128);
             if (newname.length()) {
               String target = newname;
@@ -596,6 +654,14 @@ void sdmanager::runFileManager() {
           }
           if (M5Cardputer.Keyboard.isKeyPressed('d')) {
             debounceDelay();
+            
+            // Check if file is protected
+            if (isPathProtected(full)) {
+              // Show protection warning
+              drawInfoBox("PROTECTED", "This file/folder is critical", "to firmware functionality", true, true);
+              break;
+            }
+            
             if (drawQuestionBox("Delete?", "Delete file:", name)) {
               // if it's a directory, ask for recursive delete
               File probe = SD.open(full.c_str());
@@ -674,6 +740,14 @@ void sdmanager::runFileManager() {
       String full = curPath;
       if (!full.endsWith("/")) full += "/";
       full += name;
+      
+      // Check if file is protected
+      if (isPathProtected(full)) {
+        // Show protection warning with developer mode hint
+        drawInfoBox("PROTECTED", "This file/folder is critical", "Dev mode: CTRL+FN to override", true, true);
+        continue;
+      }
+      
       if (drawQuestionBox("Delete?", "Confirm delete", name)) {
         if (entries[cur].isDir) {
           // check if empty
