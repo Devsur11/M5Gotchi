@@ -22,15 +22,22 @@ static const char* PROTECTED_FILES[] = {
   "m5gothi.conf",
   "personality.conf",
   "uploaded.json",
-  "cracked.json"
+  "cracked.json",
+  "token.json",
+  "contacts.json",
+  "id_rsa",
+  "id_rsa.pub"
 };
 
 static const char* PROTECTED_FOLDERS[] = {
-  "pwngrid"
+  "pwngrid",
+  "keys",
+  "chats",
+  "handshake"
 };
 
-static const int NUM_PROTECTED_FILES = 4;
-static const int NUM_PROTECTED_FOLDERS = 1;
+static const int NUM_PROTECTED_FILES = 8;
+static const int NUM_PROTECTED_FOLDERS = 4;
 
 // Check if a file/folder path is protected
 static bool isPathProtected(const String &path) {
@@ -55,9 +62,10 @@ static bool isPathProtected(const String &path) {
   return false;
 }
 
-// Check if developer mode is enabled (CTRL + FN pressed together)
+// Check if developer mode is enabled
 static bool isDeveloperMode() {
-  return M5Cardputer.Keyboard.isKeyPressed(KEY_LEFT_CTRL) && M5Cardputer.Keyboard.isKeyPressed(KEY_FN);
+  delay(100);
+  return M5Cardputer.Keyboard.isKeyPressed(KEY_LEFT_CTRL);
 }
 
 static void listDirectory(const String &path, std::vector<Entry> &out) {
@@ -334,7 +342,6 @@ static void editFile(const String &fullpath) {
     int y = 5;
     int start = scrollLine;
     
-    //switch to next line if current line wrap overrides hints area
     
 
     // draw lines with cursor on current line
@@ -363,8 +370,8 @@ static void editFile(const String &fullpath) {
       if (endChar < 0) endChar = 0;
       segments.push_back(fullLine.substring(0, endChar));
       taken = endChar;
-      // subsequent segments: no prefix, use wrapPx
-      while (taken < (int)fullLine.length()) {
+      // subsequent segments: no prefix, use wrapPx - wrap only selected option
+      while ((taken < (int)fullLine.length()) && idx == curLine) {
         int remain = fullLine.length() - taken;
         int e = taken + remain;
         while (e > taken && canvas_main.textWidth(fullLine.substring(taken, e)) > wrapPx) e--;
@@ -376,19 +383,21 @@ static void editFile(const String &fullpath) {
       // draw background highlight if current line
       if (idx == curLine) {
         int height = 14 * (int)segments.size();
-        canvas_main.fillRect(4, y - 2, canvas_main.width() - 14, height, tx_color_rgb565);
-        if(height + y > canvas_main.height() - 24){
-          //scroll down to fit hints area
-          scrollLine++;
-          if(scrollLine > curLine) scrollLine = curLine;
-          break; //redraw
-        }
+        canvas_main.fillRect(4, y - 2, canvas_main.width() - 14, height -2, tx_color_rgb565);
+        
         canvas_main.setTextColor(bg_color_rgb565);
         // draw segments: first with prefix, others indented after prefix
         for (size_t si = 0; si < segments.size(); ++si) {
           if (si == 0) canvas_main.drawString(prefix + segments[si], 6, y);
-          else canvas_main.drawString(segments[si], 6 + prefixW, y);
-
+          else {
+            if(height + y > canvas_main.height() - 24){
+              //scroll down to fit hints area
+              scrollLine++;
+              if(scrollLine > curLine) scrollLine = curLine;
+              break; //redraw
+            }
+            canvas_main.drawString(segments[si], 6 + prefixW, y);
+          }
           // draw cursor if it falls in this segment
           int charsBefore = 0;
           for (size_t k = 0; k < si; ++k) charsBefore += segments[k].length();
@@ -397,12 +406,12 @@ static void editFile(const String &fullpath) {
             if (curCol >= charsBefore && curCol <= charsBefore + segLen) {
               int offsetInSeg = curCol - charsBefore;
               int cursorX = 6 + prefixW + canvas_main.textWidth(segments[si].substring(0, offsetInSeg));
-              if (cursorX < canvas_main.width() - 18) canvas_main.fillRect(cursorX, y, 2, 12, bg_color_rgb565);
+              if (cursorX < canvas_main.width() - 18) canvas_main.fillRect(cursorX, y - 1 , 2, 10, bg_color_rgb565);
             }
             // special case: cursor at end (append)
             if (curCol > (int)fullLine.length()) {
               int cursorX = 6 + prefixW + canvas_main.textWidth(fullLine);
-              if (cursorX < canvas_main.width() - 18) canvas_main.fillRect(cursorX, y, 2, 12, bg_color_rgb565);
+              if (cursorX < canvas_main.width() - 18) canvas_main.fillRect(cursorX, y - 1, 2, 10, bg_color_rgb565);
             }
           }
           y += 12;
@@ -421,8 +430,11 @@ static void editFile(const String &fullpath) {
 
     canvas_main.setTextSize(1);
     canvas_main.setTextColor(tx_color_rgb565);
-    String mode = insertMode ? "[INSERT]" : "[NORMAL]";
-    String hints = mode + " .:down ;:up h:left l:right i:insert a:append o:newline x:del s:save q:quit";
+    //make a rect for hints area
+    canvas_main.fillRect(0, canvas_main.height() - 14, canvas_main.width(), 14, bg_color_rgb565);
+    // draw hints marquee
+    String mode = insertMode ? " [INSERT]" : " [NORMAL]";
+    String hints = mode + " i:insert a:append o:newline x:del s:save q:quit";
     // marquee for hints if too long (leave space for scrollbar)
     int hintW = canvas_main.textWidth(hints);
     int hintAvailW = canvas_main.width() - 18;
@@ -469,6 +481,16 @@ static void editFile(const String &fullpath) {
     M5.update();
     M5Cardputer.update();
 
+    //is any key pressed set hints marquee to start
+    static bool anyKeyPressed = false;
+    if (M5Cardputer.Keyboard.isPressed()) {
+      anyKeyPressed = true;
+      editHintOffset = 0;
+      editHintTick = millis();
+    } else {
+      anyKeyPressed = false;
+    }
+
     if (insertMode) {
 
       // backtick to exit insert mode
@@ -513,11 +535,11 @@ static void editFile(const String &fullpath) {
           if (curCol > (int)lines[curLine].length()) curCol = lines[curLine].length();
         }
       }
-      if (M5Cardputer.Keyboard.isKeyPressed('h')) {
+      if (M5Cardputer.Keyboard.isKeyPressed('h') || M5Cardputer.Keyboard.isKeyPressed(',')) {
         debounceDelay();
         if (curCol > 0) curCol--;
       }
-      if (M5Cardputer.Keyboard.isKeyPressed('l')) {
+      if (M5Cardputer.Keyboard.isKeyPressed('l') || M5Cardputer.Keyboard.isKeyPressed('/')) {
         debounceDelay();
         if (curCol < (int)lines[curLine].length()) curCol++;
       }
@@ -599,18 +621,47 @@ void sdmanager::runFileManager() {
       full += name;
       if (entries[cur].isDir) {
         // enter dir
+        canvas_main.setTextDatum(middle_center);
+        canvas_main.setTextSize(2);
+        canvas_main.fillRect( canvas_main.textWidth("Opening...") / 2 - 10,
+                             canvas_main.height() / 2 - 16,
+                             canvas_main.textWidth("Opening...") + 20,
+                             32,
+                             bg_color_rgb565);
+        canvas_main.setTextColor(tx_color_rgb565);
+        canvas_main.drawString("Opening...", canvas_main.width() / 2, canvas_main.height() / 2);
+        pushAll();
         curPath = full;
         listDirectory(curPath, entries);
         cur = 0; scroll = 0;
       } else {
+        canvas_main.setTextDatum(middle_center);
+        canvas_main.setTextSize(2);
+        canvas_main.fillRect( canvas_main.textWidth("Reading...") / 2 - 10,
+                             canvas_main.height() / 2 - 16,
+                             canvas_main.textWidth("Reading...") + 20,
+                             32,
+                             bg_color_rgb565);
+        canvas_main.setTextColor(tx_color_rgb565);
+        canvas_main.drawString("Reading...", canvas_main.width() / 2, canvas_main.height() / 2);
+        pushAll();
         // file: show submenu: view/edit/delete
+        canvas_main.setTextDatum(top_left);
         drawTopCanvas(); drawBottomCanvas();
         canvas_main.fillSprite(bg_color_rgb565);
         canvas_main.setTextSize(1.5);
         canvas_main.setTextColor(tx_color_rgb565);
         canvas_main.drawString(name, 6, 20);
         canvas_main.setTextSize(1);
-        canvas_main.drawString("v:view  e:edit  m:move/rename  d:delete  ENTER:back", 6, 60);
+        //show file size and modified time
+        File f = SD.open(full.c_str(), FILE_READ);
+        if (f) {
+          size_t fsize = f.size();
+          String sizeStr = String(fsize) + " bytes";
+          canvas_main.drawString(sizeStr, 6, 40);
+          f.close();
+        }
+        canvas_main.drawString("v:view e:edit m:move/rename d:del `:back", 2, canvas_main.height() - 12);
         pushAll();
         while (true) {
           M5.update();
@@ -619,9 +670,10 @@ void sdmanager::runFileManager() {
           if (M5Cardputer.Keyboard.isKeyPressed('e')) {
             debounceDelay();
             // Check if file is protected
-            if (isPathProtected(full)) {
+            if (isPathProtected(full)  && !isDeveloperMode()) {
               // Show protection warning and ask for developer mode
-              drawInfoBox("PROTECTED", "Press CTRL+FN to edit", "critical firmware files", true, true);
+              drawInfoBox("PROTECTED", "Cannot edit", "critical firmware files", true, true);
+              debounceDelay();
               break;
             }
             editFile(full);
@@ -630,8 +682,9 @@ void sdmanager::runFileManager() {
           if (M5Cardputer.Keyboard.isKeyPressed('m')) {
             debounceDelay();
             // Check if file is protected
-            if (isPathProtected(full)) {
+            if (isPathProtected(full) && !isDeveloperMode()) {
               drawInfoBox("PROTECTED", "Cannot move/rename", "critical firmware files", true, true);
+              debounceDelay();
               break;
             }
             String newname = userInput("Move/rename to:", name, 128);
@@ -656,9 +709,10 @@ void sdmanager::runFileManager() {
             debounceDelay();
             
             // Check if file is protected
-            if (isPathProtected(full)) {
+            if (isPathProtected(full)  && !isDeveloperMode()) {
               // Show protection warning
               drawInfoBox("PROTECTED", "This file/folder is critical", "to firmware functionality", true, true);
+              debounceDelay();
               break;
             }
             
@@ -684,7 +738,7 @@ void sdmanager::runFileManager() {
             }
             break;
           }
-          if (M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER)) { debounceDelay(); break; }
+          if (M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER) || M5Cardputer.Keyboard.isKeyPressed('`')) { debounceDelay(); break; }
         }
       }
     }
@@ -744,7 +798,8 @@ void sdmanager::runFileManager() {
       // Check if file is protected
       if (isPathProtected(full)) {
         // Show protection warning with developer mode hint
-        drawInfoBox("PROTECTED", "This file/folder is critical", "Dev mode: CTRL+FN to override", true, true);
+        drawInfoBox("PROTECTED", "This file/folder is critical", "for firmware to work", true, true);
+        debounceDelay();
         continue;
       }
       

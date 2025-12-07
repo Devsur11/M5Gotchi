@@ -233,7 +233,7 @@ menu wardrivingMenuWithWiggle[] = {
 };
 
 menu wardrivingMenuWithWiggleUnsett[] = {
-  {"Local wardriving mode", 18},
+  {"Wardriving mode", 18},
   {"View logs", 19},
   {"Set up Wiggle.net api key", 25},
 };
@@ -1681,6 +1681,13 @@ void runApp(uint8_t appID){
     if(appID == 18){
       drawInfoBox("Insert cap!", "Instert lora cap now", "then press enter.", true, false);
       logMessage("Starting wardriver!");
+      canvas_main.clear(bg_color_rgb565);
+      canvas_main.setTextSize(1.5);
+      canvas_main.setTextDatum(middle_center);
+      canvas_main.drawString("Waiting for time sync...", canvas_center_x, canvas_h/2);
+      pushAll();
+      startWardriveSession(120000); // 2 minute GPS fix timeout
+      canvas_main.fillRect(0, (canvas_h/2)-10, 250, 20, bg_color_rgb565);
       canvas_main.fillScreen(bg_color_rgb565);
       canvas_main.setTextColor(tx_color_rgb565);
       canvas_main.clear(bg_color_rgb565);
@@ -1717,6 +1724,7 @@ void runApp(uint8_t appID){
         }
         else{
           canvas_main.setTextSize(1.5);
+          canvas_main.fillRect(0, (canvas_h/2)-10, 120, 20, bg_color_rgb565);
           canvas_main.drawString("No GPS lock!", 2, (canvas_h/2) + 10);
           canvas_main.setTextSize(1);
           canvas_main.setTextDatum(middle_left);
