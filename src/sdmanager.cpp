@@ -687,7 +687,7 @@ void sdmanager::runFileManager() {
               debounceDelay();
               break;
             }
-            String newname = userInput("Move/rename to:", name, 128);
+            String newname = userInput("Move/rename:", "Type new path for file (old: " + name + ")", 128);
             if (newname.length()) {
               String target = newname;
               // if target is relative (no leading /), put in same directory
@@ -711,7 +711,7 @@ void sdmanager::runFileManager() {
             // Check if file is protected
             if (isPathProtected(full)  && !isDeveloperMode()) {
               // Show protection warning
-              drawInfoBox("PROTECTED", "This file/folder is critical", "to firmware functionality", true, true);
+              drawInfoBox("PROTECTED", "This data is critical", "to firmware functionality", true, true);
               debounceDelay();
               break;
             }
@@ -722,6 +722,18 @@ void sdmanager::runFileManager() {
               if (probe && probe.isDirectory()) {
                 probe.close();
                 if (drawQuestionBox("Recursive?", "Delete directory and all contents?", name)) {
+                  //draw little deleting box
+                  canvas_main.setTextDatum(middle_center);
+                  canvas_main.setTextSize(2);
+                  canvas_main.fillRect( canvas_main.textWidth("Deleting...") / 2 - 10,
+                                       canvas_main.height() / 2 - 16,
+                                       canvas_main.textWidth("Deleting...") + 20,
+                                       32,
+                                       bg_color_rgb565);
+                  canvas_main.setTextColor(tx_color_rgb565);
+                  canvas_main.drawString("Deleting...", canvas_main.width() / 2, canvas_main.height() / 2);
+                  pushAll();
+                  canvas_main.setTextDatum(top_left);
                   if (recursiveDelete(full)) {
                     drawInfoBox("Deleted", name, "", true, false);
                     listDirectory(curPath, entries);
@@ -731,6 +743,17 @@ void sdmanager::runFileManager() {
                 }
               } else {
                 if (probe) probe.close();
+                //draw little deleting box
+                canvas_main.setTextDatum(middle_center);
+                canvas_main.setTextSize(2);
+                canvas_main.fillRect( canvas_main.textWidth("Deleting...") / 2 - 10,
+                                      canvas_main.height() / 2 - 16,
+                                      canvas_main.textWidth("Deleting...") + 20,
+                                      32,
+                                      bg_color_rgb565);
+                canvas_main.setTextColor(tx_color_rgb565);
+                canvas_main.drawString("Deleting...", canvas_main.width() / 2, canvas_main.height() / 2);
+                pushAll();
                 SD.remove(full);
                 listDirectory(curPath, entries);
                 cur = 0; scroll = 0;
@@ -835,5 +858,88 @@ void sdmanager::runFileManager() {
     }
 
     delay(80);
+  }
+}
+
+//simple file selector
+String sdmanager::selectFile(const String allowedExtentions){
+  String selectedFile = "";
+  String currentPath = "/";
+  std::vector<Entry> entries;
+  int curIndex = 0;
+  int scrollIndex = 0;
+
+  while (true) {
+    listDirectory(currentPath, entries);
+    // Filter entries based on allowed extensions
+    std::vector<Entry> filteredEntries;
+    for (size_t i = 0; i < entries.size(); ++i) {
+      if (entries[i].isDir) {
+        filteredEntries.push_back(entries[i]);
+      } else {
+        // check extension
+        int dotIdx = entries[i].name.lastIndexOf('.');
+        if (dotIdx >= 0) {
+          String ext = entries[i].name.substring(dotIdx);
+          if (allowedExtentions.indexOf(ext) >= 0) {
+            filteredEntries.push_back(entries[i]);
+          }
+        }
+      }
+    }
+    entries = filteredEntries;
+
+    drawEntries(currentPath, entries, curIndex, scrollIndex);
+
+    M5.update();
+    M5Cardputer.update();
+
+    if (M5Cardputer.Keyboard.isKeyPressed(';')) {
+      debounceDelay();
+      if (curIndex > 0) curIndex--;
+      if (curIndex < scrollIndex) scrollIndex--;
+    } else if (M5Cardputer.Keyboard.isKeyPressed('.')) {
+      debounceDelay();
+      if (curIndex + 1 < (int)entries.size()) curIndex++;
+      if (curIndex >= scrollIndex + 5) scrollIndex++;
+    } else if (M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER)) {
+      debounceDelay();
+      if (curIndex >= 0 && curIndex < (int)entries.size()) {
+        Entry &e = entries[curIndex];
+        if (e.isDir) {
+          // enter directory
+          if (!currentPath.endsWith("/")) currentPath += "/";
+          currentPath += e.name;
+          curIndex = 0;
+          scrollIndex = 0;
+        } else {
+          // select file
+          selectedFile = currentPath;
+          if (!selectedFile.endsWith("/")) selectedFile += "/";
+          selectedFile += e.name;
+          return selectedFile;
+        }
+      }
+    } else if (M5Cardputer.Keyboard.isKeyPressed(KEY_BACKSPACE)) {
+      debounceDelay();
+      // go up one directory
+      if (currentPath != "/") {
+        int lastSlash = currentPath.lastIndexOf('/');
+        if (lastSlash > 0) {
+          currentPath = currentPath.substring(0, lastSlash);
+        } else {
+          currentPath = "/";
+        }
+        curIndex = 0;
+        scrollIndex = 0;
+      } else {
+        // at root, exit
+        return "";
+      }
+    } else if (M5Cardputer.Keyboard.isKeyPressed('`')) {
+      debounceDelay();
+      // exit
+      return "";
+    }
   }
 }

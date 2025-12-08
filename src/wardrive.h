@@ -10,8 +10,8 @@ struct wardriveStatus{
     bool gpsFixAcquired;
     double latitude;
     double longitude;
-    float hdop;
-    float altitude;
+    double hdop;
+    double altitude;
     String timestampIso;
     uint16_t networksLogged;
     uint8_t networksNow;

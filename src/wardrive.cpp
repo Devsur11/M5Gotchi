@@ -349,45 +349,67 @@ bool uploadToWigle(const String& encodedToken, const char* csvPath, int* outHttp
         return false;
     }
 
-    // Read file into memory (careful with large files; wardrive files are usually small enough)
     File f = SD.open(csvPath, FILE_READ);
     if (!f) {
         if (outHttpCode) *outHttpCode = 0;
         return false;
     }
-    String csv;
-    while (f.available()) {
-        csv += f.readStringUntil('\n');
-        csv += '\n';
+
+    size_t fileSize = f.size();
+    fLogMessage("uploadToWigle: streaming upload, file size: %u bytes", (unsigned)fileSize);
+
+    WiFiClientSecure client;
+    client.setInsecure();
+
+    const char* uploadUrl = "https://api.wigle.net/api/v2/file/upload";
+    const char* host = "wigle.net";
+
+    if (!client.connect(host, 443)) {
+        fLogMessage("uploadToWigle: connection failed");
+        if (outHttpCode) *outHttpCode = 0;
+        f.close();
+        return false;
+    }
+
+    client.print(String("POST /upload HTTP/1.1\r\n"));
+    client.print(String("Host: ") + host + "\r\n");
+    client.print(String("Authorization: Basic ") + encodedToken + "\r\n");
+    client.print("User-Agent: M5Gotchi-ESPBlaster/1.0\r\n");
+    client.print("Content-Type: text/csv\r\n");
+    client.print("Connection: close\r\n");
+    client.print(String("Content-Length: ") + fileSize + "\r\n\r\n");
+
+    const size_t bufSize = 2048;
+    uint8_t buf[bufSize];
+
+    while (true) {
+        int r = f.read(buf, bufSize);
+        if (r <= 0) break;
+        client.write(buf, r);
     }
     f.close();
 
-    // Put your preferred endpoint here. For many upload flows the web endpoint accepts a POST
-    // with CSV body and Basic auth. If Wigle requires multipart/form-data or other params,
-    // this function will need a small change.
-    const char* uploadUrl = "https://wigle.net/upload"; // tweak if API endpoint differs
+    // Read response headers
+    String line;
+    int httpCode = 0;
 
-    WiFiClientSecure *client = new WiFiClientSecure();
-    client->setInsecure(); // or use proper cert validation
-    HTTPClient https;
-    https.begin(*client, uploadUrl);
-    // "Encoded for use" already base64, so set header:
-    https.addHeader("Authorization", String("Basic ") + encodedToken);
-    https.addHeader("Content-Type", "text/csv");
-    https.addHeader("User-Agent", "M5Gotchi-ESPBlaster/1.0");
+    unsigned long timeout = millis() + 8000;
+    while (millis() < timeout) {
+        if (client.available()) {
+            line = client.readStringUntil('\n');
+            if (line.startsWith("HTTP/1.1 ")) {
+                httpCode = line.substring(9, 12).toInt();
+            }
+            if (line == "\r") break;
+        }
+    }
 
-    int code = https.POST((uint8_t*)csv.c_str(), csv.length());
-    String resp;
-    if (code > 0) resp = https.getString();
-    else resp = String();
+    if (outHttpCode) *outHttpCode = httpCode;
+    fLogMessage("uploadToWigle: HTTP %d", httpCode);
 
-    if (outHttpCode) *outHttpCode = code;
-    fLogMessage("uploadToWigle: POST %s -> HTTP %d, resp len %u", uploadUrl, code, (unsigned)resp.length());
-    https.end();
-    delete client;
-
-    return (code >= 200 && code < 300);
+    return (httpCode >= 200 && httpCode < 300);
 }
+
 
 // ---- main wardrive function (signature changed: no filename param) ----
 // - networks: vector of wifiSpeedScan seen at this moment
@@ -458,7 +480,7 @@ wardriveStatus wardrive(const std::vector<wifiSpeedScan>& networks, unsigned lon
         f.println("\"BSSID\",\"SSID\",\"Capabilities\",\"First timestamp seen\",\"Channel\",\"Frequency\",\"RSSI\",\"Latitude\",\"Longitude\",\"Altitude\",\"Accuracy\",\"RCOIs\",\"MfgId\",\"Type\"");
     }
 
-    int written = 0;
+    uint8_t written = 0;
     for (const auto& net : networks) {
         // require GPS location for wigle entries (kismet/wigle behavior)
         if (!bestFix.valid) {

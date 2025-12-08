@@ -1746,14 +1746,22 @@ void runApp(uint8_t appID){
       }
     }
     if(appID == 19){
-      drawInfoBox("Info", "Loading CSV...", "", false, false);
+      File csvFile;
       // Wardriving CSV viewer with search function
-      File csvFile = SD.open("/wardrive.csv", FILE_READ);
-      if (!csvFile) {
-      drawInfoBox("Error", "wardrive.csv not found", "Not wardrived yet?", true, false);
-      menuID = 0;
-      return;
+      String selectedPath = "/wardriving/first_seen.csv";
+      if(drawQuestionBox("Open custom?", "Open from SD, If not", " \"first seen list\" will be used")){
+        csvFile = SD.open(sdmanager::selectFile(".csv"), FILE_READ);
+        selectedPath = csvFile.name();
       }
+      else{
+        csvFile = SD.open("/wardriving/first_seen.csv", FILE_READ);
+      }
+      if (!csvFile) {
+        drawInfoBox("Error", "File not found", "Wrong selection?", true, false);
+        menuID = 0;
+        return;
+      }
+      drawInfoBox("Info", "Loading CSV...", "", false, false);
       
       // Count total lines without storing them all
       uint32_t totalLines = 0;
@@ -1773,9 +1781,9 @@ void runApp(uint8_t appID){
       }
       
       // Function to read a specific line from file without storing all lines
-      auto readLineAtIndex = [](uint32_t lineIndex) -> String {
+      auto readLineAtIndex = [&](uint32_t lineIndex) -> String {
         String result = "";
-        File f = SD.open("/wardrive.csv", FILE_READ);
+        File f = SD.open(selectedPath, FILE_READ);
         if (!f) return result;
         
         uint32_t currentLine = 0;
@@ -1796,21 +1804,22 @@ void runApp(uint8_t appID){
         return result;
       };
 
+
       // Parse CSV helper function
       auto parseCSVLine = [](const String& csvLine) -> std::vector<String> {
-      std::vector<String> fields;
-      String field = "";
-      bool inQuotes = false;
-      for (size_t i = 0; i < csvLine.length(); i++) {
-        char c = csvLine[i];
-        if (c == '"') {
-        inQuotes = !inQuotes;
-        } else if (c == ',' && !inQuotes) {
-        fields.push_back(field);
-        field = "";
-        } else {
-        field += c;
-        }
+        std::vector<String> fields;
+        String field = "";
+        bool inQuotes = false;
+        for (size_t i = 0; i < csvLine.length(); i++) {
+          char c = csvLine[i];
+          if (c == '"') {
+          inQuotes = !inQuotes;
+          } else if (c == ',' && !inQuotes) {
+          fields.push_back(field);
+          field = "";
+          } else {
+          field += c;
+          }
       }
       fields.push_back(field);
       return fields;
@@ -1944,8 +1953,7 @@ void runApp(uint8_t appID){
         canvas_main.setTextSize(1);
         int headerY = 22;
         int col1X = 5;
-        int col2X = 85;
-        int col3X = 165;
+        int col2X = 120;
         int scrollbarX = displayW - 8;
         canvas_main.drawLine(col1X, headerY + 12, displayW - 15, headerY + 12, tx_color_rgb565);
         canvas_main.drawString("SSID", col1X, headerY);
@@ -1973,7 +1981,7 @@ void runApp(uint8_t appID){
         
         // Highlight selected row
         if (selectedIndex == (displayIndex + i)) {
-          canvas_main.fillRect(col1X - 3, rowY - 2, displayW - 15, rowHeight + 2, tx_color_rgb565);
+          canvas_main.fillRect(col1X - 3, rowY - 2, displayW - 15, rowHeight, tx_color_rgb565);
           canvas_main.setTextColor(bg_color_rgb565);
           canvas_main.drawString(">", col1X - 5, rowY);
           canvas_main.drawString(ssid, col1X, rowY);
@@ -2063,9 +2071,9 @@ void runApp(uint8_t appID){
           String bssid = fields[0];
           String authMode = (fields.size() > 2) ? fields[2] : "N/A";
           String channel = (fields.size() > 4) ? fields[4] : "N/A";
-          String rssi = (fields.size() > 5) ? fields[5] : "N/A";
-          String lat = (fields.size() > 6) ? fields[6] : "N/A";
-          String lon = (fields.size() > 7) ? fields[7] : "N/A";
+          String rssi = (fields.size() > 5) ? fields[6] : "N/A";
+          String lat = (fields.size() > 6) ? fields[7] : "N/A";
+          String lon = (fields.size() > 7) ? fields[8] : "N/A";
           
           debounceDelay();
             drawTopCanvas();
@@ -2110,7 +2118,8 @@ void runApp(uint8_t appID){
         debounceDelay();
         }
       }
-      }}if(appID == 20){
+      }}
+      if(appID == 20){
       wifion();
       drawInfoBox("Info", "Scanning for wifi...", "Please wait", false, false);
       int numNetworks = WiFi.scanNetworks();

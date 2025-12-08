@@ -4,4 +4,5 @@
 
 namespace sdmanager {
   void runFileManager();
+  String selectFile(const String allowedExtentions);
 }
