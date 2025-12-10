@@ -199,7 +199,10 @@ menu settings_menu[] = {
   {"Display brightness", 41},
   {"Keyboard Sound", 42},
   {"Advertise Pwngrid presence", 60},
-  {"Connect to wifi", 43},
+  {"Connect to WiFi", 43},
+  {"Connect to WiFi on startup", 29},
+  {"GPS GPIO pins", 30},
+  {"Log GPS data after handshake", 31},
   {"GO button press function", 59},
   {"Log to SD", 58},
   {"Update system", 44},
@@ -228,7 +231,7 @@ menu pwngrid_not_enrolled_menu[] = {
 menu wardrivingMenuWithWiggle[] = {
   {"Wardriving mode", 18},
   {"View logs", 19},
-  {"Upload to Wiggle.net", 26},
+  {"Upload to Wiggle.net", 28},
   {"Reset Wiggle.net config", 27}
 };
 
@@ -1750,8 +1753,8 @@ void runApp(uint8_t appID){
       // Wardriving CSV viewer with search function
       String selectedPath = "/wardriving/first_seen.csv";
       if(drawQuestionBox("Open custom?", "Open from SD, If not", " \"first seen list\" will be used")){
-        csvFile = SD.open(sdmanager::selectFile(".csv"), FILE_READ);
-        selectedPath = csvFile.name();
+        selectedPath = sdmanager::selectFile(".csv");
+        csvFile = SD.open(selectedPath, FILE_READ);
       }
       else{
         csvFile = SD.open("/wardriving/first_seen.csv", FILE_READ);
@@ -2119,7 +2122,7 @@ void runApp(uint8_t appID){
         }
       }
       }}
-      if(appID == 20){
+    if(appID == 20){
       wifion();
       drawInfoBox("Info", "Scanning for wifi...", "Please wait", false, false);
       int numNetworks = WiFi.scanNetworks();
@@ -2530,11 +2533,11 @@ void runApp(uint8_t appID){
     if(appID == 26){
       drawInfoBox("Info", "Please wait", "", false, false);
       if(!(WiFi.status() == WL_CONNECTED)){
-        drawInfoBox("Info", "Network connection needed", "To send messages!", false, false);
+        drawInfoBox("Info", "Network connection needed", "To send stats!", false, false);
         delay(3000);
         runApp(43);
         if(WiFi.status() != WL_CONNECTED){
-          drawInfoBox("ERROR!", "No network connection", "Message send abort", true, false);
+          drawInfoBox("ERROR!", "No network connection", "Stats send abort", true, false);
           menuID = 0;
           return;
         }
@@ -2551,8 +2554,68 @@ void runApp(uint8_t appID){
       menuID = 0;
       return; 
     }
-    if(appID == 27){}
-    if(appID == 28){}
+    if(appID == 27){
+      if(drawQuestionBox("Reset token?", "Are you sure?", "This will remove API key!")){
+        wiggle_api_key = "";
+        if(saveSettings()){
+          drawInfoBox("Succes", "Wigle.net API key", "was removed", true, false);
+          menuID = 0;
+          return;
+        }
+        else{
+          drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);
+          menuID = 0;
+          return;
+        }
+      }
+      menuID = 0;
+    }
+    if(appID == 28){
+      drawInfoBox("Info", "Please wait", "", false, false);
+      if(!(WiFi.status() == WL_CONNECTED)){
+        drawInfoBox("Info", "Network connection needed", "To upload!", false, false);
+        delay(3000);
+        runApp(43);
+        if(WiFi.status() != WL_CONNECTED){
+          drawInfoBox("ERROR!", "No network connection", "Upload abort", true, false);
+          menuID = 0;
+          return;
+        }
+      }
+      drawInfoBox("Info", "Next, select file", "to upload", true, false);
+      String file = sdmanager::selectFile(".csv");
+      if(file == ""){
+        drawInfoBox("Error", "No file selected", "Operation abort", true, false);
+        menuID = 0; 
+        return;
+      }
+      drawInfoBox("Uploading", "Please wait", "This may take some time...", false, false);
+      int *statusCode = 0;
+      int statusToCode;
+      if(uploadToWigle(wiggle_api_key, file.c_str(), statusCode)){
+        drawInfoBox("Succes", "File uploaded", "To wigle.net", false, false);
+        delay(2000);
+        statusToCode = *statusCode;
+      }
+      else{
+        statusToCode = *statusCode;
+        drawInfoBox("ERROR!", "Upload failed!", "Status code: " + String(statusToCode), true, false);
+        menuID = 0;
+        return;
+      }
+      if(statusToCode == 200){
+        drawInfoBox("Succes", "File uploaded", "And registered", true, false);
+      }
+      else if(statusToCode == 500){
+        drawInfoBox("ERROR!", "Server was unable", "to process file", true, false);
+      }
+      else if(statusToCode == 401){
+        drawInfoBox("ERROR!", "Unauthorized", "Check API key", true, false);
+      }
+      else{
+        drawInfoBox("ERROR!", "Upload failed!", "Status code: " + String(statusToCode), true, false);
+      }
+    }
     if(appID == 29){}
     if(appID == 30){}
     if(appID == 31){}

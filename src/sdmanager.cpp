@@ -857,7 +857,7 @@ void sdmanager::runFileManager() {
       }
     }
 
-    delay(80);
+    delay(10);
   }
 }
 
@@ -904,6 +904,16 @@ String sdmanager::selectFile(const String allowedExtentions){
       if (curIndex >= scrollIndex + 5) scrollIndex++;
     } else if (M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER)) {
       debounceDelay();
+      canvas_main.setTextDatum(middle_center);
+      canvas_main.setTextSize(2);
+      canvas_main.fillRect( canvas_main.textWidth("Opening...") / 2 - 10,
+                            canvas_main.height() / 2 - 16,
+                            canvas_main.textWidth("Opening...") + 20,
+                            32,
+                            bg_color_rgb565);
+      canvas_main.setTextColor(tx_color_rgb565);
+      canvas_main.drawString("Opening...", canvas_main.width() / 2, canvas_main.height() / 2);
+      pushAll();
       if (curIndex >= 0 && curIndex < (int)entries.size()) {
         Entry &e = entries[curIndex];
         if (e.isDir) {
@@ -920,7 +930,7 @@ String sdmanager::selectFile(const String allowedExtentions){
           return selectedFile;
         }
       }
-    } else if (M5Cardputer.Keyboard.isKeyPressed(KEY_BACKSPACE)) {
+    } else if (M5Cardputer.Keyboard.isKeyPressed('`')) {
       debounceDelay();
       // go up one directory
       if (currentPath != "/") {

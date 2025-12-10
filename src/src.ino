@@ -236,6 +236,8 @@ void setup() {
   initPwngrid();
   esp_task_wdt_deinit();
   esp_task_wdt_init(60, false); 
+
+  
 }
 
 void wakeUp() {
