@@ -227,6 +227,22 @@ menu pwngrid_not_enrolled_menu[] = {
   {"Enroll with Pwngrid", 12}
 };
 
+// devtools menu
+menu devtools_menu[] = {
+  {"Toggle dev mode", 100},
+  {"Set global var", 101},
+  {"Set global var (freeform)", 108},
+  {"Run app by ID", 102},
+  {"Color picker (BG)", 103},
+  {"Color picker (TX)", 104},
+  {"Toggle coords overlay", 105},
+  {"Toggle serial overlay", 106},
+  {"Skip file checks in dev", 107},
+  {"Speed scan test", 109},
+  {"Coordinate picker", 110},
+  {"Crash test", 111}
+};
+
 //menuID 9 
 menu wardrivingMenuWithWiggle[] = {
   {"Wardriving mode", 18},
@@ -359,6 +375,8 @@ void initUi() {
   canvas_bot.createSprite(display_w, canvas_bot_h);
   canvas_main.createSprite(display_w, canvas_h);
   logMessage("UI initialized");
+  // enable logger overlay if configured
+  loggerSetOverlayEnabled(serial_overlay);
 }
 
 uint8_t returnBrightness(){return currentBrightness;}
@@ -428,7 +446,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi) {
     #endif
   } 
   else if (menuID == 2){
-    drawMenuList( wifi_menu , 2, 5);
+    drawMenuList( settings_menu , 6, 19);
   }
   #ifdef USE_EXPERIMENTAL_APPS
   else if (menuID == 3){
@@ -471,6 +489,9 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi) {
       drawMenuList(wardrivingMenuWithWiggleUnsett, 9, 3);
     }
   }
+  else if (menuID == 99) {
+    drawMenuList(devtools_menu, 99, 12);
+  }
   else if (menuID == 0)
   {
     drawMood(mood_face, mood_phrase);
@@ -480,6 +501,58 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi) {
   #ifdef LITE_VERSION
     drawMood(mood_face, mood_phrase);
   #endif 
+
+  // draw developer overlays on canvas_main before pushing to display
+  if (serial_overlay) {
+    // fetch logs
+    std::vector<String> lines;
+    loggerGetLines(lines, 6);
+    if (lines.size()) {
+      // ensure top-left datum for proper left-aligned text
+      canvas_main.setTextDatum(top_left);
+      // draw overlay box in top-right
+      canvas_main.setTextSize(1);
+      canvas_main.setTextColor(tx_color_rgb565);
+      int boxW = 0;
+      for (auto &l : lines) {
+        int w = canvas_main.textWidth(l);
+        if (w > boxW) boxW = w;
+      }
+      boxW += 8;
+      int boxH = 12 * (int)lines.size() + 6;
+      int x = canvas_main.width() - boxW - 2;
+      int y = 2;
+      canvas_main.fillRect(x, y, boxW, boxH, RGBToRGB565(0,0,0));
+      canvas_main.setTextColor(tx_color_rgb565);
+      int ly = y + 4;
+      for (auto &l : lines) {
+        // if text wider than available, trim end and append ellipsis
+        int maxChars = l.length();
+        while (maxChars > 0 && canvas_main.textWidth(l.substring(0, maxChars)) > (boxW - 8)) maxChars--;
+        String display = l;
+        if (maxChars < (int)l.length()) {
+          if (maxChars > 3) display = l.substring(0, maxChars - 3) + "...";
+          else display = l.substring(0, maxChars);
+        }
+        canvas_main.drawString(display, x + 4, ly);
+        ly += 12;
+      }
+    }
+  }
+  if (coords_overlay) {
+    // approximate coordinates of selected menu item
+    if (menuID != 0) {
+      int lineH = 18;
+      int x = 18; // where entries are drawn
+      int y = menu_current_opt * lineH + 2;
+      // draw crosshair and text
+      canvas_main.setTextSize(1);
+      canvas_main.setTextColor(tx_color_rgb565);
+      canvas_main.drawLine(x - 4, y, x + 20, y, tx_color_rgb565);
+      canvas_main.drawLine(x, y - 4, x, y + 12, tx_color_rgb565);
+      canvas_main.drawString("X:" + String(x) + " Y:" + String(y), x + 24, y);
+    }
+  }
 
   M5.Display.startWrite();
   if (show_toolbars) {
@@ -511,6 +584,24 @@ void drawTopCanvas() {
   char buffer[9];
   sprintf(buffer, "%02u:%02u:%02lu", hours, minutes, seconds);
   canvas_top.drawString("UPS " + String(M5.Power.getBatteryLevel()) + "%  UP:" + buffer , display_w, 3);
+  // Developer mode indicator
+  extern bool dev_mode;
+  extern bool serial_overlay;
+  extern bool coords_overlay;
+  if (dev_mode) {
+    canvas_top.setTextDatum(top_left);
+    canvas_top.setTextSize(1);
+    canvas_top.setTextColor(tx_color_rgb565);
+    canvas_top.drawString("DEV", 3, 3);
+  }
+  if (serial_overlay) {
+    canvas_top.setTextDatum(top_left);
+    canvas_top.drawString("LOGS", 40, 3);
+  }
+  if (coords_overlay) {
+    canvas_top.setTextDatum(top_left);
+    canvas_top.drawString("XY", 80, 3);
+  }
   canvas_top.drawLine(0, canvas_top_h - 1, display_w, canvas_top_h - 1);
 }
 
@@ -2615,6 +2706,146 @@ void runApp(uint8_t appID){
     if(appID == 30){}
     if(appID == 31){}
     if(appID == 32){}
+    // Devtools
+    if(appID == 99) {
+      debounceDelay();
+      drawMenuList(devtools_menu, 99, 9);
+      return;
+    }
+    if(appID == 100){
+      //pin protection
+      String dev_mode_pin = "2147";
+      if(userInput("Dev Mode PIN", "Enter PIN to toggle dev mode", 10) != dev_mode_pin){
+        drawInfoBox("Error", "Wrong PIN", "First learn how to code!!!", true, false);
+        return;
+      }
+
+      dev_mode = !dev_mode;
+      drawInfoBox("Dev Mode", dev_mode?"Enabled":"Disabled", "", true, false);
+      saveSettings();
+      return;
+    }
+    if(appID == 101){
+      // Set global var: pick from list for safety
+      String varList[] = {"hostname","bg_color","tx_color","sound","brightness","pwnagothiMode","sd_logging","skip_eapol_check","advertisePwngrid","pwned_ap","dev_mode","toogle_pwnagothi_with_gpio0","lite_mode_wpa_sec_sync_on_startup","skip_file_manager_checks_in_dev"};
+      String picked = "";
+      int choice = drawMultiChoice("Set variable", varList, 11, 99, 0);
+      if (choice >= 0 && choice < 14) {
+        picked = varList[choice];
+        String val = userInput("Set var", "New value for " + picked + ":", 128);
+        if(val.length()){
+          // known variables mapping
+          if(picked == "hostname") hostname = val;
+          else if(picked == "bg_color") { bg_color = val; initColorSettings(); }
+          else if(picked == "tx_color") { tx_color = val; initColorSettings(); }
+          else if(picked == "sound") sound = (val == "1" || val.equalsIgnoreCase("true"));
+          else if(picked == "brightness") brightness = val.toInt();
+          else if(picked == "pwnagothiMode") pwnagothiMode = (val == "1" || val.equalsIgnoreCase("true"));
+          else if(picked == "sd_logging") sd_logging = (val == "1" || val.equalsIgnoreCase("true"));
+          else if(picked == "skip_eapol_check") skip_eapol_check = (val == "1" || val.equalsIgnoreCase("true"));
+          else if(picked == "advertisePwngrid") advertisePwngrid = (val == "1" || val.equalsIgnoreCase("true"));
+          else if(picked == "pwned_ap") pwned_ap = (uint16_t)val.toInt();
+          else if(picked == "dev_mode") dev_mode = (val == "1" || val.equalsIgnoreCase("true"));
+          else if(picked == "toogle_pwnagothi_with_gpio0") toogle_pwnagothi_with_gpio0 = (val == "1" || val.equalsIgnoreCase("true"));
+          else if(picked == "lite_mode_wpa_sec_sync_on_startup") lite_mode_wpa_sec_sync_on_startup = (val == "1" || val.equalsIgnoreCase("true"));
+          else if(picked == "skip_file_manager_checks_in_dev") skip_file_manager_checks_in_dev = (val == "1" || val.equalsIgnoreCase("true"));
+          else {
+            drawInfoBox("Unknown variable", picked, "Not supported by setter.", true, true);
+            return;
+          }
+          saveSettings();
+          drawInfoBox("OK", "Set " + picked, val, true, false);
+        }
+      }
+      return;
+    }
+    if(appID == 102){
+      int id = getNumberfromUser("Run app","ID to run", 255);
+      if(id > 0) runApp((uint8_t)id);
+      return;
+    }
+    if(appID == 103){
+      // color picker for background
+      String newColor = colorPickerUI(false, bg_color);
+      if(newColor.length()) { bg_color = newColor; initColorSettings(); saveSettings(); }
+      return;
+    }
+    if(appID == 104){
+      // color picker for text
+      String newColor = colorPickerUI(true, tx_color);
+      if(newColor.length()) { tx_color = newColor; initColorSettings(); saveSettings(); }
+      return;
+    }
+    if(appID == 105){
+      coords_overlay = !coords_overlay;
+      drawInfoBox("Coords Overlay", coords_overlay?"Enabled":"Disabled", "", true, false);
+      saveSettings();
+      return;
+    }
+    if(appID == 106){
+      serial_overlay = !serial_overlay;
+      loggerSetOverlayEnabled(serial_overlay);
+      drawInfoBox("Serial Overlay", serial_overlay?"Enabled":"Disabled", "", true, false);
+      saveSettings();
+      return;
+    }
+    if(appID == 107){
+      skip_file_manager_checks_in_dev = !skip_file_manager_checks_in_dev;
+      drawInfoBox("Skip File Checks", skip_file_manager_checks_in_dev?"Enabled":"Disabled", "", true, false);
+      saveSettings();
+      return;
+    }
+    if(appID == 109){
+      if(!dev_mode){ drawInfoBox("Dev only", "Enable dev mode to run.", "", true, false); return; }
+      drawInfoBox("Speed scan", "Running speed test", "Please wait...", false, false);
+      speedScanTestAndPrintResults();
+      drawInfoBox("Done", "Speed scan finished", "", true, false);
+      return;
+    }
+    if(appID == 110){
+      if(!dev_mode){ drawInfoBox("Dev only", "Enable dev mode to run.", "", true, false); return; }
+      coordsPickerUI();
+      return;
+    }
+    if(appID == 111){
+      if(!dev_mode){ drawInfoBox("Dev only", "Enable dev mode to run.", "", true, false); return; }
+      drawInfoBox("Crash test", "This will crash the device", "Press Enter to continue", false, false);
+      delay(1000);
+      speedScanTestAndPrintResults();
+      esp_will_beg_for_its_life();
+      return;
+    }
+    if(appID == 108){
+      // Freeform setter: type var name and value
+      String varName = userInput("Set var (free)", "Var name (case-sensitive):", 64);
+      if(varName.length()){
+        String val = userInput("Set var (free)", "New value for " + varName + ":", 128);
+        if(val.length()){
+          // try best-effort mapping for common types
+          if(varName == "hostname") hostname = val;
+          else if(varName == "bg_color") { bg_color = val; initColorSettings(); }
+          else if(varName == "tx_color") { tx_color = val; initColorSettings(); }
+          else if(varName == "sound") sound = (val == "1" || val.equalsIgnoreCase("true"));
+          else if(varName == "brightness") brightness = val.toInt();
+          else if(varName == "pwnagothiMode") pwnagothiMode = (val == "1" || val.equalsIgnoreCase("true"));
+          else if(varName == "sd_logging") sd_logging = (val == "1" || val.equalsIgnoreCase("true"));
+          else if(varName == "skip_eapol_check") skip_eapol_check = (val == "1" || val.equalsIgnoreCase("true"));
+          else if(varName == "advertisePwngrid") advertisePwngrid = (val == "1" || val.equalsIgnoreCase("true"));
+          else if(varName == "pwned_ap") pwned_ap = (uint16_t)val.toInt();
+          else if(varName == "dev_mode") dev_mode = (val == "1" || val.equalsIgnoreCase("true"));
+          else if(varName == "toogle_pwnagothi_with_gpio0") toogle_pwnagothi_with_gpio0 = (val == "1" || val.equalsIgnoreCase("true"));
+          else if(varName == "lite_mode_wpa_sec_sync_on_startup") lite_mode_wpa_sec_sync_on_startup = (val == "1" || val.equalsIgnoreCase("true"));
+          else if(varName == "skip_file_manager_checks_in_dev") skip_file_manager_checks_in_dev = (val == "1" || val.equalsIgnoreCase("true"));
+          else {
+            drawInfoBox("Unknown variable", varName, "Not supported by fallback.", true, true);
+            return;
+          }
+          saveSettings();
+          drawInfoBox("OK", "Set " + varName, val, true, false);
+        }
+      }
+      return;
+    }
     if(appID == 33){}
     if(appID == 34){}
     if(appID == 35){}
@@ -4168,7 +4399,7 @@ void drawWifiInfoScreen(String wifiName, String wifiMac, String wifiRRSI, String
 
 #endif
 
-inline void pushAll(){
+void pushAll(){
   M5.Display.startWrite();
   canvas_top.pushSprite(0, 0);
   canvas_bot.pushSprite(0, canvas_top_h + canvas_h);
@@ -4176,7 +4407,7 @@ inline void pushAll(){
   M5.Display.endWrite();
 }
 
-inline void updateM5(){
+void updateM5(){
   M5.update();
   M5Cardputer.update();
   keyboard_changed = M5Cardputer.Keyboard.isChange();
@@ -4356,6 +4587,48 @@ String colorPickerUI(bool pickingText, String bg_color_toset) {
     delay(80);
   }
   return result;
+}
+
+void coordsPickerUI() {
+  appRunning = true;
+  debounceDelay();
+  // start in center of canvas
+  int x = canvas_main.width() / 2;
+  int y = canvas_main.height() / 2;
+  int step = 1;
+  uint16_t fillc = hexToRGB565(bg_color);
+  while (true) {
+    canvas_main.fillRect(0, 0, canvas_main.width(), canvas_main.height(), fillc);
+    // draw crosshair
+    canvas_main.fillRect(x, 0, 2, canvas_main.height(), tx_color_rgb565);
+    canvas_main.fillRect(0, y, canvas_main.width(), 2, tx_color_rgb565);
+    // show coords
+    canvas_main.setTextSize(1);
+    canvas_main.setTextDatum(top_left);
+    canvas_main.setTextColor(tx_color_rgb565);
+    canvas_main.drawString("X:" + String(x) + " Y:" + String(y), 4, 4);
+    pushAll();
+    M5.update();
+    M5Cardputer.update();
+    Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
+    if (status.fn) {
+      for (auto k : status.word) {
+        if (k == '`') { appRunning = false; return; }
+      }
+    }
+    for (auto k : status.word) {
+      if (k == ';') { y = max(0, y - step); }
+      if (k == '.') { y = min((int)canvas_main.height() - 1, y + step); }
+      if (k == ',') { x = max(0, x - step); }
+      if (k == '/') { x = min((int)canvas_main.width() - 1, x + step); }
+    }
+    if (status.enter) {
+      appRunning = false;
+      drawInfoBox("Coords", "X:" + String(x) + " Y:" + String(y), "", true, false);
+      return;
+    }
+    delay(50);
+  }
 }
 
 int brightnessPicker(){

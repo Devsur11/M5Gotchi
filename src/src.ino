@@ -250,29 +250,55 @@ void setup() {
   //Custom installs may not have that partition, so to prevent bricking the device
   //I am disabling update functionality for custom installs.
   //If you are an advanced user and know what you are doing, feel free to remove this check.
-  uint32_t addr = 0;
-  uint32_t size = 0;
+  // Detect partition table layout
+  const esp_partition_t *part_app0 = esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_APP_OTA_0, NULL);
+  const esp_partition_t *part_app1 = esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_APP_OTA_0, NULL);
+  const esp_partition_t *part_vfs = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_FAT, NULL);
+  const esp_partition_t *part_spiffs = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_SPIFFS, NULL);
+  const esp_partition_t *part_coredump = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_COREDUMP, NULL);
+  
+  uint32_t app1_size = part_app1 ? part_app1->size : 0;
 
-  if (coredump_part) {
-    addr = coredump_part->address;   // base flash address
-    size = coredump_part->size;      // length in bytes
+  logMessage("Partition layout detection:");
+  logMessage("App0 size: " + String(part_app0->size, HEX));
+  logMessage("App0 address: " + String(part_app0->address, HEX));
+  logMessage("App1 address: " + String(part_app1->address, HEX));
+  logMessage("App1 size: " + String(app1_size, HEX));
+  if (part_vfs) {
+    logMessage("VFS partition found at address: " + String(part_vfs->address, HEX));
   } else {
-      // no coredump partition defined in the table
+    logMessage("VFS partition not found");
   }
-
-  logMessage("Core dump image found via esp_core_dump_image_get");
-  logMessage("Core dump addr: " + String(addr) + ", size: " + String(size));
-
-  if(addr == 8323072){
+  if (part_spiffs) {
+    logMessage("SPIFFS partition found at address: " + String(part_spiffs->address, HEX));
+  } else {
+    logMessage("SPIFFS partition not found");
+  }
+  if (part_coredump) {
+    logMessage("Coredump partition found at address: " + String(part_coredump->address, HEX));
+  } else {
+    logMessage("Coredump partition not found");
+  }
+  
+  //Generic:
+  // [4818][I][logger.cpp] Partition layout detection:
+  // [4818][I][logger.cpp] App0 size: 330000
+  // [4819][I][logger.cpp] App0 address: 10000
+  // [4821][I][logger.cpp] App1 address: 10000
+  // [4825][I][logger.cpp] App1 size: 330000
+  // [4828][I][logger.cpp] VFS partition not found
+  // [4832][I][logger.cpp] SPIFFS partition found at address: 670000
+  // [4838][I][logger.cpp] Coredump partition found at address: 7f0000
+  if (part_spiffs && part_spiffs->address == 0x670000 && app1_size == 0x330000 && part_coredump && !part_vfs && part_app0->size == 0x330000) {
     logMessage("Generic install detected!");
   }
-  else{
+  else {
     logMessage("Custom install detected, removing update functionality to prevent bricking!");
     limitFeatures = true;
   }
 
-  if((hintsDisplayed & 0b1 != 0) && limitFeatures){
-    drawInfoBox("Hint", "For the best experience, please", "use the M5Burner version of this firmware.", true, false);
+  if(((hintsDisplayed & 0b1) == 0) && limitFeatures){
+    drawInfoBox("Hint", "For best experience use", " M5Burner to install this fw.", true, false);
     hintsDisplayed |= 0b1;
     saveSettings();
   }
@@ -293,9 +319,10 @@ void loop() {
   M5.update();
   M5Cardputer.update();
   if(M5Cardputer.Keyboard.isKeyPressed(KEY_OPT) && M5Cardputer.Keyboard.isKeyPressed(KEY_LEFT_CTRL) && M5Cardputer.Keyboard.isKeyPressed(KEY_FN)){
-    drawInfoBox("Debugging!", "This mode is for dev!", "Do not report this as bug!", false, false);
-    speedScanTestAndPrintResults();
-    esp_will_beg_for_its_life();
+    // Toggle dev menu instead of crashing the device
+    drawInfoBox("DevTools", "Opening developer tools...", "", false, false);
+    delay(200);
+    runApp(99);
   }
   else if(M5Cardputer.Keyboard.isKeyPressed(KEY_FN)){
     activity++;

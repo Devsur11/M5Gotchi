@@ -49,12 +49,13 @@ String* makeList(String windowName, uint8_t appid, bool addln, uint8_t maxEntryL
 void drawList(String toDraw[], uint8_t manu_size);
 void logVictim(String login, String pass);
 void drawWifiInfoScreen(String wifiName, String wifiMac, String wifiRRSI, String wifiChanel);
-inline void pushAll();
-inline void updateM5();
+void pushAll();
+void updateM5();
 void editWhitelist();
 uint16_t RGBToRGB565(uint8_t r, uint8_t g, uint8_t b);
 uint16_t hexToRGB565(String hex);
 String colorPickerUI(bool pickingText, String bg_color_toset);
+void coordsPickerUI();
 void initColorSettings();
 void drawMenuList(menu toDraw[], uint8_t menuIDPriv, uint8_t menu_size);
 int brightnessPicker();

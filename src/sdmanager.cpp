@@ -64,7 +64,12 @@ static bool isPathProtected(const String &path) {
 
 // Check if developer mode is enabled
 static bool isDeveloperMode() {
-  delay(100);
+  delay(10);
+  // Accept either keyboard modifier OR persistent dev_mode flag from config
+  extern bool dev_mode;
+  extern bool skip_file_manager_checks_in_dev;
+  if (skip_file_manager_checks_in_dev && dev_mode) return true;
+  if (dev_mode) return true;
   return M5Cardputer.Keyboard.isKeyPressed(KEY_LEFT_CTRL);
 }
 
@@ -845,7 +850,7 @@ void sdmanager::runFileManager() {
       full += name;
       
       // Check if file is protected
-      if (isPathProtected(full)) {
+      if (isPathProtected(full) && !isDeveloperMode()) {
         // Show protection warning with developer mode hint
         drawInfoBox("PROTECTED", "This file/folder is critical", "for firmware to work", true, true);
         debounceDelay();

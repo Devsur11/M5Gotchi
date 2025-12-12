@@ -108,3 +108,7 @@ extern String wiggle_api_key;
 extern bool cardputer_adv;
 extern bool limitFeatures;
 extern uint64_t hintsDisplayed;
+extern bool dev_mode;
+extern bool serial_overlay;
+extern bool coords_overlay;
+extern bool skip_file_manager_checks_in_dev;

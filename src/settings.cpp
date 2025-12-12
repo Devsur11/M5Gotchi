@@ -36,6 +36,12 @@ bool limitFeatures = false;
 // 0b1 - not M5Burner version hint
 uint64_t hintsDisplayed = 0b0;
 
+// Developer flags
+bool dev_mode = false;
+bool serial_overlay = false;
+bool coords_overlay = false;
+bool skip_file_manager_checks_in_dev = false;
+
 // struct personality{
 //     uint16_t nap_time;
 //     uint16_t delay_after_wifi_scan;
@@ -340,6 +346,14 @@ bool initVars() {
 
         if(config["hintsDisplayed"].is<uint64_t>()) hintsDisplayed = config["hintsDisplayed"].as<uint64_t>();
         else configChanged = true;
+        if (config["dev_mode"].is<bool>()) dev_mode = config["dev_mode"].as<bool>();
+        else configChanged = true;
+        if (config["serial_overlay"].is<bool>()) serial_overlay = config["serial_overlay"].as<bool>();
+        else configChanged = true;
+        if (config["coords_overlay"].is<bool>()) coords_overlay = config["coords_overlay"].as<bool>();
+        else configChanged = true;
+        if (config["skip_file_manager_checks_in_dev"].is<bool>()) skip_file_manager_checks_in_dev = config["skip_file_manager_checks_in_dev"].as<bool>();
+        else configChanged = true;
     } else {
         logMessage("Conf file not found, creating one");
         configChanged = true;
@@ -367,6 +381,10 @@ bool initVars() {
     config["lastTokenRefresh"] = lastTokenRefresh;
     config["wiggle_api_key"] = wiggle_api_key;
     config["hintsDisplayed"] = hintsDisplayed;
+    config["dev_mode"] = dev_mode;
+    config["serial_overlay"] = serial_overlay;
+    config["coords_overlay"] = coords_overlay;
+    config["skip_file_manager_checks_in_dev"] = skip_file_manager_checks_in_dev;
 
     if (configChanged) {
         logMessage("Config updated with missing/default values, saving...");
