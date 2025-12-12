@@ -30,6 +30,11 @@ bool advertisePwngrid = true;
 uint64_t lastTokenRefresh;
 String wiggle_api_key = "";
 bool cardputer_adv = false;
+bool limitFeatures = false;
+// Keep track of which hints have been displayed using bitmask
+// Each bit represents a different hint
+// 0b1 - not M5Burner version hint
+uint64_t hintsDisplayed = 0b0;
 
 // struct personality{
 //     uint16_t nap_time;
@@ -332,6 +337,9 @@ bool initVars() {
 
         if(config["wiggle_api_key"].is<const char*>()) wiggle_api_key = String(config["wiggle_api_key"].as<const char*>());
         else configChanged = true;
+
+        if(config["hintsDisplayed"].is<uint64_t>()) hintsDisplayed = config["hintsDisplayed"].as<uint64_t>();
+        else configChanged = true;
     } else {
         logMessage("Conf file not found, creating one");
         configChanged = true;
@@ -358,6 +366,7 @@ bool initVars() {
     config["advertise_pwngrid"] = advertisePwngrid;
     config["lastTokenRefresh"] = lastTokenRefresh;
     config["wiggle_api_key"] = wiggle_api_key;
+    config["hintsDisplayed"] = hintsDisplayed;
 
     if (configChanged) {
         logMessage("Config updated with missing/default values, saving...");
@@ -399,6 +408,7 @@ bool saveSettings(){
     config["advertise_pwngrid"] = advertisePwngrid;
     config["lastTokenRefresh"] = lastTokenRefresh;
     config["wiggle_api_key"] = wiggle_api_key;
+    config["hintsDisplayed"] = hintsDisplayed;
     
     logMessage("JSON data creation successful, proceeding to save");
     FConf = SD.open(NEW_CONFIG_FILE, FILE_WRITE, false);

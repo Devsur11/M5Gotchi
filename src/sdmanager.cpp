@@ -250,7 +250,9 @@ static void viewFile(const String &fullpath) {
       int idx = from + i;
       if (idx >= (int)lines.size()) break;
       // reserve space for scrollbar on the right
-      canvas_main.drawString(lines[idx], 6, y);
+      // Truncate lines to fit display width (approximately 35 chars at textSize 1)
+      String displayLine = lines[idx].length() > 35 ? lines[idx].substring(0, 35) : lines[idx];
+      canvas_main.drawString(displayLine, 6, y);
       y += 12;
     }
     // draw page indicator on left bottom
@@ -330,8 +332,8 @@ static void editFile(const String &fullpath) {
   int curCol = 0;
   int scrollLine = 0;
   bool insertMode = false;
-  const int linesPerPage = 7;
-  const int maxLineLen = 200;
+  int linesPerPage = 7;
+  const int maxLineLen = 2147483647; // arbitrary large limit
 
   while (true) {
     drawTopCanvas();
@@ -359,72 +361,82 @@ static void editFile(const String &fullpath) {
       // build wrapped segments for this logical line
       String fullLine = lines[idx];
       std::vector<String> segments;
-      // first segment includes space for prefix
-      int taken = 0;
-      // first segment: include prefix width in limit
-      int maxFirstPx = wrapPx - prefixW;
-      if (maxFirstPx < 8) maxFirstPx = wrapPx; // fallback
-      int endChar = fullLine.length();
-      // determine endChar for first segment
-      while (endChar > taken && canvas_main.textWidth(fullLine.substring(0, endChar)) > maxFirstPx) endChar--;
-      if (endChar < 0) endChar = 0;
+      
+      // First segment: limited by prefix space
+      int firstSegmentPx = wrapPx - prefixW;
+      if (firstSegmentPx <= 0) firstSegmentPx = 50; // minimum fallback
+      
+      int pos = 0;
+      // Build first segment by measuring actual pixel width
+      int endChar = 0;
+      while (endChar < (int)fullLine.length() && canvas_main.textWidth(fullLine.substring(0, endChar + 1)) <= firstSegmentPx) {
+        endChar++;
+      }
+      if (endChar == 0 && fullLine.length() > 0) endChar = 124; // at least one char
       segments.push_back(fullLine.substring(0, endChar));
-      taken = endChar;
-      // subsequent segments: no prefix, use wrapPx - wrap only selected option
-      while ((taken < (int)fullLine.length()) && idx == curLine) {
-        int remain = fullLine.length() - taken;
-        int e = taken + remain;
-        while (e > taken && canvas_main.textWidth(fullLine.substring(taken, e)) > wrapPx) e--;
-        if (e <= taken) break; // can't fit any more
-        segments.push_back(fullLine.substring(taken, e));
-        taken = e;
+      pos = endChar;
+      
+      // Subsequent segments: wrap all remaining long lines by measuring pixels
+      while (pos < (int)fullLine.length()) {
+        endChar = pos;
+        while (endChar < (int)fullLine.length() && canvas_main.textWidth(fullLine.substring(pos, endChar + 1)) <= firstSegmentPx) {
+          endChar++;
+        }
+        if (endChar == pos && pos < (int)fullLine.length()) endChar = pos + 1; // at least one char per segment
+        segments.push_back(fullLine.substring(pos, endChar));
+        pos = endChar;
       }
 
       // draw background highlight if current line
+      // We'll stop rendering more visual rows when the canvas area is exhausted
+      bool stopAllRendering = false;
+      const int maxSegments = 64; // safety cap to avoid pathological lines
       if (idx == curLine) {
-        int height = 14 * (int)segments.size();
-        canvas_main.fillRect(4, y - 2, canvas_main.width() - 14, height -2, tx_color_rgb565);
-        
+        int height = 12 * (int)segments.size();
+        canvas_main.fillRect(4, y - 2, canvas_main.width() - 14, height + 2, tx_color_rgb565);
+
         canvas_main.setTextColor(bg_color_rgb565);
         // draw segments: first with prefix, others indented after prefix
         for (size_t si = 0; si < segments.size(); ++si) {
-          if (si == 0) canvas_main.drawString(prefix + segments[si], 6, y);
-          else {
-            if(height + y > canvas_main.height() - 24){
-              //scroll down to fit hints area
-              scrollLine++;
-              if(scrollLine > curLine) scrollLine = curLine;
-              break; //redraw
+          if (si == 0) {
+            canvas_main.drawString(prefix + segments[si], 6, y);
+          } else {
+            // if next segment would overflow the usable canvas area, stop drawing further rows
+            if (y > canvas_main.height() - 24) {
+              // ensure scrollLine advances so next frame shows remaining content
+              if (scrollLine < curLine) scrollLine++;
+              stopAllRendering = true;
+              break; // stop drawing segments for this and subsequent lines
             }
             canvas_main.drawString(segments[si], 6 + prefixW, y);
           }
+
           // draw cursor if it falls in this segment
           int charsBefore = 0;
           for (size_t k = 0; k < si; ++k) charsBefore += segments[k].length();
           int segLen = segments[si].length();
-          if ((insertMode && idx == curLine) || (!insertMode && idx == curLine)) {
-            if (curCol >= charsBefore && curCol <= charsBefore + segLen) {
-              int offsetInSeg = curCol - charsBefore;
-              int cursorX = 6 + prefixW + canvas_main.textWidth(segments[si].substring(0, offsetInSeg));
-              if (cursorX < canvas_main.width() - 18) canvas_main.fillRect(cursorX, y - 1 , 2, 10, bg_color_rgb565);
-            }
-            // special case: cursor at end (append)
-            if (curCol > (int)fullLine.length()) {
-              int cursorX = 6 + prefixW + canvas_main.textWidth(fullLine);
-              if (cursorX < canvas_main.width() - 18) canvas_main.fillRect(cursorX, y - 1, 2, 10, bg_color_rgb565);
-            }
+          if (curCol >= charsBefore && curCol <= charsBefore + segLen && idx == curLine) {
+            int offsetInSeg = curCol - charsBefore;
+            int cursorX = 6 + prefixW + offsetInSeg * 6; // char-based estimate
+            if (cursorX < canvas_main.width() - 18) canvas_main.fillRect(cursorX, y - 1, 2, 10, bg_color_rgb565);
           }
+
           y += 12;
+          if ((int)si > maxSegments) { stopAllRendering = true; break; }
         }
       } else {
         canvas_main.setTextColor(tx_color_rgb565);
         // draw segments: first with prefix, others indented after prefix
         for (size_t si = 0; si < segments.size(); ++si) {
+          if (y > canvas_main.height() - 24) { stopAllRendering = true; break; }
           if (si == 0) canvas_main.drawString(prefix + segments[si], 6, y);
           else canvas_main.drawString(segments[si], 6 + prefixW, y);
           y += 12;
+          if ((int)si > maxSegments) { stopAllRendering = true; break; }
         }
       }
+
+      if (stopAllRendering) break; // stop rendering further visual rows
     }
 
 
@@ -435,22 +447,18 @@ static void editFile(const String &fullpath) {
     // draw hints marquee
     String mode = insertMode ? " [INSERT]" : " [NORMAL]";
     String hints = mode + " i:insert a:append o:newline x:del s:save q:quit";
-    // marquee for hints if too long (leave space for scrollbar)
-    int hintW = canvas_main.textWidth(hints);
-    int hintAvailW = canvas_main.width() - 18;
+    // marquee for hints if too long (character-based: ~35 chars fit at textSize 1)
+    int hintLen = hints.length();
+    int hintAvailChars = 35;
     static unsigned long editHintTick = 0;
     static int editHintOffset = 0;
-    if (hintW > hintAvailW) {
+    if (hintLen > hintAvailChars) {
       unsigned long now = millis();
-      if (now - editHintTick > 1) { editHintTick = now; editHintOffset++; }
-      int maxOffset = hintW - hintAvailW + 8;
+      if (now - editHintTick > 100) { editHintTick = now; editHintOffset++; }
+      int maxOffset = hintLen - hintAvailChars + 2;
       if (editHintOffset > maxOffset) editHintOffset = 0;
-      int startChar = 0;
-      while (startChar < (int)hints.length() && canvas_main.textWidth(hints.substring(0, startChar)) < editHintOffset) startChar++;
-      String toDraw = hints.substring(startChar);
-      int endChar = toDraw.length();
-      while (endChar > 0 && canvas_main.textWidth(toDraw.substring(0, endChar)) > hintAvailW) endChar--;
-      toDraw = toDraw.substring(0, endChar);
+      String toDraw = hints.substring(editHintOffset);
+      if (toDraw.length() > hintAvailChars) toDraw = toDraw.substring(0, hintAvailChars);
       canvas_main.drawString(toDraw, 3, canvas_main.height() - 12);
     } else {
       canvas_main.drawString(hints, 3, canvas_main.height() - 12);

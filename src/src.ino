@@ -20,6 +20,13 @@
 #include "githubUpdater.h"
 #include "wpa_sec.h"
 #endif
+#include "esp_partition.h"
+
+const esp_partition_t *coredump_part =
+    esp_partition_find_first(ESP_PARTITION_TYPE_DATA,
+                             ESP_PARTITION_SUBTYPE_DATA_COREDUMP,
+                             NULL);
+
 
 uint8_t state;
 uint8_t activity = 14;
@@ -237,7 +244,38 @@ void setup() {
   esp_task_wdt_deinit();
   esp_task_wdt_init(60, false); 
 
-  
+
+  //For everyone that sees this code and thinks why am I limiting features based on partition address:
+  //The generic install provides a otadata partition that I can use for updates.
+  //Custom installs may not have that partition, so to prevent bricking the device
+  //I am disabling update functionality for custom installs.
+  //If you are an advanced user and know what you are doing, feel free to remove this check.
+  uint32_t addr = 0;
+  uint32_t size = 0;
+
+  if (coredump_part) {
+    addr = coredump_part->address;   // base flash address
+    size = coredump_part->size;      // length in bytes
+  } else {
+      // no coredump partition defined in the table
+  }
+
+  logMessage("Core dump image found via esp_core_dump_image_get");
+  logMessage("Core dump addr: " + String(addr) + ", size: " + String(size));
+
+  if(addr == 8323072){
+    logMessage("Generic install detected!");
+  }
+  else{
+    logMessage("Custom install detected, removing update functionality to prevent bricking!");
+    limitFeatures = true;
+  }
+
+  if((hintsDisplayed & 0b1 != 0) && limitFeatures){
+    drawInfoBox("Hint", "For the best experience, please", "use the M5Burner version of this firmware.", true, false);
+    hintsDisplayed |= 0b1;
+    saveSettings();
+  }
 }
 
 void wakeUp() {

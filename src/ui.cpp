@@ -357,13 +357,8 @@ void initUi() {
 
   canvas_top.createSprite(display_w, canvas_top_h);
   canvas_bot.createSprite(display_w, canvas_bot_h);
-  canvas_main.createSprite(display_w /*- (display_w * 0.02)*/, canvas_h);
-  // bar_right.createSprite((display_w * 0.02) / 2, (canvas_h - 6) / 4 );
-  // bar_right2.createSprite((display_w * 0.02) / 2, (canvas_h - 6) / 4 );
-  // bar_right3.createSprite((display_w * 0.02) / 2, (canvas_h - 6) / 4 );
-  // bar_right4.createSprite((display_w * 0.02) / 2, (canvas_h - 6) / 4 );
+  canvas_main.createSprite(display_w, canvas_h);
   logMessage("UI initialized");
-  
 }
 
 uint8_t returnBrightness(){return currentBrightness;}
@@ -447,7 +442,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi) {
     drawMenuList( pwngotchi_menu , 5, 4);
   }
   else if (menuID == 6){
-    drawMenuList( settings_menu , 6, 15);
+    drawMenuList( settings_menu , 6, 18);
   }  
   else if (menuID == 7){
     (wpa_sec_api_key.length()>5)?drawMenuList(wpasec_menu, 7, 3):drawMenuList(wpasec_setup_menu, 7, 1);
@@ -1105,7 +1100,7 @@ void runApp(uint8_t appID){
     if(appID == 5){drawInfoBox("ERROR", "not implemented", "" ,  true, true);}
     if(appID == 6){
       debounceDelay();
-      drawMenuList(settings_menu ,6  , 15);
+      drawMenuList(settings_menu ,6  , 18);
     }
     if(appID == 7){
       debounceDelay();
@@ -2806,6 +2801,11 @@ void runApp(uint8_t appID){
       menuID = 0;
     }
     if(appID == 44){
+      if(limitFeatures){
+        drawInfoBox("ERROR", "Update disabled", "Please use M5Burner version", true, false);
+        menuID = 0;
+        return;
+      }
       String tempMenu[] = {"From SD", "From WIFI", "From Github"};
       uint8_t choice = drawMultiChoice("Update type", tempMenu, 3, 6, 4);
       if(choice == 0){updateFromSd();}

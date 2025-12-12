@@ -106,3 +106,5 @@ extern bool advertisePwngrid;
 extern uint64_t lastTokenRefresh;
 extern String wiggle_api_key;
 extern bool cardputer_adv;
+extern bool limitFeatures;
+extern uint64_t hintsDisplayed;
