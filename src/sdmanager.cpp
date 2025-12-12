@@ -213,7 +213,6 @@ static void drawEntries(const String &path, const std::vector<Entry> &entries, i
   // push all canvases together to avoid leaving stale UI
   pushAll();
 }
-
 static void viewFile(const String &fullpath) {
   File f = SD.open(fullpath.c_str(), FILE_READ);
   if (!f) {
@@ -244,23 +243,44 @@ static void viewFile(const String &fullpath) {
     canvas_main.fillSprite(bg_color_rgb565);
     canvas_main.setTextSize(1);
     canvas_main.setTextColor(tx_color_rgb565);
+    
+    // Build wrapped segments for all lines
+    std::vector<String> segments;
+    int wrapPx = 230; // wrap width in pixels
+    for (size_t i = 0; i < lines.size(); ++i) {
+      String line = lines[i];
+      if (line.length() == 0) {
+        segments.push_back("");
+      } else {
+        int pos = 0;
+        while (pos < (int)line.length()) {
+          int endChar = pos;
+          while (endChar < (int)line.length() && canvas_main.textWidth(line.substring(pos, endChar + 1)) <= wrapPx) {
+            endChar++;
+          }
+          if (endChar == pos && pos < (int)line.length()) endChar = pos + 1; // at least one char
+          segments.push_back(line.substring(pos, endChar));
+          pos = endChar;
+        }
+      }
+    }
+
     int y = 10;
     int from = page * linesPerPage;
     for (int i = 0; i < linesPerPage; ++i) {
       int idx = from + i;
-      if (idx >= (int)lines.size()) break;
-      // reserve space for scrollbar on the right
-      // Truncate lines to fit display width (approximately 35 chars at textSize 1)
-      String displayLine = lines[idx].length() > 35 ? lines[idx].substring(0, 35) : lines[idx];
-      canvas_main.drawString(displayLine, 6, y);
+      if (idx >= (int)segments.size()) break;
+      canvas_main.drawString(segments[idx], 6, y);
       y += 12;
     }
+    
     // draw page indicator on left bottom
     canvas_main.setTextSize(1);
-    canvas_main.drawString(String("Page ") + String(page + 1) + "/" + String((lines.size() + linesPerPage - 1) / linesPerPage), 6, canvas_main.height() - 20);
+    int totalPages = (segments.size() + linesPerPage - 1) / linesPerPage;
+    canvas_main.drawString(String("Page ") + String(page + 1) + "/" + String(totalPages), 6, canvas_main.height() - 20);
 
     // Draw vertical scrollbar on right
-    int total = lines.size();
+    int total = segments.size();
     int visible = linesPerPage;
     int trackX = canvas_main.width() - 8;
     int trackY = 8;
@@ -313,7 +333,7 @@ static void viewFile(const String &fullpath) {
     }
     if (M5Cardputer.Keyboard.isKeyPressed('.')) {
       debounceDelay();
-      if ((page + 1) * linesPerPage < (int)lines.size()) page++;
+      if ((page + 1) * linesPerPage < (int)segments.size()) page++;
     }
     if (M5Cardputer.Keyboard.isKeyPressed(';')) {
       debounceDelay();
@@ -332,7 +352,7 @@ static void editFile(const String &fullpath) {
   int curCol = 0;
   int scrollLine = 0;
   bool insertMode = false;
-  int linesPerPage = 7;
+  int linesPerPage = 8;
   const int maxLineLen = 2147483647; // arbitrary large limit
 
   while (true) {
@@ -388,8 +408,6 @@ static void editFile(const String &fullpath) {
       }
 
       // draw background highlight if current line
-      // We'll stop rendering more visual rows when the canvas area is exhausted
-      bool stopAllRendering = false;
       const int maxSegments = 64; // safety cap to avoid pathological lines
       if (idx == curLine) {
         int height = 12 * (int)segments.size();
@@ -400,12 +418,16 @@ static void editFile(const String &fullpath) {
         for (size_t si = 0; si < segments.size(); ++si) {
           if (si == 0) {
             canvas_main.drawString(prefix + segments[si], 6, y);
+            if (y > canvas_main.height() - 24) {
+              // ensure scrollLine advances so next frame shows remaining content
+              if (scrollLine < curLine) scrollLine++;
+              break; // stop drawing segments for this and subsequent lines
+            }
           } else {
             // if next segment would overflow the usable canvas area, stop drawing further rows
             if (y > canvas_main.height() - 24) {
               // ensure scrollLine advances so next frame shows remaining content
               if (scrollLine < curLine) scrollLine++;
-              stopAllRendering = true;
               break; // stop drawing segments for this and subsequent lines
             }
             canvas_main.drawString(segments[si], 6 + prefixW, y);
@@ -422,21 +444,17 @@ static void editFile(const String &fullpath) {
           }
 
           y += 12;
-          if ((int)si > maxSegments) { stopAllRendering = true; break; }
         }
       } else {
         canvas_main.setTextColor(tx_color_rgb565);
         // draw segments: first with prefix, others indented after prefix
         for (size_t si = 0; si < segments.size(); ++si) {
-          if (y > canvas_main.height() - 24) { stopAllRendering = true; break; }
           if (si == 0) canvas_main.drawString(prefix + segments[si], 6, y);
           else canvas_main.drawString(segments[si], 6 + prefixW, y);
           y += 12;
-          if ((int)si > maxSegments) { stopAllRendering = true; break; }
         }
       }
 
-      if (stopAllRendering) break; // stop rendering further visual rows
     }
 
 
