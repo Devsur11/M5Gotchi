@@ -9,28 +9,6 @@
 #include "settings.h"
 #include "SD.h"
 
-// void logMessage(String message) {
-//     #ifdef SERIAL_LOGS
-//     // Format: [I][logger.cpp:logMessage][time:12345] Message
-//     printf("[%lu][I][logger.cpp:11] %s\n", millis(), message.c_str());
-
-//     if(sd_logging)
-//     {if(SD.exists("/log.txt")) {
-//         File logFile = SD.open("/log.txt", FILE_APPEND);
-//         if (logFile) {
-//             logFile.printf("[%lu][I][logger.cpp:11] %s\n", millis(), message.c_str());
-//             logFile.close();
-//         }
-//     } else {
-//         File logFile = SD.open("/log.txt", FILE_WRITE);
-//         if (logFile) {
-//             logFile.printf("[%lu][I][logger.cpp:11] %s\n", millis(), message.c_str());
-//             logFile.close();
-//         }
-//     }}
-//     #endif
-// }
-
 // In-memory circular buffer for overlay logs with timestamps
 struct OverlayEntry { uint32_t ts; String txt; };
 static std::deque<OverlayEntry> overlayLogs;
@@ -43,6 +21,42 @@ void loggerSetOverlayEnabled(bool enabled) {
 
 bool loggerIsOverlayEnabled() {
     return overlayEnabled;
+}
+
+void drawOverlayLogs() {
+    if (!overlayEnabled) return;
+
+    const int startX = 5;
+    const int startY = 20;
+    const int lineHeight = 12;
+    const int maxLines = 8;
+    
+    M5Cardputer.Display.setTextColor(TFT_WHITE, TFT_BLACK);
+    M5Cardputer.Display.setTextSize(1);
+
+    uint32_t now_ms = millis();
+    // remove expired entries (>5s)
+    while (!overlayLogs.empty() && (now_ms - overlayLogs.front().ts > 5000)) {
+        overlayLogs.pop_front();
+    }
+
+    int lineNum = 0;
+    for (auto it = overlayLogs.rbegin(); it != overlayLogs.rend() && lineNum < maxLines; ++it, ++lineNum) {
+        M5Cardputer.Display.setCursor(startX, startY + lineNum * lineHeight);
+        M5Cardputer.Display.fillRect(startX, startY,lineNum * lineHeight, 256, TFT_BLACK);
+        M5Cardputer.Display.print(it->txt);
+    }
+}
+
+void loggerTask() {
+    if (!overlayEnabled) return;
+
+    static uint32_t lastDrawTime = 0;
+    uint32_t now = millis();
+    if (now - lastDrawTime >= 100) { // update every 1000ms
+        drawOverlayLogs();
+        lastDrawTime = now;
+    }
 }
 
 void loggerGetLines(std::vector<String> &out, int maxLines) {
@@ -67,8 +81,9 @@ void logMessage(String message) {
         // keep timestamps minimal for overlay
         OverlayEntry e{millis(), String(millis()) + ": " + message};
         overlayLogs.push_back(e);
-        while (overlayLogs.size() > MAX_OVERLAY_LOGS) overlayLogs.pop_front();
+        while (overlayLogs.size() > MAX_OVERLAY_LOGS) overlayLogs.pop_front();        
     }
+    loggerTask();
 }
 
 #include <stdarg.h>

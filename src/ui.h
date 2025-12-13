@@ -42,13 +42,13 @@ void updateUi(bool show_toolbars = false, bool triggerPwnagothi = true);
 void runApp(uint8_t appID = 0);
 inline void resetSprite();
 String userInput(String tittle, String desc, uint8_t maxLenght);
-bool drawQuestionBox(String tittle, String info, String info2, String label = "To confirm press y, to abort press n");
+bool drawQuestionBox(String tittle, String info, String info2, String label = "  ");
 int drawMultiChoice(String tittle, String toDraw[], uint8_t menuSize, uint8_t prevMenuID, uint8_t prevOpt);
 uint8_t returnBrightness();
 String* makeList(String windowName, uint8_t appid, bool addln, uint8_t maxEntryLen);
 void drawList(String toDraw[], uint8_t manu_size);
 void logVictim(String login, String pass);
-void drawWifiInfoScreen(String wifiName, String wifiMac, String wifiRRSI, String wifiChanel);
+inline void drawWifiInfoScreen(String wifiName, String wifiMac, String wifiRRSI, String wifiChanel);
 void pushAll();
 void updateM5();
 void editWhitelist();
@@ -70,6 +70,7 @@ bool registerNewMessage(message newMess);
 std::vector<message> loadMessageHistory(const String &unitName);
 void renderMessages(M5Canvas &canvas, const std::vector<message> &messages, int scrollOffset);
 String findIncomingFingerprint(const std::vector<message> &messages);
+void drawHintBox(String text, uint64_t hintID);
 #ifdef ENABLE_COREDUMP_LOGGING
 void sendCrashReport();
 #endif

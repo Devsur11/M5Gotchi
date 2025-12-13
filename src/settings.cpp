@@ -1,3 +1,4 @@
+#include <vector>
 #include "settings.h"
 #include "ArduinoJson.h"
 #include "SD.h"
@@ -11,6 +12,8 @@ uint16_t pwned_ap;
 SPIClass sdSPI;
 String savedApSSID;
 String savedAPPass;
+std::vector<SavedNetwork> savedNetworks;
+bool connectWiFiOnStartup = false;
 String whitelist;
 File FConf;
 bool pwnagothiMode = false;
@@ -31,9 +34,17 @@ uint64_t lastTokenRefresh;
 String wiggle_api_key = "";
 bool cardputer_adv = false;
 bool limitFeatures = false;
+bool checkUpdatesAtNetworkStart = false;
+uint8_t gpsTx;
+uint8_t gpsRx;
+bool useCustomGPSPins = false;
+bool getLocationAfterPwn = false;
+
 // Keep track of which hints have been displayed using bitmask
 // Each bit represents a different hint
 // 0b1 - not M5Burner version hint
+// 0b10 - welcome hint
+// 0b100 - new version available hint
 uint64_t hintsDisplayed = 0b0;
 
 // Developer flags
@@ -296,11 +307,25 @@ bool initVars() {
         if (config["pwned_ap"].is<uint16_t>()) pwned_ap = config["pwned_ap"];
         else configChanged = true;
 
+        // legacy single saved network keys
         if (config["savedApSSID"].is<const char*>()) savedApSSID = String(config["savedApSSID"].as<const char*>());
         else configChanged = true;
 
         if (config["savedAPPass"].is<const char*>()) savedAPPass = String(config["savedAPPass"].as<const char*>());
         else configChanged = true;
+
+        // new: savedNetworks as array of {ssid, pass, connectOnStart}
+        if (config["savedNetworks"].is<JsonArray>()) {
+            JsonArray arr = config["savedNetworks"].as<JsonArray>();
+            savedNetworks.clear();
+            for (JsonObject net : arr) {
+                SavedNetwork n;
+                n.ssid = net["ssid"].is<const char*>() ? String(net["ssid"].as<const char*>()) : "";
+                n.pass = net["pass"].is<const char*>() ? String(net["pass"].as<const char*>()) : "";
+                n.connectOnStart = net["connectOnStart"].is<bool>() ? net["connectOnStart"].as<bool>() : false;
+                savedNetworks.push_back(n);
+            }
+        }
 
         if (config["whitelist"].is<const char*>()) whitelist = String(config["whitelist"].as<const char*>());
         else configChanged = true;
@@ -338,7 +363,7 @@ bool initVars() {
         if(config["advertise_pwngrid"].is<bool>()) advertisePwngrid = config["advertise_pwngrid"].as<bool>();
         else configChanged = true;
 
-        if(config["lastTokenRefresh"].is<uint64_t>()) advertisePwngrid = config["lastTokenRefresh"].as<uint64_t>();
+        if(config["lastTokenRefresh"].is<uint64_t>()) lastTokenRefresh = config["lastTokenRefresh"].as<uint64_t>();
         else configChanged = true;
 
         if(config["wiggle_api_key"].is<const char*>()) wiggle_api_key = String(config["wiggle_api_key"].as<const char*>());
@@ -354,6 +379,28 @@ bool initVars() {
         else configChanged = true;
         if (config["skip_file_manager_checks_in_dev"].is<bool>()) skip_file_manager_checks_in_dev = config["skip_file_manager_checks_in_dev"].as<bool>();
         else configChanged = true;
+
+        if(config["checkUpdatesAtNetworkStart"].is<bool>()) checkUpdatesAtNetworkStart = config["checkUpdatesAtNetworkStart"].as<bool>();
+        else configChanged = true;
+
+        if(config["connectWiFiOnStartup"].is<bool>()) connectWiFiOnStartup = config["connectWiFiOnStartup"].as<bool>();
+        else configChanged = true;
+
+        if(config["gpsTx"].is<uint8_t>()) gpsTx = config["gpsTx"].as<uint8_t>();
+        else configChanged = true;
+
+        if(config["gpsRx"].is<uint8_t>()) gpsRx = config["gpsRx"].as<uint8_t>();
+        else configChanged = true;
+
+        if(config["useCustomGPSPins"].is<bool>()) useCustomGPSPins = config["useCustomGPSPins"].as<bool>();
+        else configChanged = true;
+
+        if(config["getLocationAfterPwn"].is<bool>()) getLocationAfterPwn = config["getLocationAfterPwn"].as<bool>();
+        else configChanged = true;
+
+        if(configChanged) {
+            logMessage("Config file missing values, will be updated");
+        }
     } else {
         logMessage("Conf file not found, creating one");
         configChanged = true;
@@ -366,6 +413,14 @@ bool initVars() {
     config["pwned_ap"] = pwned_ap;
     config["savedApSSID"] = savedApSSID;
     config["savedAPPass"] = savedAPPass;
+    // Save new networks array
+    JsonArray nets = config.createNestedArray("savedNetworks");
+    for (auto &n : savedNetworks) {
+        JsonObject net = nets.createNestedObject();
+        net["ssid"] = n.ssid;
+        net["pass"] = n.pass;
+        net["connectOnStart"] = n.connectOnStart;
+    }
     config["whitelist"] = whitelist;
     config["auto_mode_on_startup"] = pwnagothiModeEnabled;
     config["bg_color"] = bg_color;
@@ -385,6 +440,12 @@ bool initVars() {
     config["serial_overlay"] = serial_overlay;
     config["coords_overlay"] = coords_overlay;
     config["skip_file_manager_checks_in_dev"] = skip_file_manager_checks_in_dev;
+    config["checkUpdatesAtNetworkStart"] = checkUpdatesAtNetworkStart;
+    config["connectWiFiOnStartup"] = connectWiFiOnStartup;
+    config["gpsTx"] = gpsTx;
+    config["gpsRx"] = gpsRx;
+    config["useCustomGPSPins"] = useCustomGPSPins;
+    config["getLocationAfterPwn"] = getLocationAfterPwn;
 
     if (configChanged) {
         logMessage("Config updated with missing/default values, saving...");
@@ -412,6 +473,14 @@ bool saveSettings(){
     config["pwned_ap"] = pwned_ap;
     config["savedApSSID"] = savedApSSID;
     config["savedAPPass"] = savedAPPass;
+    // savedNetworks
+    JsonArray nets = config.createNestedArray("savedNetworks");
+    for (auto &n : savedNetworks) {
+        JsonObject net = nets.createNestedObject();
+        net["ssid"] = n.ssid;
+        net["pass"] = n.pass;
+        net["connectOnStart"] = n.connectOnStart;
+    }
     config["whitelist"] = whitelist;
     config["auto_mode_on_startup"] = pwnagothiModeEnabled;
     config["bg_color"] = bg_color;
@@ -427,6 +496,13 @@ bool saveSettings(){
     config["lastTokenRefresh"] = lastTokenRefresh;
     config["wiggle_api_key"] = wiggle_api_key;
     config["hintsDisplayed"] = hintsDisplayed;
+    config["getLocationAfterPwn"] = getLocationAfterPwn;
+    config["useCustomGPSPins"] = useCustomGPSPins;
+    config["gpsTx"] = gpsTx;
+    config["gpsRx"] = gpsRx;
+    config["connectWiFiOnStartup"] = connectWiFiOnStartup;
+    config["checkUpdatesAtNetworkStart"] = checkUpdatesAtNetworkStart;
+
     
     logMessage("JSON data creation successful, proceeding to save");
     FConf = SD.open(NEW_CONFIG_FILE, FILE_WRITE, false);
@@ -440,5 +516,107 @@ bool saveSettings(){
     } else {
         logMessage("Failed to open config file for writing");
         return false;
+    }
+}
+
+bool addSavedNetwork(const String &ssid, const String &pass, bool connectOnStart){
+    // update existing if present
+    for(auto &e : savedNetworks){
+        if(e.ssid == ssid){
+            e.pass = pass;
+            e.connectOnStart = connectOnStart ? true : e.connectOnStart;
+            if(connectOnStart){ savedApSSID = e.ssid; savedAPPass = e.pass; }
+            return saveSettings();
+        }
+    }
+    SavedNetwork n;
+    n.ssid = ssid;
+    n.pass = pass;
+    n.connectOnStart = connectOnStart;
+    savedNetworks.push_back(n);
+    if(connectOnStart){
+        // Update single savedAp compatibility
+        savedApSSID = ssid;
+        savedAPPass = pass;
+    }
+    return saveSettings();
+}
+
+bool removeSavedNetwork(size_t idx){
+    if(idx >= savedNetworks.size()) return false;
+    savedNetworks.erase(savedNetworks.begin() + idx);
+    // ensure savedAp compatibility - set to first connectOnStart or first network
+    savedApSSID = "";
+    savedAPPass = "";
+    for(auto &n : savedNetworks){
+        if(n.connectOnStart){
+            savedApSSID = n.ssid;
+            savedAPPass = n.pass;
+            break;
+        }
+    }
+    if(savedApSSID == "" && savedNetworks.size() > 0){
+        savedApSSID = savedNetworks[0].ssid;
+        savedAPPass = savedNetworks[0].pass;
+    }
+    return saveSettings();
+}
+
+bool setSavedNetworkConnectOnStart(size_t idx, bool enabled){
+    if(idx >= savedNetworks.size()) return false;
+    savedNetworks[idx].connectOnStart = enabled;
+    if(enabled){
+        savedApSSID = savedNetworks[idx].ssid;
+        savedAPPass = savedNetworks[idx].pass;
+    } else {
+        // find another connectOnStart; else clear
+        bool found = false;
+        for(size_t i=0;i<savedNetworks.size();i++){
+            if(savedNetworks[i].connectOnStart){
+                savedApSSID = savedNetworks[i].ssid;
+                savedAPPass = savedNetworks[i].pass;
+                found = true;
+                break;
+            }
+        }
+        if(!found){
+            if(savedNetworks.size()>0){
+                savedApSSID = savedNetworks[0].ssid;
+                savedAPPass = savedNetworks[0].pass;
+            } else {
+                savedApSSID = "";
+                savedAPPass = "";
+            }
+        }
+    }
+    return saveSettings();
+}
+
+void attemptConnectSavedNetworks(){
+    if(savedNetworks.size() == 0){
+        // fallback to legacy single saved values
+        if(savedApSSID.length() > 0){
+            WiFi.begin(savedApSSID.c_str(), savedAPPass.c_str());
+            unsigned long start = millis();
+            while(millis() - start < 10000 && WiFi.status() != WL_CONNECTED) delay(500);
+        }
+        return;
+    }
+
+    // try connectOnStart flagged networks first
+    for(auto &n : savedNetworks){
+        if(n.connectOnStart){
+            WiFi.begin(n.ssid.c_str(), n.pass.c_str());
+            unsigned long start = millis();
+            while(millis() - start < 10000 && WiFi.status() != WL_CONNECTED) delay(500);
+            if(WiFi.status() == WL_CONNECTED) return;
+        }
+    }
+    // try other networks
+    for(auto &n : savedNetworks){
+        WiFi.begin(n.ssid.c_str(), n.pass.c_str());
+        unsigned long start = millis();
+        while(millis() - start < 10000 && WiFi.status() != WL_CONNECTED) delay(500);
+        if(WiFi.status() == WL_CONNECTED) return;
     }
 }

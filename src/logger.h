@@ -7,3 +7,4 @@ void fLogMessage(const char *format, ...);
 void loggerSetOverlayEnabled(bool enabled);
 bool loggerIsOverlayEnabled();
 void loggerGetLines(std::vector<String> &out, int maxLines);
+void loggerTask();

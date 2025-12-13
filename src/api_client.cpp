@@ -311,6 +311,7 @@ bool api_client::sendMessageTo(const String &recipientFingerprint, const String 
     // encrypt
     std::vector<uint8_t> clearVec(cleartext.c_str(), cleartext.c_str() + cleartext.length());
     std::vector<uint8_t> encrypted;
+    logMessage("Encrypting message to " + recipientFingerprint);
     if (!pwngrid::crypto::encryptFor(clearVec, pubB64, encrypted)) {
         logMessage("encryptFor failed");
         return false;

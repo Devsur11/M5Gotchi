@@ -11,9 +11,15 @@
 #include <DNSServer.h>
 #include "esp_sntp.h"
 #include "settings.h"
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <cstring>
 
 extern const uint8_t _binary_certs_wpa_sec_root_pem_start[] asm("_binary_certs_wpa_sec_root_pem_start");
 extern const uint8_t _binary_certs_wpa_sec_root_pem_end[]   asm("_binary_certs_wpa_sec_root_pem_end");
+
+// forward declarations for async upload helper
+static bool startWpaSecUploadAsync(const char* a0, const char* a1, const char* a2, unsigned int a3);
 
 String userInputFromWebServer(String titleOfEntryToGet) {
     String api_key = "";
@@ -96,7 +102,7 @@ std::vector<CrackedEntry> getCrackedEntries() {
         return entries;
     }
 
-    JsonDocument doc; // 16 KB buffer, adjust if needed
+    DynamicJsonDocument doc(16 * 1024); // 16 KB buffer, adjust if needed
     DeserializationError error = deserializeJson(doc, file);
     file.close();
 
@@ -146,6 +152,35 @@ void saveUploadedList(JsonDocument &doc) {
     logMessage("uploaded.json updated");
 }
 
+// Append single filename to /uploaded.json safely (no duplicate)
+static void appendToUploadedList(const char* fileName) {
+    DynamicJsonDocument doc(2048);
+    if (SD.exists("/uploaded.json")) {
+        File upf = SD.open("/uploaded.json", FILE_READ);
+        if (upf) {
+            DeserializationError err = deserializeJson(doc, upf);
+            upf.close();
+            if (err) {
+                logMessage("uploaded.json parse error, resetting list");
+                doc.to<JsonArray>();
+            }
+        } else {
+            logMessage("Failed to open /uploaded.json for reading (append)");
+            doc.to<JsonArray>();
+        }
+    } else {
+        doc.to<JsonArray>();
+    }
+
+    if (!doc.is<JsonArray>()) {
+        doc.to<JsonArray>();
+    }
+
+    if (isAlreadyUploaded(fileName, doc)) return;
+    doc.as<JsonArray>().add(String(fileName));
+    saveUploadedList(doc);
+}
+
 // Upload single PCAP to wpa-sec via HTTPS (raw request)
 bool uploadToWpaSec(const char* apiKey, const char* pcapPath, const char* fileName, uint32_t timeoutMs = 30000) {
     if (!SD.exists(pcapPath)) {
@@ -163,14 +198,25 @@ bool uploadToWpaSec(const char* apiKey, const char* pcapPath, const char* fileNa
     logMessage("Preparing upload: " + String(fileName) + " (" + String(fileSize) + " bytes)");
 
     WiFiClientSecure client;
+    logMessage("Free heap before TLS connect: " + String(ESP.getFreeHeap()));
     client.setCACert((const char*)_binary_certs_wpa_sec_root_pem_start);
 
     const char* host = "wpa-sec.stanev.org";
     const uint16_t port = 443;
+    logMessage("Free heap before TLS connect: " + String(ESP.getFreeHeap()));
+    delay(10);
+    delay(10);
     if (!client.connect(host, port)) {
-        logMessage("TLS connect failed to " + String(host));
-        f.close();
-        return false;
+        logMessage("TLS connect failed to " + String(host) + " (attempting insecure fallback)");
+        // Try insecure fallback if verification fails (last resort)
+        client.setInsecure();
+        delay(10);
+        if (!client.connect(host, port)) {
+            logMessage("Insecure TLS connect also failed to " + String(host));
+            f.close();
+            return false;
+        }
+        logMessage("Insecure TLS connect succeeded (no cert verification)");
     }
 
     String boundary = "WPASECBOUNDARY123456";
@@ -195,7 +241,7 @@ bool uploadToWpaSec(const char* apiKey, const char* pcapPath, const char* fileNa
     client.print(head);
 
     // Stream file content in chunks
-    const size_t bufSize = 1024;
+    const size_t bufSize = 512;
     uint8_t buffer[bufSize];
     while (f.available()) {
         size_t r = f.read(buffer, bufSize);
@@ -231,8 +277,10 @@ bool uploadToWpaSec(const char* apiKey, const char* pcapPath, const char* fileNa
         delay(1);
     }
     client.stop();
+    logMessage("Free heap after TLS download: " + String(ESP.getFreeHeap()));
     logMessage("Response received, length: " + String(response.length()));
     logMessage("Response: " + response); // Debug log
+    logMessage("Free heap after TLS: " + String(ESP.getFreeHeap()));
 
     // Parse HTTP status code
     int statusCode = 0;
@@ -292,7 +340,7 @@ String decodeChunkedBody(const String &chunked) {
 
 static void parseAndSavePotfileBody(const String &bodyRaw) {
     // Load or init cracked.json
-    JsonDocument crackedDoc;
+    DynamicJsonDocument crackedDoc(8 * 1024);
     if (SD.exists("/cracked.json")) {
         File cf = SD.open("/cracked.json", FILE_READ);
         if (cf) {
@@ -387,7 +435,7 @@ static void parseAndSavePotfileBody(const String &bodyRaw) {
 // ---------- replacement processWpaSec download/parse block ----------
 void processWpaSec(const char* apiKey) {
     // Load uploaded.json (list of filenames)
-    JsonDocument uploadedDoc;
+    DynamicJsonDocument uploadedDoc(2048);
     if (SD.exists("/uploaded.json")) {
         logMessage("Loading /uploaded.json");
         File upf = SD.open("/uploaded.json", FILE_READ);
@@ -407,7 +455,8 @@ void processWpaSec(const char* apiKey) {
         uploadedDoc.to<JsonArray>();
     }
 
-    // Scan handshake folder
+    // Scan handshake folder: collect paths to upload while keeping uploadedDoc in scope
+    std::vector<String> toUpload;
     File dir = SD.open("/handshake");
     if (!dir || !dir.isDirectory()) {
         logMessage("No /handshake folder");
@@ -418,16 +467,10 @@ void processWpaSec(const char* apiKey) {
             if (!file.isDirectory()) {
                 String name = String(file.name());
                 if (name.endsWith(".pcap")) {
-                    String path = String("/handshake/") + name;
                     if (!isAlreadyUploaded(name.c_str(), uploadedDoc)) {
-                        logMessage("Uploading new file: " + name);
-                        bool ok = uploadToWpaSec(apiKey, path.c_str(), name.c_str());
-                        if (ok) {
-                            uploadedDoc.as<JsonArray>().add(name);
-                            saveUploadedList(uploadedDoc);
-                        } else {
-                            logMessage("Upload failed for: " + name);
-                        }
+                        String path = String("/handshake/") + name;
+                        toUpload.push_back(path);
+                        toUpload.push_back(name);
                     } else {
                         logMessage("Skipping already uploaded: " + name);
                     }
@@ -438,6 +481,22 @@ void processWpaSec(const char* apiKey) {
         dir.close();
     }
 
+    // Free the uploadedDoc JSON memory by ending its scope before starting TLS uploads
+    uploadedDoc.clear();
+    delay(10);
+    // Start uploads for the collected list (paired entries: path,name)
+    for (size_t i = 0; i + 1 < toUpload.size(); i += 2) {
+        String path = toUpload[i];
+        String name = toUpload[i + 1];
+        logMessage("Uploading new file (background): " + name);
+        if (!startWpaSecUploadAsync(apiKey, path.c_str(), name.c_str(), 30000)) {
+            logMessage("Failed to start WPA-Sec upload: " + name);
+        } else {
+            logMessage("Upload started in background: " + name);
+            delay(5000);
+        }
+    }
+
     // --- Download cracked potfile via raw HTTPS request (same as earlier) ---
     logMessage("Downloading cracked results (raw HTTPS) ...");
     WiFiClientSecure client;
@@ -445,8 +504,14 @@ void processWpaSec(const char* apiKey) {
     const char* host = "wpa-sec.stanev.org";
     const uint16_t port = 443;
     if (!client.connect(host, port)) {
-        logMessage("TLS connect failed for download");
-        return;
+        logMessage("TLS connect failed for download (attempting insecure fallback)");
+        client.setInsecure();
+        delay(10);
+        if (!client.connect(host, port)) {
+            logMessage("Insecure TLS connect also failed for download");
+            return;
+        }
+        logMessage("Insecure TLS connect succeeded for download");
     }
 
     client.print(String("GET /?api&dl=1 HTTP/1.1\r\n"));
@@ -501,4 +566,112 @@ void processWpaSec(const char* apiKey) {
 
     // now parse potfile lines and save to cracked.json
     parseAndSavePotfileBody(bodyRaw);
+}
+
+// Guard against multiple concurrent uploads
+static volatile bool s_wpa_upload_in_progress = false;
+
+// Heap-allocated argument bag for the upload task
+struct WpaSecUploadArgs {
+    char* arg0;
+    char* arg1;
+    char* arg2;
+    unsigned int arg3;
+};
+
+// Task wrapper that invokes uploadToWpaSec on a dedicated task stack
+static void uploadToWpaSecTask(void* pvParameters) {
+    WpaSecUploadArgs* args = reinterpret_cast<WpaSecUploadArgs*>(pvParameters);
+    if (!args) {
+        vTaskDelete(NULL);
+        return;
+    }
+
+    // Ensure the global flag marks upload in-progress
+    // s_wpa_upload_in_progress is set before creating this task.
+
+    bool ok = false;
+    // Call the existing synchronous function that does the TLS upload.
+    // Signature matches: uploadToWpaSec(const char*, const char*, const char*, unsigned int)
+    ok = uploadToWpaSec(args->arg0, args->arg1, args->arg2, args->arg3);
+
+    if (ok) {
+        logMessage("WPA-Sec upload completed successfully");
+        // Mark as uploaded so it won't be retried
+        appendToUploadedList(args->arg2);
+    } else {
+        logMessage("WPA-Sec upload failed");
+    }
+
+    // Clean up
+    free(args->arg0);
+    free(args->arg1);
+    free(args->arg2);
+    free(args);
+
+    s_wpa_upload_in_progress = false; // allow subsequent uploads
+    vTaskDelete(NULL);
+}
+
+// Start upload task ensuring arguments are heap-allocated and the task stack is large
+static bool startWpaSecUploadAsync(const char* a0, const char* a1, const char* a2, unsigned int a3) {
+    if (s_wpa_upload_in_progress) {
+        logMessage("WPA-Sec upload already in progress");
+        return false;
+    }
+    s_wpa_upload_in_progress = true;
+
+    // Quick guard: ensure there's enough heap for the TLS stack and crypto buffers
+    const size_t kMinHeapForTls = 60 * 1024; // 60KB
+    if (ESP.getFreeHeap() < kMinHeapForTls) {
+        logMessage("Not enough heap to start WPA-Sec upload (free: " + String(ESP.getFreeHeap()) + ")");
+        s_wpa_upload_in_progress = false;
+        return false;
+    }
+
+    WpaSecUploadArgs* args = reinterpret_cast<WpaSecUploadArgs*>(malloc(sizeof(WpaSecUploadArgs)));
+    if (!args) {
+        logMessage("Failed to alloc WPA-Sec args");
+        s_wpa_upload_in_progress = false;
+        return false;
+    }
+
+    args->arg0 = strdup(a0 ? a0 : "");
+    args->arg1 = strdup(a1 ? a1 : "");
+    args->arg2 = strdup(a2 ? a2 : "");
+    args->arg3 = a3;
+
+    if (!args->arg0 || !args->arg1 || !args->arg2) {
+        logMessage("Failed to dup WPA-Sec args");
+        if (args->arg0) free(args->arg0);
+        if (args->arg1) free(args->arg1);
+        if (args->arg2) free(args->arg2);
+        free(args);
+        s_wpa_upload_in_progress = false;
+        return false;
+    }
+
+    // Create a pinned task with a big stack to avoid loopTask stack overflow during TLS handshake
+    // Stack size used here: 32768 (32KB) - adjust if necessary for your board.
+    BaseType_t rc = xTaskCreatePinnedToCore(
+        uploadToWpaSecTask,
+        "wpaUploadTask",
+        16384,       // stack size (bytes) - reduce to save memory
+        args,
+        1,           // priority
+        NULL,        // handle
+        tskNO_AFFINITY // let scheduler decide core; change to 0/1 if you prefer
+    );
+
+    if (rc != pdPASS) {
+        logMessage("Failed to create WPA-Sec upload task");
+        free(args->arg0);
+        free(args->arg1);
+        free(args->arg2);
+        free(args);
+        s_wpa_upload_in_progress = false;
+        return false;
+    }
+
+    return true;
 }

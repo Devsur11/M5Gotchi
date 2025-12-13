@@ -200,7 +200,9 @@ menu settings_menu[] = {
   {"Keyboard Sound", 42},
   {"Advertise Pwngrid presence", 60},
   {"Connect to WiFi", 43},
+  {"Manage saved networks", 32},
   {"Connect to WiFi on startup", 29},
+  {"Check for updates at network start", 33},
   {"GPS GPIO pins", 30},
   {"Log GPS data after handshake", 31},
   {"GO button press function", 59},
@@ -210,6 +212,11 @@ menu settings_menu[] = {
   {"About M5Gotchi", 45},
   {"Power off system", 46},
   {"Reboot system", 56}
+};
+
+menu gps_pins_menu[] = {
+  {"Use default pins", 30},
+  {"Set custom pins", 31},
 };
 
 //menuID 8
@@ -446,7 +453,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi) {
     #endif
   } 
   else if (menuID == 2){
-    drawMenuList( settings_menu , 6, 19);
+    drawMenuList( wifi_menu , 2, 5);
   }
   #ifdef USE_EXPERIMENTAL_APPS
   else if (menuID == 3){
@@ -460,7 +467,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi) {
     drawMenuList( pwngotchi_menu , 5, 4);
   }
   else if (menuID == 6){
-    drawMenuList( settings_menu , 6, 18);
+    drawMenuList( settings_menu , 6, 20);
   }  
   else if (menuID == 7){
     (wpa_sec_api_key.length()>5)?drawMenuList(wpasec_menu, 7, 3):drawMenuList(wpasec_setup_menu, 7, 1);
@@ -503,42 +510,6 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi) {
   #endif 
 
   // draw developer overlays on canvas_main before pushing to display
-  if (serial_overlay) {
-    // fetch logs
-    std::vector<String> lines;
-    loggerGetLines(lines, 6);
-    if (lines.size()) {
-      // ensure top-left datum for proper left-aligned text
-      canvas_main.setTextDatum(top_left);
-      // draw overlay box in top-right
-      canvas_main.setTextSize(1);
-      canvas_main.setTextColor(tx_color_rgb565);
-      int boxW = 0;
-      for (auto &l : lines) {
-        int w = canvas_main.textWidth(l);
-        if (w > boxW) boxW = w;
-      }
-      boxW += 8;
-      int boxH = 12 * (int)lines.size() + 6;
-      int x = canvas_main.width() - boxW - 2;
-      int y = 2;
-      canvas_main.fillRect(x, y, boxW, boxH, RGBToRGB565(0,0,0));
-      canvas_main.setTextColor(tx_color_rgb565);
-      int ly = y + 4;
-      for (auto &l : lines) {
-        // if text wider than available, trim end and append ellipsis
-        int maxChars = l.length();
-        while (maxChars > 0 && canvas_main.textWidth(l.substring(0, maxChars)) > (boxW - 8)) maxChars--;
-        String display = l;
-        if (maxChars < (int)l.length()) {
-          if (maxChars > 3) display = l.substring(0, maxChars - 3) + "...";
-          else display = l.substring(0, maxChars);
-        }
-        canvas_main.drawString(display, x + 4, ly);
-        ly += 12;
-      }
-    }
-  }
   if (coords_overlay) {
     // approximate coordinates of selected menu item
     if (menuID != 0) {
@@ -561,6 +532,10 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi) {
   }
   canvas_main.pushSprite(0, canvas_top_h);
   M5.Display.endWrite();
+  if(serial_overlay){
+    loggerTask();
+    delay(100);
+  } 
 }
 
 void drawTopCanvas() {
@@ -696,25 +671,37 @@ void drawInfoBox(String tittle, String info, String info2, bool canBeQuit, bool 
   appRunning = true;
   debounceDelay();
   while(true){
-    drawTopCanvas();
-    drawBottomCanvas();
     canvas_main.fillScreen(bg_color_rgb565);
     canvas_main.setTextColor(tx_color_rgb565);
     canvas_main.clear(bg_color_rgb565);
     canvas_main.setTextSize(3);
-    if(isCritical){canvas_main.setColor(RED);}
-    else {canvas_main.setColor(tx_color_rgb565);}
+    for(uint8_t size = 0; size<3;size++){
+      if(canvas_main.textWidth(tittle) > 245){
+        canvas_main.setTextSize(3-size);
+      }
+      else{
+        break;
+      }
+    }
+    uint32_t tittleLenght = canvas_main.textLength(tittle, canvas_main.textWidth(tittle) );
+    canvas_main.setColor(tx_color_rgb565);
     canvas_main.setTextDatum(middle_center);
     canvas_main.drawString(tittle, canvas_center_x, canvas_h / 4);
     canvas_main.setTextSize(1.5);
-    canvas_main.setTextDatum(middle_center);
-    canvas_main.drawString(info, canvas_center_x, canvas_h / 2);
-    canvas_main.drawString(info2, canvas_center_x, (canvas_h / 2) + 20);
-    ;
+    canvas_main.setTextDatum(top_left);
+    canvas_main.setCursor(1, (canvas_h / 4) + tittleLenght + 8);
+    canvas_main.println(info + "\n" +  info2);
+    // canvas_main.drawString(info, canvas_center_x, canvas_h / 2);
+    // canvas_main.drawString(info2, canvas_center_x, (canvas_h / 2) + 20);
     if(canBeQuit){
+      canvas_main.setTextDatum(middle_center);
+      canvas_main.setTextSize(2);
+      //canvas_main.drawString("To exit press OK", canvas_center_x, canvas_h * 0.9);
+      int buttonWidth = canvas_main.textWidth("OK") + 20;
+      int buttonHeight = 10;
+      canvas_main.drawRect(canvas_center_x - (buttonWidth / 2), (canvas_h * 0.9) - 5, buttonWidth, buttonHeight, tx_color_rgb565);
       canvas_main.setTextSize(1);
-      canvas_main.drawString("To exit press OK", canvas_center_x, canvas_h * 0.9);
-      drawBottomCanvas();
+      canvas_main.drawString("OK", canvas_center_x, canvas_h * 0.9);
       pushAll();
       M5.update();
       M5Cardputer.update();
@@ -725,9 +712,100 @@ void drawInfoBox(String tittle, String info, String info2, bool canBeQuit, bool 
 
     }
     else{
-      drawBottomCanvas();
+      //lets draw "Please wait..." at the bottom
+      canvas_main.setTextDatum(middle_center);
+      canvas_main.setTextSize(1.5);
+      canvas_main.setTextColor(tx_color_rgb565);
+      canvas_main.drawString("Please wait...", canvas_center_x, canvas_h * 0.9); 
       pushAll();
       return;
+    }
+  }
+  appRunning = false;
+}
+
+void drawHintBox(String text, uint64_t hintID) {
+  if(bitRead(hintsDisplayed, hintID)) {
+    return;
+  }
+  appRunning = true;
+  debounceDelay();
+  while(true){
+    if(true){
+      canvas_main.setTextDatum(middle_center);
+      canvas_main.setTextSize(1);
+      
+      uint8_t current_option = 1; // 0 = OK, 1 = Don't show again
+      bool selecting = true;
+      
+      while(selecting) {
+        canvas_main.fillScreen(bg_color_rgb565);
+        canvas_main.setTextColor(tx_color_rgb565);
+        canvas_main.clear(bg_color_rgb565);
+        canvas_main.setTextSize(1.5);
+        canvas_main.setTextDatum(top_left);
+        canvas_main.setCursor(1, 5);
+        canvas_main.println(text);
+        
+        // Draw buttons
+        canvas_main.setTextSize(1);
+        canvas_main.setTextDatum(middle_center);
+        
+        int btn1_x = canvas_center_x - 60;
+        int btn2_x = canvas_center_x + 40;
+        int btn_y = canvas_h * 0.9;
+        
+        // OK button
+        if(current_option == 0) {
+          canvas_main.drawRect(btn1_x - 20, btn_y - 7, 40, 14, tx_color_rgb565);
+          canvas_main.setTextColor(tx_color_rgb565);
+        } else {
+          canvas_main.setTextColor(tx_color_rgb565);
+        }
+        canvas_main.drawString("OK", btn1_x, btn_y);
+        
+        // Don't show again button
+        if(current_option == 1) {
+          canvas_main.drawRect(btn2_x - 60, btn_y - 7, 120, 14, tx_color_rgb565);
+          canvas_main.setTextColor(tx_color_rgb565);
+        } else {
+          canvas_main.setTextColor(tx_color_rgb565);
+        }
+        canvas_main.drawString("Don't show again", btn2_x, btn_y);
+        
+        pushAll();
+        M5.update();
+        M5Cardputer.update();
+        
+        keyboard_changed = M5Cardputer.Keyboard.isChange();
+        if(keyboard_changed){Sound(10000, 100, sound);}
+        
+        Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
+        
+        for(auto i : status.word) {
+          if(i == ',') { // left arrow
+            current_option = 0;
+            debounceDelay();
+          }
+          else if(i == '/') { // right arrow
+            current_option = 1;
+            debounceDelay();
+          }
+        }
+        
+        if(status.enter) {
+          if(current_option == 0) {
+            Sound(10000, 100, sound);
+            return;
+          }
+          else if(current_option == 1) {
+            bitSet(hintsDisplayed, hintID);
+            saveSettings();
+            Sound(10000, 100, sound);
+            return;
+          }
+        }
+      }
     }
   }
   appRunning = false;
@@ -1191,7 +1269,7 @@ void runApp(uint8_t appID){
     if(appID == 5){drawInfoBox("ERROR", "not implemented", "" ,  true, true);}
     if(appID == 6){
       debounceDelay();
-      drawMenuList(settings_menu ,6  , 18);
+      drawMenuList(settings_menu ,6  , 20);
     }
     if(appID == 7){
       debounceDelay();
@@ -2702,12 +2780,115 @@ void runApp(uint8_t appID){
         drawInfoBox("ERROR!", "Upload failed!", "Status code: " + String(statusToCode), true, false);
       }
     }
-    if(appID == 29){}
-    if(appID == 30){}
-    if(appID == 31){}
-    if(appID == 32){}
-    // Devtools
-    if(appID == 99) {
+    if(appID == 29){
+      // Toggle connect to WiFi on startup
+      String opts[] = {"Off","On"};
+      uint8_t initial = connectWiFiOnStartup ? 1 : 0;
+      uint8_t choice = drawMultiChoice("Connect WiFi on boot?", opts, 2, 6, initial);
+      connectWiFiOnStartup = (choice == 1);
+      if(saveSettings()){
+        drawInfoBox("Saved", "Connect on startup updated", "", true, false);
+      } else {
+        drawInfoBox("ERROR", "Failed to save setting", "Check SD card", true, false);
+      }
+      menuID = 0;
+      return;
+    }
+    if(appID == 30){
+      // GPS GPIO pins
+      String options[] = {"Use default pins", "Set custom pins"};
+      int initial = useCustomGPSPins ? 1 : 0;
+      int res = drawMultiChoice("GPS pins", options, 2, 6, initial);
+      if(res == 0){
+        useCustomGPSPins = false;
+        if(saveSettings()) drawInfoBox("Saved", "Using default GPS pins", "", true, false);
+      } else if(res == 1){
+        // set custom pins - prefill with current pins
+        String txs = userInput("GPS TX Pin", "Enter TX pin number", 3);
+        String rxs = userInput("GPS RX Pin", "Enter RX pin number", 3);
+        if(txs.length() && rxs.length()){
+          gpsTx = txs.toInt();
+          gpsRx = rxs.toInt();
+          useCustomGPSPins = true;
+          if(saveSettings()) drawInfoBox("Saved", "Custom GPS pins set", "", true, false);
+        }
+      }
+      menuID = 0;
+      return;
+    }
+    if(appID == 31){
+      // Log GPS data after handshake
+      String menu[] = {"Off","On"};
+      uint8_t initial = getLocationAfterPwn ? 1 : 0;
+      uint8_t choice = drawMultiChoice("Log GPS data after handshake", menu, 2, 6, initial);
+      getLocationAfterPwn = (choice == 1);
+      if(saveSettings()){
+        drawInfoBox("Saved", "Setting updated", "", true, false);
+      }
+      menuID = 0;
+      return;
+    }
+    if(appID == 32){
+      // Manage saved networks
+      // build menu of saved networks
+      size_t n = savedNetworks.size();
+      std::vector<String> vlist;
+      for(size_t i=0;i<n;i++){
+        vlist.push_back(savedNetworks[i].ssid + (savedNetworks[i].connectOnStart?" (Auto)":""));
+      }
+      vlist.push_back("Add new network");
+      vlist.push_back("Back");
+      String *arr = new String[vlist.size()];
+      for(size_t i=0;i<vlist.size(); ++i) arr[i] = vlist[i];
+      int8_t choice = drawMultiChoice("Saved networks", arr, vlist.size(), 0, 0);
+      delete[] arr;
+      if(choice == -1 || choice == n+1){ menuID = 0; return; }
+      else if(choice == n){
+        // Add new network
+        drawInfoBox("Scanning...","Scanning for networks","Please wait", false, false);
+        int numNetworks = WiFi.scanNetworks();
+        if(numNetworks == 0){ drawInfoBox("Info","No networks found","", true, false); menuID=0; return; }
+        std::vector<String> wifinets;
+        for (int i = 0; i < numNetworks; i++) wifinets.push_back(WiFi.SSID(i));
+        String *warr = new String[wifinets.size()];
+        for (size_t i = 0; i < wifinets.size(); ++i) warr[i] = wifinets[i];
+        int idx = drawMultiChoice("Select network:", warr, wifinets.size(), 6, 3);
+        delete[] warr;
+        if(idx == -1){ menuID = 0; return; }
+        String pass = userInput("Password", "Enter wifi password", 30);
+        if(addSavedNetwork(wifinets[idx], pass, false)) drawInfoBox("Saved", "Network added", "", true, false);
+        else drawInfoBox("ERROR", "Failed to save network", "", true, false);
+        menuID = 0; return;
+      } else {
+        // selected existing network - options: connect, remove, toggle auto
+        size_t idx = choice;
+        String opts[] = {"Connect","Toggle Auto","Remove","Back"};
+        int sel = drawMultiChoice("Action", opts, 4, 0, 0);
+        if(sel == 0){
+          // Connect
+          String pass = savedNetworks[idx].pass;
+          if(pass.length() == 0){
+            pass = userInput("Password", "Enter wifi password", 30);
+          }
+          WiFi.begin(savedNetworks[idx].ssid.c_str(), pass.c_str());
+          unsigned long start = millis();
+          while(millis() - start < 10000 && WiFi.status() != WL_CONNECTED) delay(500);
+          if(WiFi.status() == WL_CONNECTED){ drawInfoBox("Connected","Connected to " + savedNetworks[idx].ssid, "", true, false); }
+          else drawInfoBox("Error","Connection failed","", true, false);
+        }
+        else if(sel == 1){
+          bool newVal = !savedNetworks[idx].connectOnStart;
+          setSavedNetworkConnectOnStart(idx, newVal);
+          drawInfoBox("Saved","Auto connect toggled", "", true, false);
+        }
+        else if(sel == 2){
+          removeSavedNetwork(idx);
+          drawInfoBox("Removed","Network removed", "", true, false);
+        }
+      }
+      menuID = 0; return;
+    }
+    if(appID == 99){
       debounceDelay();
       drawMenuList(devtools_menu, 99, 9);
       return;
@@ -2846,7 +3027,14 @@ void runApp(uint8_t appID){
       }
       return;
     }
-    if(appID == 33){}
+    if(appID == 33){
+      String opts[] = {"Off","On"};
+      uint8_t initial = checkUpdatesAtNetworkStart ? 1 : 0;
+      uint8_t choice = drawMultiChoice("Check updates on network start?", opts, 2, 6, initial);
+      checkUpdatesAtNetworkStart = (choice == 1);
+      if(saveSettings()) drawInfoBox("Saved","Setting updated", "", true, false);
+      menuID = 0; return;
+    }
     if(appID == 34){}
     if(appID == 35){}
     if(appID == 36){
@@ -2855,8 +3043,12 @@ void runApp(uint8_t appID){
         if(answear){
           menuID = 0;
           String sub_menu[] = {"Stealth (legacy)", "Normal (beta)"};
-          uint8_t modeChoice = drawMultiChoice("Select mode:", sub_menu, 2, 2, 2);
+          int8_t modeChoice = drawMultiChoice("Select mode:", sub_menu, 2, 2, 2);
           debounceDelay();
+          if(modeChoice == -1){
+            menuID = 0;
+            return;
+          }
           if(modeChoice==0){
             stealth_mode = true;
           }
@@ -2976,19 +3168,22 @@ void runApp(uint8_t appID){
         for (int i = 0; i < numNetworks; i++) {
           String ssid = WiFi.SSID(i);
           logMessage(WiFi.SSID(i) + " =? " + savedApSSID);
-          if(WiFi.SSID(i) == (savedApSSID)){
-            WiFi.begin(savedApSSID, savedAPPass);
-            uint8_t counter;
-            while (counter<=10 && !WiFi.isConnected()) {
-              delay(1000);
-              drawInfoBox("Connecting", "Connecting to " + savedApSSID, "You'll soon be redirected ", false, false);
-              counter++;
-            }
-            counter = 0;
-            if(WiFi.isConnected()){
-              drawInfoBox("Connected", "Connected succesfully to", String(WiFi.SSID()) , true, false);
-              menuID = 0;
-              return;
+          // attempt any saved network that matches this SSID
+          for(size_t si = 0; si < savedNetworks.size(); ++si){
+            if(WiFi.SSID(i) == (savedNetworks[si].ssid)){
+              WiFi.begin(savedNetworks[si].ssid.c_str(), savedNetworks[si].pass.c_str());
+              uint8_t counter;
+              while (counter<=10 && !WiFi.isConnected()) {
+                delay(1000);
+                drawInfoBox("Connecting", "Connecting to " + savedNetworks[si].ssid, "You'll soon be redirected ", false, false);
+                counter++;
+              }
+              counter = 0;
+              if(WiFi.isConnected()){
+                drawInfoBox("Connected", "Connected succesfully to", String(WiFi.SSID()) , true, false);
+                menuID = 0;
+                return;
+              }
             }
           }
           wifinets[i] = String(ssid);
@@ -3020,6 +3215,8 @@ void runApp(uint8_t appID){
         drawInfoBox("Connected", "Connected succesfully to", String(WiFi.SSID()) , true, false);
         savedApSSID = WiFi.SSID(wifisel);
         savedAPPass = password;
+        // Ensure network is saved (and flag it as connect-on-start by default)
+        addSavedNetwork(savedApSSID, savedAPPass, true);
         if(saveSettings()){
           menuID = 0;
           return;
@@ -3675,6 +3872,14 @@ String userInput(String tittle, String desc, uint8_t maxLenght){
     drawBottomCanvas();
     canvas_main.clear(bg_color_rgb565);
     canvas_main.setTextSize(3);
+    for(uint8_t size = 0; size<3;size++){
+      if(canvas_main.textWidth(tittle) > 240){
+        canvas_main.setTextSize(3-size);
+      }
+      else{
+        break;
+      }
+    }
     canvas_main.setTextColor(tx_color_rgb565);
     canvas_main.setTextDatum(middle_center);
     canvas_main.drawString(tittle, canvas_center_x, canvas_h / 4);
@@ -3682,8 +3887,7 @@ String userInput(String tittle, String desc, uint8_t maxLenght){
     canvas_main.drawString(desc, canvas_center_x, canvas_h * 0.9);
     M5.update();
     M5Cardputer.update();
-    ;
-    //auto i;
+    
     keyboard_changed = M5Cardputer.Keyboard.isChange();
     if(keyboard_changed){Sound(10000, 100, sound);}    
     Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
@@ -3720,6 +3924,11 @@ String userInput(String tittle, String desc, uint8_t maxLenght){
     canvas_main.setTextSize(1.5);
     canvas_main.setCursor(0 , canvas_h /2);
     canvas_main.println(textTyped);
+    //draw OK button
+    canvas_main.drawRect(canvas_center_x - (canvas_main.textWidth("OK")/2) -10, canvas_h - 32, (canvas_main.textWidth("OK")/2 )+ 30, 14, tx_color_rgb565);
+    canvas_main.setTextDatum(middle_center);
+    canvas_main.setTextSize(1);
+    canvas_main.drawString("OK", canvas_center_x, canvas_h - 25);
     pushAll();
   }
   //drawInfoBox("Confirm value:", textTyped, true, false);
@@ -3740,29 +3949,72 @@ String multiplyChar(char toMultiply, uint8_t literations){
 bool drawQuestionBox(String tittle, String info, String info2, String label) {
   appRunning = true;
   debounceDelay();
+  bool selected = false;
   while(true){
     drawTopCanvas();
     drawBottomCanvas();
     canvas_main.clear(bg_color_rgb565);
     canvas_main.setTextSize(3);
+    for(uint8_t size = 0; size<3;size++){
+      if(canvas_main.textWidth(tittle) > 240){
+        canvas_main.setTextSize(3-size);
+      }
+      else{
+        break;
+      }
+    }
     canvas_main.setColor(tx_color_rgb565);
     canvas_main.setTextDatum(middle_center);
     canvas_main.drawString(tittle, canvas_center_x, canvas_h / 4);
-    canvas_main.setTextSize(1.5);
-    canvas_main.setTextDatum(middle_center);
-    canvas_main.drawString(info, canvas_center_x, canvas_h / 2);
-    canvas_main.drawString(info2, canvas_center_x, (canvas_h / 2) + 20);
+    canvas_main.setTextSize(1.2);
+    canvas_main.setTextDatum(middle_left);
+    canvas_main.setCursor(2, 22 + canvas_main.textLength(tittle, canvas_main.textWidth(tittle)) +17);
+    canvas_main.println(info + "\n" + info2);
     canvas_main.setTextSize(1);
-    canvas_main.drawString( label, canvas_center_x, canvas_h * 0.9);
+    canvas_main.setTextDatum(middle_center);
+    if(label.length()>5){
+      //lets draw 2 squares with yes and no
+      //yes
+      if(selected){canvas_main.drawRect(canvas_center_x - 80, canvas_h - 30, 60, 15, tx_color_rgb565);}
+      canvas_main.setTextDatum(middle_center);
+      canvas_main.drawString("Yes", canvas_center_x - 50, canvas_h - 22);
+      //no
+      if(!selected){canvas_main.drawRect(canvas_center_x + 20, canvas_h - 30, 60, 15, tx_color_rgb565);}
+      canvas_main.setTextDatum(middle_center);
+      canvas_main.drawString("No", canvas_center_x + 50, canvas_h - 22);
+      canvas_main.drawString( label, canvas_center_x, canvas_h * 0.9);
+    }
+    else{
+      //yes
+      if(selected){canvas_main.drawRect(canvas_center_x - 80, canvas_h - 20, 60, 15, tx_color_rgb565);}
+      canvas_main.setTextDatum(middle_center);
+      canvas_main.drawString("Yes", canvas_center_x - 50, canvas_h - 12);
+      //no
+      if(!selected){canvas_main.drawRect(canvas_center_x + 20, canvas_h - 20, 60, 15, tx_color_rgb565);}
+      canvas_main.setTextDatum(middle_center);
+      canvas_main.drawString("No", canvas_center_x + 50, canvas_h - 12);
+    }
+
+    
+
     pushAll();
     M5.update();
     M5Cardputer.update();
     keyboard_changed = M5Cardputer.Keyboard.isChange();
     if(keyboard_changed){Sound(10000, 100, sound);}    
     Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
-    ;
-
-    
+    if(status.enter){
+      if(!selected){
+        logMessage("No");
+        debounceDelay();
+        return false;
+      }
+      else{
+        logMessage("yes");
+        debounceDelay();
+        return true;
+      }
+    }
     for(auto i : status.word){
       if(i=='`' && status.fn){
         appRunning = false;
@@ -3770,11 +4022,17 @@ bool drawQuestionBox(String tittle, String info, String info2, String label) {
       }
       else if(i=='y'){
         logMessage("yes");
+        debounceDelay();
         return true;
       }
       else if(i=='n'){
         logMessage("No");
+        debounceDelay();
         return false;
+      }
+      else if(i=='/' || i==',' || i==';' || i=='.'){
+        selected = !selected;
+        debounceDelay();
       }
     }
   }
@@ -4363,43 +4621,20 @@ void logVictim(String login, String pass){
   return;
 }
 
-void drawWifiInfoScreen(String wifiName, String wifiMac, String wifiRRSI, String wifiChanel){
-  debounceDelay();
-  while(true){
-    drawTopCanvas();
-    drawBottomCanvas();
-    canvas_main.fillSprite(bg_color_rgb565);
-    canvas_main.setTextSize(2);
-    canvas_main.setTextColor(tx_color_rgb565);
-    canvas_main.setColor(tx_color_rgb565);
-    canvas_main.setTextDatum(middle_center);
-    canvas_main.drawString(wifiChoice, display_w/2, 25);
-    canvas_main.setTextSize(1.5);
-    canvas_main.drawString("Mac: " + wifiMac, display_w/2 , 50);
-    canvas_main.drawString(wifiRRSI + " RRSI, Chanel: " + wifiChanel, display_w/2, 70);
-    canvas_main.setTextSize(1);
-    canvas_main.drawString("<To clone press C, ENTER to exit>", display_w/2, 100);
-    pushAll();
-    updateM5();
-    keyboard_changed = M5Cardputer.Keyboard.isChange();
-    ;
-    if(keyboard_changed){Sound(10000, 100, sound);} 
-    Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
-    for(auto i : status.word){
-      if(i == 'c'){
-        cloned = true;
-        return;
-      }
-    }
-    if(status.enter){
-      return;
-    }
+// deprecated, leaved only for compatibility with older versions
+inline void drawWifiInfoScreen(String wifiName, String wifiMac, String wifiRRSI, String wifiChanel){
+  if(drawQuestionBox(wifiName, "Mac: " + wifiMac + ", " + wifiRRSI + " RRSI", ", Chanel: " + wifiChanel, "Clone this wifi?")){
+    cloned = true;
+    return;
   }
 }
 
 #endif
 
 void pushAll(){
+  if(coords_overlay){loggerTask(); delay(100);}
+  drawBottomCanvas();
+  drawTopCanvas();
   M5.Display.startWrite();
   canvas_top.pushSprite(0, 0);
   canvas_bot.pushSprite(0, canvas_top_h + canvas_h);
@@ -4715,14 +4950,17 @@ void sendCrashReport(){
   uint8_t wifiCount = WiFi.scanNetworks();
   for(uint8_t i = 0; i < wifiCount; i++){
     String ssid = WiFi.SSID(i);
-    if(ssid == savedApSSID){
-      WiFi.begin(savedApSSID.c_str(), savedAPPass.c_str());
-      uint8_t connectTry = 0;
-      while(WiFi.status() != WL_CONNECTED && connectTry < 10){
-        delay(1000);
-        connectTry++;
+    // try all saved networks and if found connect
+    for(size_t si = 0; si < savedNetworks.size(); ++si){
+      if(ssid == savedNetworks[si].ssid){
+        WiFi.begin(savedNetworks[si].ssid.c_str(), savedNetworks[si].pass.c_str());
+        uint8_t connectTry = 0;
+        while(WiFi.status() != WL_CONNECTED && connectTry < 10){
+          delay(1000);
+          connectTry++;
+        }
+        break;
       }
-      break;
     }
   }
   if(WiFi.status() == WL_CONNECTED){

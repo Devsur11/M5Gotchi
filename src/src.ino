@@ -16,10 +16,8 @@
 #include "esp_system.h"
 #include "mbedtls/base64.h"
 #endif
-#ifdef LITE_VERSION
 #include "githubUpdater.h"
 #include "wpa_sec.h"
-#endif
 #include "esp_partition.h"
 
 const esp_partition_t *coredump_part =
@@ -184,6 +182,27 @@ void setup() {
   initColorSettings();
   initUi();
   preloadMoods();
+  // Try to connect to any saved networks on startup if enabled
+  bool newVersionAvailable = false;
+  if(connectWiFiOnStartup){
+    attemptConnectSavedNetworks();
+    if(WiFi.status() == WL_CONNECTED){
+      logMessage("Connected to WiFi on startup");
+    } else {
+      logMessage("Failed to connect to WiFi on startup");
+    }
+    //lets now check for updates and if it exists, inform the user
+    if(checkUpdatesAtNetworkStart) {
+      logMessage("Checking for updates on network start");
+      if(check_for_new_firmware_version(false)) {
+        logMessage("New firmware version available on startup");
+        newVersionAvailable = true;
+      } else {
+        logMessage("No new firmware version found on startup");
+      }
+    }
+  }
+  
   if(initVars()){}
   else{
     #ifndef BYPASS_SD_CHECK
@@ -203,30 +222,32 @@ void setup() {
   wakeUp();
   #ifdef LITE_VERSION
   #ifndef SKIP_AUTO_UPDATE
-  drawInfoBox("Update", "Checking for updates", "Please wait...", false, false);
-  WiFi.begin(savedApSSID.c_str(), savedAPPass.c_str());
-  delay(5000);
-  if(check_for_new_firmware_version(true)) {
-    drawInfoBox("Update", "New firmware version available", "Downloading...", false, false);
-    delay(1000);
-    logMessage("New firmware version available, downloading...");
-    if(ota_update_from_url(true)) {
-      drawInfoBox("Update", "Update successful", "Restarting...", false, false);
-      logMessage("Update successful, restarting...");
+  if(checkUpdatesAtNetworkStart) {
+    drawInfoBox("Update", "Checking for updates", "Please wait...", false, false);
+    attemptConnectSavedNetworks();
+    delay(5000);
+      if(check_for_new_firmware_version(true)) {
+      drawInfoBox("Update", "New firmware version available", "Downloading...", false, false);
       delay(1000);
-      ESP.restart();
+      logMessage("New firmware version available, downloading...");
+      if(ota_update_from_url(true)) {
+        drawInfoBox("Update", "Update successful", "Restarting...", false, false);
+        logMessage("Update successful, restarting...");
+        delay(1000);
+        ESP.restart();
+      } else {
+        logMessage("Update failed");
+      }
     } else {
-      logMessage("Update failed");
+      drawInfoBox("Update", "No new firmware version found", "Booting...", false, false);
+      logMessage("No new firmware version found, or wifi not connected");
+      delay(1000);
     }
-  } else {
-    drawInfoBox("Update", "No new firmware version found", "Booting...", false, false);
-    logMessage("No new firmware version found, or wifi not connected");
-    delay(1000);
-  }
-  if(WiFi.status() == WL_CONNECTED) {
-    if(lite_mode_wpa_sec_sync_on_startup){
-      logMessage("Syncing known networks with WPA_SEC");
-      processWpaSec(wpa_sec_api_key.c_str());
+    if(WiFi.status() == WL_CONNECTED) {
+      if(lite_mode_wpa_sec_sync_on_startup){
+        logMessage("Syncing known networks with WPA_SEC");
+        processWpaSec(wpa_sec_api_key.c_str());
+      }
     }
   }
   #endif
@@ -298,9 +319,11 @@ void setup() {
   }
 
   if(((hintsDisplayed & 0b1) == 0) && limitFeatures){
-    drawInfoBox("Hint", "For best experience use", " M5Burner to install this fw.", true, false);
-    hintsDisplayed |= 0b1;
-    saveSettings();
+    drawHintBox("For the best experience please use M5Burner to install this firmware.", 1);
+  }
+  drawHintBox("Hi there!\nPress esc to open menu.\nUse arrows to navigate.\nSometimes keyboard.\nLook around, and enjoy!", 2);
+  if(newVersionAvailable) {
+    drawHintBox("A new firmware version is available!\nPlease update via the menu\nPlease note tha bugs from older version will not be reviewed!", 3);
   }
 }
 
@@ -314,6 +337,7 @@ void wakeUp() {
 
 
 void loop() {
+  
   pwngridAdvertise(0, getCurrentMoodFace());
   unsigned long currentMillis = millis();
   M5.update();
@@ -326,6 +350,7 @@ void loop() {
   }
   else if(M5Cardputer.Keyboard.isKeyPressed(KEY_FN)){
     activity++;
+    debounceDelay();
   }
 
   updateUi(true);

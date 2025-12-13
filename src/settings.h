@@ -3,6 +3,7 @@
 #include <SPI.h>
 #include "logger.h"
 #include "WiFi.h"
+#include <vector>
 
 extern "C" {
   #include "esp_heap_caps.h"
@@ -85,8 +86,20 @@ extern bool sound;
 extern int brightness;
 extern uint16_t pwned_ap;
 extern SPIClass sdSPI;
+struct SavedNetwork {
+    String ssid;
+    String pass;
+    bool connectOnStart;
+};
+extern std::vector<SavedNetwork> savedNetworks;
 extern String savedApSSID;
 extern String savedAPPass;
+extern bool connectWiFiOnStartup;
+
+bool addSavedNetwork(const String &ssid, const String &pass, bool connectOnStart);
+bool removeSavedNetwork(size_t idx);
+bool setSavedNetworkConnectOnStart(size_t idx, bool enabled);
+void attemptConnectSavedNetworks();
 extern String whitelist;
 extern bool pwnagothiMode;
 extern uint8_t sessionCaptures;
@@ -112,3 +125,8 @@ extern bool dev_mode;
 extern bool serial_overlay;
 extern bool coords_overlay;
 extern bool skip_file_manager_checks_in_dev;
+extern uint8_t gpsTx;
+extern uint8_t gpsRx;
+extern bool useCustomGPSPins;
+extern bool getLocationAfterPwn;
+extern bool checkUpdatesAtNetworkStart;

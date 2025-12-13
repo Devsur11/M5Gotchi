@@ -444,7 +444,7 @@ static int parse_public_key_tolerant(mbedtls_pk_context *pk, const uint8_t *pem,
 
 // ---------- Encrypt (patched) ----------
 bool pwngrid::crypto::encryptFor(const std::vector<uint8_t> &cleartext, const String &recipientPubPEM, std::vector<uint8_t> &out) {
-    CryptoGuard guard;
+    //CryptoGuard guard;
     if (recipientPubPEM.length() == 0) {
         logMessage("[crypto] encryptFor: recipient public key empty");
         return false;
