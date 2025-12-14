@@ -74,6 +74,7 @@ struct personality{
     uint16_t deauth_packet_delay;
     uint16_t delay_after_no_clients_found;
     uint16_t client_discovery_timeout;
+    uint16_t gps_fix_timeout;
 };
 
 bool initVars();
@@ -130,3 +131,4 @@ extern uint8_t gpsRx;
 extern bool useCustomGPSPins;
 extern bool getLocationAfterPwn;
 extern bool checkUpdatesAtNetworkStart;
+extern bool auto_mode_and_wardrive;

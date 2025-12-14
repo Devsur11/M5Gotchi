@@ -6,6 +6,7 @@
 #include <HTTPClient.h>
 #include "wardrive.h"
 #include "logger.h"
+#include "crypto.h"
 
 static const int GPS_RX_PIN = 15; // AT6H TX -> ESP RX
 static const int GPS_TX_PIN = 13; // AT6H RX <- ESP TX
@@ -362,7 +363,7 @@ bool uploadToWigle(const String& encodedToken, const char* csvPath, int* outHttp
     client.setInsecure();
 
     const char* uploadUrl = "https://api.wigle.net/api/v2/file/upload";
-    const char* host = "wigle.net";
+    const char* host = "api.wigle.net";
 
     if (!client.connect(host, 443)) {
         fLogMessage("uploadToWigle: connection failed");
@@ -371,22 +372,77 @@ bool uploadToWigle(const String& encodedToken, const char* csvPath, int* outHttp
         return false;
     }
 
-    client.print(String("POST /upload HTTP/1.1\r\n"));
-    client.print(String("Host: ") + host + "\r\n");
-    client.print(String("Authorization: Basic ") + encodedToken + "\r\n");
-    client.print("User-Agent: M5Gotchi-ESPBlaster/1.0\r\n");
-    client.print("Content-Type: text/csv\r\n");
-    client.print("Connection: close\r\n");
-    client.print(String("Content-Length: ") + fileSize + "\r\n\r\n");
+    // Use multipart/form-data with a boundary so the Wigle API accepts the upload
+    String filename = csvPath;
+    int lastSlash = filename.lastIndexOf('/');
+    if (lastSlash >= 0) filename = filename.substring(lastSlash + 1);
 
+    // Create a reasonably-unique boundary
+    String boundary = "----WiGLEBoundary" + String(millis());
+
+    String preamble = String("--") + boundary + "\r\n";
+    preamble += String("Content-Disposition: form-data; name=\"file\"; filename=\"") + filename + "\"\r\n";
+    preamble += "Content-Type: text/csv\r\n\r\n";
+
+    String closing = String("\r\n--") + boundary + "--\r\n";
+
+    // Compute total content length: preamble + file + closing
+    size_t contentLength = preamble.length() + (size_t)fileSize + closing.length();
+
+    client.print(String("POST /api/v2/file/upload HTTP/1.1\r\n"));
+    client.print(String("Host: ") + host + "\r\n");
+    // Normalize the provided API key/token. Users may provide either:
+    // - a plain "name:token" pair (we will base64-encode it),
+    // - a base64-encoded credential (as provided by Wigle's "Encoded for use" token), or
+    // - a bare token (less likely to work; we send it as-is and log a warning).
+    String authHeaderB64;
+    String key = encodedToken;
+    key.trim();
+    if (key.length() == 0) {
+        fLogMessage("uploadToWigle: warning: empty Wigle API key provided");
+    }
+    // If it contains a colon, treat as plain name:token and base64-encode
+    if (key.indexOf(':') >= 0) {
+        std::vector<uint8_t> bytes;
+        bytes.reserve(key.length());
+        for (size_t i = 0; i < (size_t)key.length(); ++i) bytes.push_back((uint8_t)key[i]);
+        authHeaderB64 = pwngrid::crypto::base64Encode(bytes);
+        fLogMessage("uploadToWigle: encoded plain name:token into base64 credential");
+    } else {
+        // Try to base64-decode and check if it yields a name:token; if so, assume it's valid
+        auto dec = pwngrid::crypto::base64Decode(key);
+        bool dec_has_colon = false;
+        for (auto b : dec) if (b == (uint8_t)':') { dec_has_colon = true; break; }
+        if (dec_has_colon) {
+            authHeaderB64 = key; // already proper base64-encoded credential
+            fLogMessage("uploadToWigle: using provided base64-encoded credential");
+        } else {
+            // Ambiguous: user provided token only (no colon, not decodable to name:token)
+            // Send it as-is but log a warning suggesting correct formats.
+            authHeaderB64 = key;
+            fLogMessage("uploadToWigle: warning: API key appears to be a bare token; consider using 'name:token' or the encoded credential from https://wigle.net/account");
+        }
+    }
+    client.print(String("Authorization: Basic ") + authHeaderB64 + "\r\n");
+    client.print("User-Agent: M5Gotchi-ESPBlaster/1.0\r\n");
+    client.print(String("Content-Type: multipart/form-data; boundary=") + boundary + "\r\n");
+    client.print("Connection: close\r\n");
+    client.print(String("Content-Length: ") + contentLength + "\r\n\r\n");
+
+    // Send preamble
+    client.print(preamble);
+
+    // Stream the file body
     const size_t bufSize = 2048;
     uint8_t buf[bufSize];
-
     while (true) {
         int r = f.read(buf, bufSize);
         if (r <= 0) break;
         client.write(buf, r);
     }
+
+    // Send closing boundary
+    client.print(closing);
     f.close();
 
     // Read response headers
@@ -406,6 +462,27 @@ bool uploadToWigle(const String& encodedToken, const char* csvPath, int* outHttp
 
     if (outHttpCode) *outHttpCode = httpCode;
     fLogMessage("uploadToWigle: HTTP %d", httpCode);
+
+    // Read response body (if any) for debugging and log a short snippet
+    String respBody;
+    unsigned long bodyTimeout = millis() + 3000;
+    while (millis() < bodyTimeout) {
+        while (client.available()) {
+            respBody += client.readString();
+            // prevent unbounded growth
+            if (respBody.length() > 2048) {
+                respBody = respBody.substring(0, 2048);
+                break;
+            }
+        }
+        if (!client.connected()) break;
+    }
+    if (respBody.length()) {
+        // Log only beginning to avoid huge logs
+        String snippet = respBody;
+        if (snippet.length() > 512) snippet = snippet.substring(0, 512);
+        fLogMessage("uploadToWigle: response body: %s", snippet.c_str());
+    }
 
     return (httpCode >= 200 && httpCode < 300);
 }

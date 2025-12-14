@@ -185,6 +185,7 @@ menu wpasec_setup_menu[] = {
 //menuID 5
 menu pwngotchi_menu[] = {
     {"Switch to auto mode", 36},
+    {"Auto mode + wardriving", 14},
     {"Whitelist editor", 38},
     {"Handshakes file list", 39},
     {"Personality editor", 57}
@@ -464,7 +465,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi) {
   }
   #endif
   else if (menuID == 5){
-    drawMenuList( pwngotchi_menu , 5, 4);
+    drawMenuList( pwngotchi_menu , 5, 5);
   }
   else if (menuID == 6){
     drawMenuList( settings_menu , 6, 20);
@@ -1256,7 +1257,7 @@ void runApp(uint8_t appID){
   if(appID){
     if(appID == 1){
       debounceDelay();
-      drawMenuList( wifi_menu , 2, 6);
+      drawMenuList( wifi_menu , 2, 5);
     }
     #ifdef USE_EXPERIMENTAL_APPS
     if(appID == 2){drawMenuList(bluetooth_menu, 3, 6);}
@@ -1416,7 +1417,46 @@ void runApp(uint8_t appID){
       debounceDelay();
       sdmanager::runFileManager();
     }
-    if(appID == 14){}
+    if(appID == 14){
+      if(!pwnagothiMode){
+        bool answear = drawQuestionBox("CONFIRMATION", "Operate only if you ", "have premision!");
+        if(answear){
+          menuID = 0;
+          String sub_menu[] = {"Stealth (legacy)", "Normal (beta)"};
+          int8_t modeChoice = drawMultiChoice("Select mode:", sub_menu, 2, 2, 2);
+          debounceDelay();
+          if(modeChoice == -1){
+            menuID = 0;
+            return;
+          }
+          if(modeChoice==0){
+            stealth_mode = true;
+          }
+          else{
+            stealth_mode = false;
+          }
+          drawInfoBox("INITIALIZING", "Pwnagothi mode initialization", "please wait...", false, false);
+          menuID = 0;
+          if(pwnagothiBegin()){
+            auto_mode_and_wardrive = true;
+            pwnagothiMode = true;
+            menuID = 0;
+            return;
+          }
+          else{
+            drawInfoBox("ERROR", "Pwnagothi init failed!", "", true, false);
+            pwnagothiMode = false;
+          }
+          menuID = 0;
+          return;
+        }
+      }
+      else{
+        drawInfoBox("WTF?!", "Pwnagothi mode is on", "Can't you just look at UI!??", true, true);
+      }
+      menuID = 0;
+      return;
+    }
     if(appID == 15){
       bool confirmation = drawQuestionBox("Reset?", "This will delete all keys,", "messages, frends, identity");
       if(confirmation){
@@ -2754,15 +2794,15 @@ void runApp(uint8_t appID){
         return;
       }
       drawInfoBox("Uploading", "Please wait", "This may take some time...", false, false);
-      int *statusCode = 0;
+      int statusCode = 0;
       int statusToCode;
-      if(uploadToWigle(wiggle_api_key, file.c_str(), statusCode)){
+      if(uploadToWigle(wiggle_api_key, file.c_str(), &statusCode)){
         drawInfoBox("Succes", "File uploaded", "To wigle.net", false, false);
         delay(2000);
-        statusToCode = *statusCode;
+        statusToCode = statusCode;
       }
       else{
-        statusToCode = *statusCode;
+        statusToCode = statusCode;
         drawInfoBox("ERROR!", "Upload failed!", "Status code: " + String(statusToCode), true, false);
         menuID = 0;
         return;
@@ -3549,6 +3589,7 @@ void runApp(uint8_t appID){
           "Deauth packet delay" + String(" (ms): ") + String(pwnagotchi.deauth_packet_delay),
           "Delay after no clients found" + String(" (ms): ") + String(pwnagotchi.delay_after_no_clients_found),
           "Client discovery timeout" + String(" (ms): ") + String(pwnagotchi.client_discovery_timeout),
+          "GPS fix interval" + String(" (ms): ") + String(pwnagotchi.gps_fix_timeout),
           "Sound on events" + String(pwnagotchi.sound_on_events ? " (y)" : " (n)"),
           "Deauth on" + String(pwnagotchi.deauth_on ? " (y)" : " (n)"),
           "Add to whitelist on success" + String(pwnagotchi.add_to_whitelist_on_success ? " (y)" : " (n)"),
@@ -3557,13 +3598,13 @@ void runApp(uint8_t appID){
           "Back"
         };
       
-        int8_t choice = drawMultiChoiceLonger("Personality settings", personality_options, 20, 6, 4);
+        int8_t choice = drawMultiChoiceLonger("Personality settings", personality_options, 21, 6, 4);
         if(choice == 19 || choice == -1){
           savePersonality();
           menuID = 0;
           return;
         }
-        else if(choice >= 14){
+        else if(choice >= 15){
           bool valueToSet = getBoolInput(personality_options[choice], "Press t or f, then ENTER", false);
           switch (choice) {
             case 14:
@@ -3637,6 +3678,9 @@ void runApp(uint8_t appID){
               break;
             case 13:
               pwnagotchi.client_discovery_timeout = valueToSet;
+              break;
+            case 14:
+              pwnagotchi.gps_fix_timeout = valueToSet;
               break;
             default:
               break;

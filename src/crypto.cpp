@@ -296,7 +296,6 @@ String pwngrid::crypto::publicPEMBase64() {
 }
 
 bool pwngrid::crypto::verifyMessageWithPubPEM(const std::vector<uint8_t> &msg, const std::vector<uint8_t> &sig, const String &pubPEM) {
-    CryptoGuard guard;
     if (pubPEM.length() == 0) return false;
 
     // Normalize header in memory: python client changes header to RSA PUBLIC KEY.
@@ -570,7 +569,6 @@ bool pwngrid::crypto::encryptFor(const std::vector<uint8_t> &cleartext, const St
 
 // ---------- Decrypt (patched) ----------
 bool pwngrid::crypto::decrypt(const std::vector<uint8_t> &ciphertext, std::vector<uint8_t> &outCleartext) {
-    CryptoGuard guard;
     // layout: nonce(12) + 4 bytes key size + encKey + ciphertext + tag(16)
     size_t minLen = GCM_NONCE_LEN + 4 + GCM_TAG_LEN;
     if (ciphertext.size() < minLen) {

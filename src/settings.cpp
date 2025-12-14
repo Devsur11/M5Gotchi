@@ -39,6 +39,7 @@ uint8_t gpsTx;
 uint8_t gpsRx;
 bool useCustomGPSPins = false;
 bool getLocationAfterPwn = false;
+bool auto_mode_and_wardrive = false;
 
 // Keep track of which hints have been displayed using bitmask
 // Each bit represents a different hint
@@ -95,7 +96,8 @@ personality pwnagotchi = {
     0,  // client_sniffing_time  - not used in code
     150,    // deauth_packet_delay
     3000,   // delay_after_no_clients_found
-    15000   // client_discovery_timeout
+    15000,   // client_discovery_timeout
+    5000    // gps_fix_timeout
 };
 
 bool initPersonality(){
@@ -184,6 +186,8 @@ bool initPersonality(){
         if (personalityDoc["client_discovery_timeout"].is<uint16_t>()) pwnagotchi.client_discovery_timeout = personalityDoc["client_discovery_timeout"];
         else personalityChanged = true;
         
+        if (personalityDoc["gps_fix_timeout"].is<uint16_t>()) pwnagotchi.gps_fix_timeout = personalityDoc["gps_fix_timeout"];
+        else personalityChanged = true;
     }
     else {
         logMessage("No personality file found, creating with default values");
@@ -211,6 +215,7 @@ bool initPersonality(){
     personalityDoc["delay_after_no_clients_found"] = pwnagotchi.delay_after_no_clients_found;
     personalityDoc["delay_after_attack_fail"] = pwnagotchi.delay_after_attack_fail;
     personalityDoc["client_discovery_timeout"] = pwnagotchi.client_discovery_timeout;
+    personalityDoc["gps_fix_timeout"] = pwnagotchi.gps_fix_timeout;
     
     if (personalityChanged) {
         logMessage("Personality updated with missing/default values, saving...");
@@ -251,6 +256,7 @@ bool savePersonality(){
     personalityDoc["delay_after_no_clients_found"] = pwnagotchi.delay_after_no_clients_found;
     personalityDoc["delay_after_attack_fail"] = pwnagotchi.delay_after_attack_fail;
     personalityDoc["client_discovery_timeout"] = pwnagotchi.client_discovery_timeout;
+    personalityDoc["gps_fix_timeout"] = pwnagotchi.gps_fix_timeout;
 
     logMessage("Personality JSON data creation successful, proceeding to save");
     FConf = SD.open(PERSONALITY_FILE, FILE_WRITE, false);

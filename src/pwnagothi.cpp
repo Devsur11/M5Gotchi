@@ -10,6 +10,7 @@
 #include <vector>
 #include "pwngrid.h"
 #include "api_client.h"
+#include "wardrive.h"
 
 bool pwnagothiModeEnabled;
 bool pwnagothiScan = true;
@@ -231,6 +232,9 @@ void pwnagothiLoop(){
             setMood(1, "(*_*)", "Speed scan completed proceding to attack!");
             pwngridAdvertise(1, "(*_*)");
             updateUi(true, false);
+            if(auto_mode_and_wardrive){
+                wardrive(g_speedScanResults, pwnagotchi.gps_fix_timeout);
+            }
             delay(pwnagotchi.delay_after_wifi_scan);
         } else {
             logMessage("('_') No networks found by speed scan. Falling back to slow scan and retrying.");
@@ -345,6 +349,9 @@ void pwnagothiLoop(){
                 setMood(1, "(^_^)", "Got new handshake!!!" );
                 logMessage("(^_^) Got new handshake!!!");
                 api_client::queueAPForUpload(attackVector, String(entry.bssid[0], HEX) + ":" + String(entry.bssid[1], HEX) + ":" + String(entry.bssid[2], HEX) + ":" + String(entry.bssid[3], HEX) + ":" + String(entry.bssid[4], HEX) + ":" + String(entry.bssid[5], HEX));
+                if(getLocationAfterPwn){
+                    wardrive(g_speedScanResults, pwnagotchi.gps_fix_timeout);
+                }
                 pwngridAdvertise(1, "(^_^)");
                 lastPwnedAP = attackVector;
                 updateUi(true, false);
@@ -402,6 +409,22 @@ void pwnagothiLoop(){
     delay(pwnagotchi.nap_time);
 }
 
+
+void convert_normal_scan_to_speedscan(){
+    g_speedScanResults.clear();
+    int n = WiFi.scanComplete();
+    for(int i = 0; i < n; i++){
+        wifiSpeedScan entry;
+        entry.ssid = WiFi.SSID(i);
+        entry.rssi = WiFi.RSSI(i);
+        entry.channel = WiFi.channel(i);
+        entry.secure = WiFi.encryptionType(i) != WIFI_AUTH_OPEN;
+        String bssidStr = WiFi.BSSIDstr(i);
+        sscanf(bssidStr.c_str(), "%hhx:%hhx:%hhx:%hhx:%hhx:%hhx", &entry.bssid[0], &entry.bssid[1], &entry.bssid[2], &entry.bssid[3], &entry.bssid[4], &entry.bssid[5]);
+        g_speedScanResults.push_back(entry);
+    }
+}
+
 void pwnagothiStealthLoop(){
     if(pwnagothiScan){
         logMessage("(<_>) Scanning..");
@@ -412,6 +435,11 @@ void pwnagothiStealthLoop(){
         if((WiFi.scanComplete()) >= 0){
             wifiCheckInt = 0;
             pwnagothiScan = false;
+            if(auto_mode_and_wardrive){
+                g_speedScanResults.clear();
+                convert_normal_scan_to_speedscan();
+                wardrive(g_speedScanResults, pwnagotchi.gps_fix_timeout);
+            }
             logMessage("(*_*) Scan compleated proceding to attack!");
             setMood(1, "(*_*)", "Scan compleated proceding to attack!");
             pwngridAdvertise(1, "(*_*)");
@@ -547,6 +575,10 @@ void pwnagothiStealthLoop(){
                 setMood(1, "(^_^)", "Got new handshake!!!" );
                 logMessage("(^_^) Got new handshake!!!");
                 pwngridAdvertise(1, "(^_^)");
+                api_client::queueAPForUpload(attackVector, String(WiFi.BSSIDstr(wifiCheckInt)));
+                if(getLocationAfterPwn){
+                    wardrive(g_speedScanResults, pwnagotchi.gps_fix_timeout);
+                }
                 lastPwnedAP = attackVector;
                 updateUi(true, false);
                 SnifferEnd();

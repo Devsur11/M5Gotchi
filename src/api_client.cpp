@@ -426,8 +426,8 @@ bool api_client::pollInbox() {
         return false;
     }
     // Expect "messages" array in response like server. Format may vary.
-    if (!rd["messages"].is<String>()) {
-        logMessage("poll: no messages");
+    if (!rd["messages"].is<JsonArray>()) {
+        logMessage("poll: no messages array");
         return true;
     }
     JsonArray msgs = rd["messages"].as<JsonArray>();
@@ -504,7 +504,6 @@ bool api_client::pollInbox() {
             } else {
                 logMessage("Failed to mark message as read on server.");
             }
-            //TODO: Only register message when the server confirms read status
         }
     }
     return true;
