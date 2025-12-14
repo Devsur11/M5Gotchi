@@ -626,7 +626,35 @@ void drawMood(String face, String phrase) {
     canvas_main.setTextSize(1.5);
     canvas_main.setTextDatum(top_left);
     canvas_main.setCursor(3, 10);
-    canvas_main.println(hostname + ">");
+    constexpr float XP_SCALE = 5.0f;
+    constexpr float XP_EXPONENT = 0.75f;
+
+    uint16_t level = (uint16_t)floor(pow(pwned_ap / XP_SCALE, XP_EXPONENT));
+
+    float prev_level_xp = XP_SCALE * pow(level, 1.0f / XP_EXPONENT);
+    float next_level_xp = XP_SCALE * pow(level + 1, 1.0f / XP_EXPONENT);
+
+    float to_next_level = next_level_xp - pwned_ap;
+
+    // draw text once, reuse width
+    String lvlText = hostname + ">  Lvl " + String(level);
+    int textW = canvas_main.textWidth(lvlText);
+    canvas_main.println(lvlText);
+
+    // progress bar math
+    int barWidth = 240 - textW - 10;
+    float progress = pwned_ap - prev_level_xp;
+    float level_span = next_level_xp - prev_level_xp;
+
+    progress = constrain(progress, 0, level_span);
+
+    int filledWidth = (int)((progress / level_span) * barWidth);
+
+    // draw bar
+    int barX = textW + 10;
+    canvas_main.drawRect(barX, 10, barWidth, 10, tx_color_rgb565);
+    canvas_main.fillRect(barX, 10, filledWidth, 10, tx_color_rgb565);
+
 
 
     if (moods.count(face + ".jpg")) {
