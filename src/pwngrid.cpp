@@ -86,7 +86,7 @@ esp_err_t pwngridAdvertise(uint8_t channel, String face) {
     // Append json byte to frame
     // If current byte is not ascii, add ? instead
     uint8_t next_byte = (uint8_t)'?';
-    if (isAscii(pal_json_str[i])) {
+    if (true){//isAscii(pal_json_str[i])) {
       next_byte = (uint8_t)pal_json_str[i];
     }
 

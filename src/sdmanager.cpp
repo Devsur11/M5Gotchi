@@ -332,7 +332,7 @@ static void viewFile(const String &fullpath) {
 
     M5.update();
     M5Cardputer.update();
-    if (M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER)) {
+    if (M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER) || M5Cardputer.Keyboard.isKeyPressed('`')) {
       debounceDelay();
       break;
     }

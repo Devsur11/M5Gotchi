@@ -27,7 +27,7 @@ const esp_partition_t *coredump_part =
 
 
 uint8_t state;
-uint8_t activity = 14;
+uint8_t activity = 0;
 unsigned long previousMillis = 0;  // Zmienna do przechowywania ostatniego czasu wykonania funkcjami
 unsigned long interval = 120000;  // 2 minuty w milisekundach (2 * 60 * 1000)
 bool firstSoundEnable;
@@ -182,6 +182,12 @@ void setup() {
   initColorSettings();
   initUi();
   preloadMoods();
+  // Ensure mood text/face files exist and load them from SD
+  if (!initMoodsFromSD()) {
+    logMessage("Moods: failed to initialize from SD, using defaults");
+  } else {
+    logMessage("Moods: initialized from SD");
+  }
   // Try to connect to any saved networks on startup if enabled
   bool newVersionAvailable = false;
   if(connectWiFiOnStartup){
@@ -329,17 +335,14 @@ void setup() {
 
 void wakeUp() {
   for (uint8_t i = 0; i <= 2; i++) {
-    setMood(wakeUpList[i]);
+    setMood(wakeUpList[0]);
     updateUi();
     delay(1250);
   }
 }
 
-
 void loop() {
-  
   pwngridAdvertise(0, getCurrentMoodFace());
-  unsigned long currentMillis = millis();
   M5.update();
   M5Cardputer.update();
   if(M5Cardputer.Keyboard.isKeyPressed(KEY_OPT) && M5Cardputer.Keyboard.isKeyPressed(KEY_LEFT_CTRL) && M5Cardputer.Keyboard.isKeyPressed(KEY_FN)){
@@ -354,33 +357,6 @@ void loop() {
   }
 
   updateUi(true);
-  if(!pwnagothiMode)  {
-    if (currentMillis >= interval) {
-      interval = interval + 120000;  // Zaktualizowanie czasu ostatniego wykonania funkcji
-      updateActivity(false);  // Wykonanie funkcji co 2 minuty
-      setMood(activity);
-      logMessage("Mood changed");
-    }
-    setMood(activity);
-  }
-}
-
-void updateActivity(bool reward = false) {
-  if(reward){
-    if(activity == 2 || activity == 26){
-      activity = 10;
-    }
-    else{
-      activity++;
-    }
-  }
-  else{
-    if(activity==0){  
-    }
-    else{
-      activity--;
-    }
-  } 
 }
 
 void Sound(int frequency, int duration, bool sound){

@@ -132,3 +132,4 @@ extern bool useCustomGPSPins;
 extern bool getLocationAfterPwn;
 extern bool checkUpdatesAtNetworkStart;
 extern bool auto_mode_and_wardrive;
+extern uint sessionDeauths;

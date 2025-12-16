@@ -27,6 +27,8 @@
 #include "sdmanager.h"
 #include <vector>
 #include "wardrive.h"
+#include "M5GFX.h"
+#include <FS.h>
 
 M5Canvas canvas_top(&M5.Display);
 M5Canvas canvas_main(&M5.Display);
@@ -668,12 +670,17 @@ void drawMood(String face, String phrase) {
         }
     } else {
         // fallback: display face as text
-        canvas_main.setTextSize(4);
+        if (canvas_main.loadFont(SD, "/Test.vlw")) {}
+        else {
+          logMessage("Failed to load font for mood face");
+        }
         canvas_main.setTextColor(fg, bg);
         canvas_main.drawString(face, 5, 30);
     }
 
     // Draw phrase
+    //now lets return to default font
+    canvas_main.unloadFont();
     canvas_main.setTextSize(1.5);
     canvas_main.setTextColor(fg, bg);
     canvas_main.setCursor(3, canvas_h - 40);

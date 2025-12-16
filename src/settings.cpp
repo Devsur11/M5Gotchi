@@ -40,6 +40,7 @@ uint8_t gpsRx;
 bool useCustomGPSPins = false;
 bool getLocationAfterPwn = false;
 bool auto_mode_and_wardrive = false;
+uint sessionDeauths = 0;
 
 // Keep track of which hints have been displayed using bitmask
 // Each bit represents a different hint
