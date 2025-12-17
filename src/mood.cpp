@@ -6,12 +6,6 @@
 #include <map>
 #include <vector>
 
-// ASCII equivalent
-struct splash {
-    String face;
-    String splash;
-};
-
 const char* sleeping[] = {
   "(⇀‿‿↼)",
   "(≖‿‿≖)"
@@ -131,50 +125,15 @@ const char* text_happy[] = {
 };
 
 const char* startup[] = {
-  "Hi, I'm M5Gotchi! Starting ...",
-  "New day, new hunt, new pwns! Starting ...",
-  "I pwn therefore I am. Starting ...",
-  "My crime is that of curiosity ...",
-  "Hack the Planet! Starting ..."
+  "Hi, I'm M5Gotchi! \nStarting ...",
+  "New day, new hunt, new pwns! \nStarting ...",
+  "I pwn therefore I am. \nStarting ...",
+  "My crime is that of curiosity ... \nStarting ...",
+  "Hack the Planet! \nStarting ..."
 };
-
-// Default splash/face pairs (used to create defaults and fallback)
-splash defaultMainFaces[] = {
-  {"(⇀‿‿↼)", "Zzzz...."},
-  {"(≖‿‿≖)", "..."},
-  {"(◕‿‿◕)", "Let's go for a walk! Pwning will do us good!"},
-  {"(╥☁╥ )", "Anyone?! Please?!"},
-  {"(ب__ب)", "Why did you left me?"},
-  {"(☓‿‿☓)", "Why my life sucks?!"},
-  {"(ب__ب)", "Why did you left me?"},
-  {"(✜‿‿✜)", "Working... Please hold..."},
-  {"(#__#)", "file pwnagothi.cpp has stopped working"},
-  {"(°▃▃°)", "Too much 0s and 1s to understand"},
-  {"(ᵔ◡◡ᵔ)", "I PWN! Suck my balz!"},
-  {"(#__#)", "WTF! I didn't even touch it!"},
-  {"( ◕‿◕)", "I see you :) What password are you hiding?"},
-  {"(◕‿◕ )", "Oh, hello, don't hide! I'm just curious!"},
-  {"(•‿‿•)", "Let's see what you got for me!"},
-  {"(◕‿‿◕)", "Don't mind me, I'm just looking around"},
-  {"(☼‿‿☼)", "Hello there, wanna show me something hidden?"},
-  {"(♥‿‿♥)", "Wanna meet? I've got some packets to share!"},
-  {"(⌐■_■)", "So much to PWN!"},
-  {"(^‿‿^)", "I LOVE PWNAGOTCHI!"},
-  {"(⌐■_■)", "Hell yeah!"},
-  {"(°▃▃°)", "I'm hungry for handshakes!"},
-  {"(ᵔ◡◡ᵔ)", "So many possibilities to pwn!!"},
-  {"(☼‿‿☼)", "Ready for action!"},
-  {"(°▃▃°)", "It's snapshot day my dudes"},
-  {"(^‿‿^)", "Welcome to another day of using my system!"},
-  {"(☓‿‿☓)", "It works on my end. On your it don't need to :)"},
-};
-
-// Runtime main faces (populated from SD or fallback to defaults)
-std::vector<splash> mainFaces;
 
 uint8_t current_mood = 0;
 String current_phrase = "";
-String part2 = "";
 String current_face = "";
 bool current_broken = false;
 
@@ -219,12 +178,6 @@ bool createDefaultMoodFiles() {
   addSection("sad", sad, sizeof(sad)/sizeof(sad[0]));
   addSection("excited", excited, sizeof(excited)/sizeof(excited[0]));
 
-  // Also include faces used in main splash list
-  facesContent += "[mainFaces]\n";
-  for (auto &s : defaultMainFaces) {
-    facesContent += s.face + "\n";
-  }
-  facesContent += "\n";
 
   bool ok1 = writeTextFile("/moods/faces.txt", facesContent);
 
@@ -249,11 +202,6 @@ bool createDefaultMoodFiles() {
   addSectionTxt("happy", text_happy, sizeof(text_happy)/sizeof(text_happy[0]));
   addSectionTxt("startup", startup, sizeof(startup)/sizeof(startup[0]));
 
-  // // mainFaces: face|phrase
-  // textsContent += "[mainFaces]\n";
-  // for (auto &s : defaultMainFaces) {
-  //   textsContent += s.face + "|" + s.splash + "\n";
-  // }
   textsContent += "\n";
 
   bool ok2 = writeTextFile("/moods/texts.txt", textsContent);
@@ -292,30 +240,33 @@ bool reloadMoodFiles() {
   bool okFaces = parseSectionedFile("/moods/faces.txt", facesMap);
   bool okTexts = parseSectionedFile("/moods/texts.txt", textsMap);
 
-  // Populate mainFaces vector from texts mainFaces section if present, otherwise fallback
-  mainFaces.clear();
-  if (okTexts && textsMap.count("mainFaces")) {
-    for (auto &line : textsMap["mainFaces"]) {
-      int sep = line.indexOf('|');
-      if (sep > 0) {
-        String face = line.substring(0, sep);
-        String phrase = line.substring(sep+1);
-        mainFaces.push_back({face, phrase});
-      }
-    }
-  }
-
-  if (mainFaces.empty()) {
-    // fallback to defaults
-    for (auto &s : defaultMainFaces) mainFaces.push_back(s);
-  }
-
   String details = "";
   details += "faces sections=" + String(facesMap.size());
   details += ", texts sections=" + String(textsMap.size());
-  details += ", main faces=" + String(mainFaces.size());
   logMessage(String("Mood files loaded: faces=") + (okFaces?"ok":"fail") + ", texts=" + (okTexts?"ok":"fail") + "; " + details);
   return okFaces && okTexts;
+}
+
+bool initedMoods = false;
+
+void debugPrintMoods() {
+  logMessage("Faces Map:");
+  for (auto &pair : facesMap) {
+    String line = " [" + pair.first + "]: ";
+    for (auto &val : pair.second) {
+      line += "\"" + val + "\", ";
+    }
+    logMessage(line);
+  }
+
+  logMessage("Texts Map:");
+  for (auto &pair : textsMap) {
+    String line = " [" + pair.first + "]: ";
+    for (auto &val : pair.second) {
+      line += "\"" + val + "\", ";
+    }
+    logMessage(line);
+  }
 }
 
 bool initMoodsFromSD() {
@@ -323,7 +274,7 @@ bool initMoodsFromSD() {
   if (!SD.exists("/moods/faces.txt") || !SD.exists("/moods/texts.txt")) {
     createDefaultMoodFiles();
   }
-
+  initedMoods = true;
   return reloadMoodFiles();
 }
 
@@ -333,66 +284,89 @@ void setMood(uint8_t mood, String face, String phrase, bool broken) {
 
   if (face != "") {
     current_face = face;
-  } else {
-    // guard against out of range
-    if (mainFaces.size() > current_mood) current_face = mainFaces[current_mood].face;
-    else current_face = defaultMainFaces[current_mood % (sizeof(defaultMainFaces)/sizeof(defaultMainFaces[0]))].face;
-  }
+  } 
 
   if (phrase != "") {
     current_phrase = phrase;
-  } else {
-    if (mainFaces.size() > current_mood) current_phrase = mainFaces[current_mood].splash;
-    else current_phrase = defaultMainFaces[current_mood % (sizeof(defaultMainFaces)/sizeof(defaultMainFaces[0]))].splash;
   }
 }
 
 void setMoodToStatus(){
   char* out;
-  asprintf(&out, "I've been pwning for %d and kicked %d clients! I've also met %d new peers and ate %d handshake!", millis()/1000, sessionDeauths, getPwngridTotalPeers(), sessionCaptures);
-  setMood(2, happy[random(0, sizeof(happy)/sizeof(happy[0]))], String(out), false);
+  uint16_t sessionTimeMinutes = (lastSessionTime) / 60000;
+  asprintf(&out, "I've been pwning for %d minutes and kicked %d clients! I've also met %d new peers and ate %d handshakes", sessionTimeMinutes, lastSessionDeauths, lastSessionPeers, lastSessionCaptures);
+  setMood(0, facesMap.count("happy") ? facesMap["happy"][random(0, facesMap["happy"].size())] : happy[random(0, sizeof(happy)/sizeof(happy[0]))], String(out), false);
   free(out);
 }
 
 void setMoodToNewHandshake(uint8_t handshakes){
   char* out;
-  asprintf(&out, new_handshake[random(0, sizeof(new_handshake)/sizeof(new_handshake[0]))], String(handshakes).c_str());
-  setMood(4, excited[random(0, sizeof(excited)/sizeof(excited[0]))], String(out), false);
+  if(initedMoods){
+    asprintf(&out, textsMap["new_handshake"][random(0, textsMap["new_handshake"].size())].c_str(), String(handshakes).c_str());
+  }
+  else{
+    asprintf(&out, new_handshake[random(0, sizeof(new_handshake)/sizeof(new_handshake[0]))], String(handshakes).c_str());
+  }
+  setMood(4, facesMap.count("excited") ? facesMap["excited"][random(0, facesMap["excited"].size())] : excited[random(0, sizeof(excited)/sizeof(excited[0]))], String(out), false);
   free(out);
 }
 
 void setMoodToDeauth(const String& ssid){
   char* out;
-  asprintf(&out, deauthing[random(0, sizeof(deauthing)/sizeof(deauthing[0]))], ssid.c_str());
-  setMood(3, sad[random(0, sizeof(sad)/sizeof(sad[0]))], String(out), false);
+  if(initedMoods){
+    asprintf(&out, textsMap["deauthing"][random(0, textsMap["deauthing"].size())].c_str(), ssid.c_str());
+  }
+  else{
+    asprintf(&out, deauthing[random(0, sizeof(deauthing)/sizeof(deauthing[0]))], ssid.c_str());
+  }
+  setMood(3, facesMap.count("excited") ? facesMap["excited"][random(0, facesMap["excited"].size())] : excited[random(0, sizeof(excited)/sizeof(excited[0]))], String(out), false);
   free(out);
 }
 
 void setMoodToPeerNearby(const String& peerName){
   char* out;
-  asprintf(&out, peer_nearby[random(0, sizeof(peer_nearby)/sizeof(peer_nearby[0]))], peerName.c_str());
-  setMood(2, happy[random(0, sizeof(happy)/sizeof(happy[0]))], String(out), false);
+  if(initedMoods){
+    asprintf(&out, textsMap["peer_nearby"][random(0, textsMap["peer_nearby"].size())].c_str(), peerName.c_str());
+  }
+  else{
+    asprintf(&out, peer_nearby[random(0, sizeof(peer_nearby)/sizeof(peer_nearby[0]))], peerName.c_str());
+  }
+  setMood(0, facesMap.count("excited") ? facesMap["excited"][random(0, facesMap["excited"].size())] : excited[random(0, sizeof(excited)/sizeof(excited[0]))], String(out), false);  
   free(out);
 }
 
 void setMoodToAttackFailed(const String& targetName){
   char* out;
-  asprintf(&out, attack_failed[random(0, sizeof(attack_failed)/sizeof(attack_failed[0]))], targetName.c_str());
-  setMood(3, sad[random(0, sizeof(sad)/sizeof(sad[0]))], String(out), false);
+  if(initedMoods){
+    asprintf(&out, textsMap["attack_failed"][random(0, textsMap["attack_failed"].size())].c_str(), targetName.c_str());
+  }
+  else{
+    asprintf(&out, attack_failed[random(0, sizeof(attack_failed)/sizeof(attack_failed[0]))], targetName.c_str());
+  }
+  setMood(0, facesMap.count("sad") ? facesMap["sad"][random(0, facesMap["sad"].size())] : sad[random(0, sizeof(sad)/sizeof(sad[0]))], String(out), false);
   free(out);
 }
 
 void setMoodToStartup(){
-  String phrase = startup[random(0, sizeof(startup)/sizeof(startup[0]))];
-  setMood(1, looking[random(0, sizeof(looking)/sizeof(looking[0]))], phrase, false);
+  char* out;
+  if(initedMoods){
+    asprintf(&out, textsMap["startup"][random(0, textsMap["startup"].size())].c_str());
+  }
+  else{
+    asprintf(&out, startup[random(0, sizeof(startup)/sizeof(startup[0]))]);
+  }
+  setMood(0, facesMap.count("excited") ? facesMap["excited"][random(0, facesMap["excited"].size())] : excited[random(0, sizeof(excited)/sizeof(excited[0]))], String(out), false);  
+  free(out);
 }
 
 void setMoodSad(){
-  setMood(3, sad[random(0, sizeof(sad)/sizeof(sad[0]))], text_sad[random(0, sizeof(text_sad)/sizeof(text_sad[0]))], false);
+  setMood(0, facesMap.count("sad") ? facesMap["sad"][random(0, facesMap["sad"].size())] : sad[random(0, sizeof(sad)/sizeof(sad[0]))],
+          textsMap.count("sad") ? textsMap["sad"][random(0, textsMap["sad"].size())] : text_sad[random(0, sizeof(text_sad)/sizeof(text_sad[0]))], false);
 }
 
 void setMoodHappy(){
-  setMood(2, happy[random(0, sizeof(happy)/sizeof(happy[0]))], text_happy[random(0, sizeof(text_happy)/sizeof(text_happy[0]))], false);
+  setMood(0, facesMap.count("happy") ? facesMap["happy"][random(0, facesMap["happy"].size())] : happy[random(0, sizeof(happy)/sizeof(happy[0]))],
+          textsMap.count("happy") ? textsMap["happy"][random(0, textsMap["happy"].size())] : text_happy[random(0, sizeof(text_happy)/sizeof(text_happy[0]))], false);
 }
 
 void setMoodBroken(){
@@ -400,41 +374,86 @@ void setMoodBroken(){
 }
 
 void setMoodSleeping(){
-  setMood(0, sleeping[random(0, sizeof(sleeping)/sizeof(sleeping[0]))], "Zzzz....", false);
+  setMood(0, facesMap.count("sleeping") ? facesMap["sleeping"][random(0, facesMap["sleeping"].size())] : sleeping[random(0, sizeof(sleeping)/sizeof(sleeping[0]))],
+          "Zzzzz...", false);
 }
 
 void setMoodLooking(uint8_t durationSeconds){
   char* out;
-  asprintf(&out, system_def[3], durationSeconds);
-  setMood(1, looking[random(0, sizeof(looking)/sizeof(looking[0]))], String(out), false);
+  if(durationSeconds == 0){
+    asprintf(&out, "Looking around...");
+    setMood(1, facesMap.count("looking") ? facesMap["looking"][random(0, facesMap["looking"].size())] : looking[random(0, sizeof(looking)/sizeof(looking[0]))], String(out), false);
+    free(out);
+    return;
+  }
+  if(durationSeconds < 60){
+    asprintf(&out, "Looking around (%d %s)", durationSeconds, textsMap.count("time_def") ? textsMap["time_def"][1].c_str() : time_def[1]);
+  }
+  else{
+    int minutes = durationSeconds / 60;
+    asprintf(&out, "Looking around (%d %s)", minutes, textsMap.count("time_def") ? textsMap["time_def"][0].c_str() : time_def[0]);
+  }
+  setMood(1, facesMap.count("looking") ? facesMap["looking"][random(0, facesMap["looking"].size())] : looking[random(0, sizeof(looking)/sizeof(looking[0]))], String(out), false);
   free(out);
-}
-
-void setMoodExcited(){
-  setMood(4, excited[random(0, sizeof(excited)/sizeof(excited[0]))], "So much to pwn!", false);
 }
 
 void setMoodApSelected(const String& ssid){
   char* out;
-  asprintf(&out, ap_selected[random(0, sizeof(ap_selected)/sizeof(ap_selected[0]))], ssid.c_str());
-  setMood(2, happy[random(0, sizeof(happy)/sizeof(happy[0]))], String(out), false);
+  if(initedMoods){
+    asprintf(&out, textsMap["ap_selected"][random(0, textsMap["ap_selected"].size())].c_str(), ssid.c_str());
+  }
+  else{
+    asprintf(&out, ap_selected[random(0, sizeof(ap_selected)/sizeof(ap_selected[0]))], ssid.c_str());
+  }
+  setMood(2, facesMap["happy"][random(0, facesMap["happy"].size())], String(out), false);
   free(out);
 }
 
 void setNewMessageMood(uint8_t messages){
   char* out;
-  asprintf(&out, system_def[0], String(messages).c_str(), messages == 1 ? "" : "s");
-  setMood(2, happy[random(0, sizeof(happy)/sizeof(happy[0]))], String(out), false);
+  if(initedMoods){
+    asprintf(&out, textsMap["system_def"][0].c_str(), String(messages).c_str(), (messages==1?"":"s"));
+  }
+  else{
+    asprintf(&out, system_def[0], String(messages).c_str(), (messages==1?"":"s"));
+  }
+  setMood(0, facesMap.count("excited") ? facesMap["excited"][random(0, facesMap["excited"].size())] : excited[random(0, sizeof(excited)/sizeof(excited[0]))], String(out), false);  
   free(out);
 }
 
 void setGeneratingKeysMood(){
-  setMood(4, excited[random(0, sizeof(excited)/sizeof(excited[0]))], "Generating keys, do not turn off ...", false);
+  setMood(0, facesMap.count("excited") ? facesMap["excited"][random(0, facesMap["excited"].size())] : excited[random(0, sizeof(excited)/sizeof(excited[0]))],
+          textsMap.count("system_def") ? textsMap["system_def"][1] : "Generating keys, do not turn off ...", false);
 }
 
 void setChannelFreeMood(uint8_t channel){
   char* out;
-  asprintf(&out, system_def[2], String(channel).c_str());
-  setMood(4, excited[random(0, sizeof(excited)/sizeof(excited[0]))], String(out), false);
+  if(initedMoods){
+    asprintf(&out, textsMap.count("system_def") ? textsMap["system_def"][2].c_str() : system_def[2], String(channel).c_str());
+  }
+  else{
+    asprintf(&out, system_def[2], String(channel).c_str());
+  }
+  setMood(2, facesMap["happy"][random(0, facesMap["happy"].size())], String(out), false);
   free(out);
+}
+
+void setIDLEMood(){
+  int16_t balance = tot_happy_epochs - tot_sad_epochs;
+  if(balance >= 5 && balance < 15){
+    setMood(0, facesMap.count("happy") ? facesMap["happy"][random(0, facesMap["happy"].size())] : happy[random(0, sizeof(happy)/sizeof(happy[0]))],
+            "...", false);
+  }
+  else if(balance <= -5){
+    setMood(0, facesMap.count("sad") ? facesMap["sad"][random(0, facesMap["sad"].size())] : sad[random(0, sizeof(sad)/sizeof(sad[0]))],
+            "...", false);
+  }
+  else if(balance >= 15){
+    setMood(0, facesMap.count("excited") ? facesMap["excited"][random(0, facesMap["excited"].size())] : excited[random(0, sizeof(excited)/sizeof(excited[0]))],
+            "...", false);
+  }
+  else{
+    setMood(0, facesMap.count("looking") ? facesMap["looking"][random(0, facesMap["looking"].size())] : looking[random(0, sizeof(looking)/sizeof(looking[0]))],
+            "...", false);
+  }
 }

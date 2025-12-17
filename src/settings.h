@@ -4,6 +4,7 @@
 #include "logger.h"
 #include "WiFi.h"
 #include <vector>
+#include "pwngrid.h"
 
 extern "C" {
   #include "esp_heap_caps.h"
@@ -132,4 +133,9 @@ extern bool useCustomGPSPins;
 extern bool getLocationAfterPwn;
 extern bool checkUpdatesAtNetworkStart;
 extern bool auto_mode_and_wardrive;
-extern uint sessionDeauths;
+extern uint lastSessionDeauths;
+extern uint lastSessionCaptures;
+extern long lastSessionTime;
+extern uint8_t lastSessionPeers;
+uint16_t tot_happy_epochs;
+uint16_t tot_sad_epochs;

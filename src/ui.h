@@ -32,7 +32,6 @@ void trigger(uint8_t trigID);
 void drawInfoBox(String tittle, String info, String info2, bool canBeQuit, bool isCritical);
 bool activityRewarded();
 void initUi();
-void wakeUp();
 void drawMood(String face, String phrase);
 void drawTopCanvas();
 void drawRightBar();

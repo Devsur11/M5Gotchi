@@ -681,7 +681,7 @@ void drawMood(String face, String phrase) {
     // Draw phrase
     //now lets return to default font
     canvas_main.unloadFont();
-    canvas_main.setTextSize(1.5);
+    canvas_main.setTextSize(1.2);
     canvas_main.setTextColor(fg, bg);
     canvas_main.setCursor(3, canvas_h - 40);
     canvas_main.println("> " + phrase);
@@ -2384,7 +2384,6 @@ void runApp(uint8_t appID){
       intWifiChoice = wifisel;
       logMessage("Selected wifi: "+ wifiChoice);
       drawInfoBox("Succes", wifiChoice, "Was selected", true, false);
-      updateActivity(true);
       menuID = 0;
     }
     if(appID == 21){
@@ -2394,7 +2393,7 @@ void runApp(uint8_t appID){
       else{
         drawWifiInfoScreen(WiFi.SSID(intWifiChoice), WiFi.BSSIDstr(intWifiChoice), String(WiFi.RSSI(intWifiChoice)), String(WiFi.channel(intWifiChoice)));
       }
-      updateActivity(true);
+      
       menuID = 0;
     }
     if(appID == 22){
@@ -2515,7 +2514,7 @@ void runApp(uint8_t appID){
       menu_current_opt = 0;
       menu_current_page = 1;
       menuID = 0;
-      updateActivity(true);
+      
       menuID = 0;
     }
     if(appID == 23){
@@ -2592,7 +2591,7 @@ void runApp(uint8_t appID){
           drawInfoBox("Error!", "No wifi selected!", "Select one first!", true, false);
         }
       }
-      updateActivity(true);
+      
       menuID = 0;
     }
     if(appID == 24){
@@ -2735,7 +2734,7 @@ void runApp(uint8_t appID){
           return;
         }
       }
-      updateActivity(true);
+      
     }
     if(appID == 25){
       String new_wiggle_api_key = "";
@@ -3189,7 +3188,7 @@ void runApp(uint8_t appID){
         return;
       }
       drawMultiChoiceLonger("Handshakes:", fileList, fileCount, 5, 3);
-      updateActivity(true);
+      
       menuID = 0;
     }
     if(appID == 40){

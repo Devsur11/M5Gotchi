@@ -26,14 +26,8 @@ const esp_partition_t *coredump_part =
                              NULL);
 
 
-uint8_t state;
-uint8_t activity = 0;
-unsigned long previousMillis = 0;  // Zmienna do przechowywania ostatniego czasu wykonania funkcjami
-unsigned long interval = 120000;  // 2 minuty w milisekundach (2 * 60 * 1000)
 bool firstSoundEnable;
 bool isSoundPlayed = false;
-uint32_t last_mood_switch = 10001;
-uint8_t wakeUpList[] = {0, 1, 2};
 
 #ifdef ENABLE_COREDUMP_LOGGING
 
@@ -171,23 +165,33 @@ void setup() {
     digitalWrite(LORA_RST, LOW);   // hold SX1262 in reset - this will ensure it doesn't interfere with SD card init
     delay(50);
   }
-  wifion();
-  sdSPI.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);  
-  #ifdef ENABLE_COREDUMP_LOGGING
-  esp_core_dump_init();
-
-  #endif
-  initVars();
+  sdSPI.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
+  if(initVars()){}
+  else{
+    #ifndef BYPASS_SD_CHECK
+    drawInfoBox("ERROR!", "SD card is needed to work.", "Insert it and restart", false, true);
+    while(true){delay(10);}
+    #endif
+  }
   M5.Display.setBrightness(brightness);
   initColorSettings();
   initUi();
   preloadMoods();
+  initPwngrid();
   // Ensure mood text/face files exist and load them from SD
   if (!initMoodsFromSD()) {
     logMessage("Moods: failed to initialize from SD, using defaults");
   } else {
     logMessage("Moods: initialized from SD");
   }
+  setMoodToStartup();
+  updateUi(false, false);
+  wifion();
+  
+  #ifdef ENABLE_COREDUMP_LOGGING
+  esp_core_dump_init();
+  #endif
+  
   // Try to connect to any saved networks on startup if enabled
   bool newVersionAvailable = false;
   if(connectWiFiOnStartup){
@@ -209,13 +213,7 @@ void setup() {
     }
   }
   
-  if(initVars()){}
-  else{
-    #ifndef BYPASS_SD_CHECK
-    drawInfoBox("ERROR!", "SD card is needed to work.", "Insert it and restart", false, true);
-    while(true){delay(10);}
-    #endif
-  }
+  
   // check if core dump exists
   #ifdef ENABLE_COREDUMP_LOGGING
   if (esp_core_dump_image_check() == ESP_OK) {
@@ -225,7 +223,6 @@ void setup() {
     logMessage("Core dump image not found");
   }
   #endif
-  wakeUp();
   #ifdef LITE_VERSION
   #ifndef SKIP_AUTO_UPDATE
   if(checkUpdatesAtNetworkStart) {
@@ -331,18 +328,10 @@ void setup() {
   if(newVersionAvailable) {
     drawHintBox("A new firmware version is available!\nPlease update via the menu\nPlease note tha bugs from older version will not be reviewed!", 3);
   }
-}
-
-void wakeUp() {
-  for (uint8_t i = 0; i <= 2; i++) {
-    setMood(wakeUpList[0]);
-    updateUi();
-    delay(1250);
-  }
+  setMoodToStatus();
 }
 
 void loop() {
-  pwngridAdvertise(0, getCurrentMoodFace());
   M5.update();
   M5Cardputer.update();
   if(M5Cardputer.Keyboard.isKeyPressed(KEY_OPT) && M5Cardputer.Keyboard.isKeyPressed(KEY_LEFT_CTRL) && M5Cardputer.Keyboard.isKeyPressed(KEY_FN)){
@@ -351,11 +340,6 @@ void loop() {
     delay(200);
     runApp(99);
   }
-  else if(M5Cardputer.Keyboard.isKeyPressed(KEY_FN)){
-    activity++;
-    debounceDelay();
-  }
-
   updateUi(true);
 }
 

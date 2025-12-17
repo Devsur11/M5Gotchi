@@ -6,6 +6,8 @@
 #include "logger.h"
 #include "settings.h"
 
+#ifndef PWNGRID_H
+#define PWNGRID_H
 typedef struct {
   int epoch;
   String face;
@@ -32,3 +34,4 @@ void checkPwngridGoneFriends();
 String getLastPeerFace();
 uint16_t getPwngridLastPwnedAmount();
 uint16_t getPwngridLastSessionPwnedAmount();
+#endif

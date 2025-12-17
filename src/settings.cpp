@@ -40,7 +40,10 @@ uint8_t gpsRx;
 bool useCustomGPSPins = false;
 bool getLocationAfterPwn = false;
 bool auto_mode_and_wardrive = false;
-uint sessionDeauths = 0;
+uint lastSessionDeauths = 0;
+uint lastSessionCaptures = 0;
+long lastSessionTime = 0;
+uint8_t lastSessionPeers = 0;
 
 // Keep track of which hints have been displayed using bitmask
 // Each bit represents a different hint
@@ -54,28 +57,6 @@ bool dev_mode = false;
 bool serial_overlay = false;
 bool coords_overlay = false;
 bool skip_file_manager_checks_in_dev = false;
-
-// struct personality{
-//     uint16_t nap_time;
-//     uint16_t delay_after_wifi_scan;
-//     uint16_t delay_after_no_networks_found;
-//     uint16_t delay_after_attack_fail;
-//     uint16_t delay_after_successful_attack;
-//     uint16_t deauth_packets_sent;
-//     uint16_t delay_after_deauth;
-//     uint16_t delay_after_picking_target;
-//     uint16_t delay_before_switching_target;
-//     uint16_t delay_after_client_found;
-//     bool sound_on_events;
-//     bool deauth_on;
-//     uint16_t handshake_wait_time;
-//     bool add_to_whitelist_on_success;
-//     bool add_to_whitelist_on_fail;
-//     bool activate_sniffer_on_deauth;
-//     uint16_t client_sniffing_time;
-//     uint16_t deauth_packet_delay;
-//     uint16_t delay_after_no_clients_found;
-// };
 
 personality pwnagotchi = {
     3000,      // nap_time
@@ -405,6 +386,15 @@ bool initVars() {
         if(config["getLocationAfterPwn"].is<bool>()) getLocationAfterPwn = config["getLocationAfterPwn"].as<bool>();
         else configChanged = true;
 
+        if(config["lastSessionDeauths"].is<uint>()) lastSessionDeauths = config["lastSessionDeauths"].as<uint>();
+        else configChanged = true;
+        
+        if(config["lastSessionTime"].is<long>()) lastSessionTime = config["lastSessionTime"].as<long>();
+        else configChanged = true;
+
+        if(config["lastSessionPeers"].is<uint8_t>()) lastSessionPeers = config["lastSessionPeers"].as<uint8_t>();
+        else configChanged = true;
+
         if(configChanged) {
             logMessage("Config file missing values, will be updated");
         }
@@ -453,6 +443,10 @@ bool initVars() {
     config["gpsRx"] = gpsRx;
     config["useCustomGPSPins"] = useCustomGPSPins;
     config["getLocationAfterPwn"] = getLocationAfterPwn;
+    config["lastSessionDeauths"] = lastSessionDeauths;
+    config["lastSessionCaptures"] = lastSessionCaptures;
+    config["lastSessionTime"] = lastSessionTime;
+    config["lastSessionPeers"] = lastSessionPeers;
 
     if (configChanged) {
         logMessage("Config updated with missing/default values, saving...");
@@ -509,8 +503,11 @@ bool saveSettings(){
     config["gpsRx"] = gpsRx;
     config["connectWiFiOnStartup"] = connectWiFiOnStartup;
     config["checkUpdatesAtNetworkStart"] = checkUpdatesAtNetworkStart;
+    config["lastSessionDeauths"] = lastSessionDeauths;
+    config["lastSessionCaptures"] = lastSessionCaptures;
+    config["lastSessionTime"] = lastSessionTime;
+    config["lastSessionPeers"] = lastSessionPeers;
 
-    
     logMessage("JSON data creation successful, proceeding to save");
     FConf = SD.open(NEW_CONFIG_FILE, FILE_WRITE, false);
     if (FConf) {

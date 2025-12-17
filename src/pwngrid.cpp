@@ -1,4 +1,5 @@
 #include "pwngrid.h"
+#include "mood.h"
 
 uint8_t pwngrid_friends_tot = 0;
 pwngrid_peer pwngrid_peers[255];
@@ -13,6 +14,18 @@ String getPwngridLastFriendName() { return pwngrid_last_friend_name; }
 uint16_t getPwngridLastPwnedAmount() { return pwngrid_last_pwned_amount; }
 pwngrid_peer *getPwngridPeers() { return pwngrid_peers; }
 String getLastPeerFace() { return lastPeerFace; }
+
+void pwngridAdvertiseLoop(void *pvParameters) {
+    while (true) {
+        // Periodically call pwngridAdvertise
+        uint8_t channel = 0; // Example: channel 1
+        String face = getCurrentMoodFace();
+        pwngridAdvertise(channel, face);
+
+        // Delay for a specific time before calling again
+        vTaskDelay(1000 / portTICK_PERIOD_MS); // Adjust the delay (in milliseconds) as needed
+    }
+}
 
 // Had to remove Radiotap headers, since its automatically added
 // Also had to remove the last 4 bytes (frame check sequence)
@@ -233,4 +246,21 @@ void initPwngrid() {
   esp_wifi_set_promiscuous_rx_cb(&pwnSnifferCallback);
   esp_wifi_set_promiscuous(true);
   delay(1);
+  //check if task is already created
+  if (xTaskGetHandle("pwngridTx") == NULL) {
+    logMessage("Starting pwngrid advertise task");
+  }
+  else {
+    return;
+  }
+
+  xTaskCreatePinnedToCore(
+        pwngridAdvertiseLoop,      // Function to be executed
+        "pwngridTx",    // Name of the task
+        2048,                      // Stack size (in bytes)
+        NULL,                      // Parameters to pass to the task
+        1,                         // Priority (1 is the lowest priority)
+        NULL,                      // Task handle
+        1                          // Core to run the task on (0 or 1)
+    );
 }
