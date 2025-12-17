@@ -1,0 +1,3 @@
+[submodule "lib/M5GFX"]
+	path = lib/M5GFX
+	url = https://github.com/Devsur11/M5GFX
