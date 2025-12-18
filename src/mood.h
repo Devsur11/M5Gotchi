@@ -2,7 +2,8 @@
 #include <SD.h>
 
 #define MOOD_BROKEN 19
-
+#ifndef MOOD_H
+#define MOOD_H
 
 void setMood(uint8_t mood, String face = "", String phrase = "", bool broken = false);
 String getCurrentMoodFace();
@@ -33,3 +34,4 @@ void setChannelFreeMood(uint8_t channel);
 void setMoodApSelected(const String& ssid);
 void setNewMessageMood(uint8_t messages);
 void setIDLEMood();
+#endif

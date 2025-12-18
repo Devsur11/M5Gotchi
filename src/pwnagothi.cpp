@@ -126,7 +126,12 @@ bool pwnagothiBegin(){
     if(!(wifion())){
         logMessage("WiFi init failed");
         return false;
-    }   
+    }
+    lastSessionDeauths = 0;
+    lastSessionCaptures = 0;
+    lastSessionPeers = 0;
+    lastSessionTime = 0;
+    saveSettings();
     drawInfoBox("Waiting", "3 seconds to cancel", "Press ` to cancel", false, false);
     uint32_t start = millis();
     while(millis() - start < 3000){

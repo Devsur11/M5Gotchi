@@ -25,6 +25,7 @@
 #include "pwngrid.h"
 #include "api_client.h"
 #include "sdmanager.h"
+#include "textsEditor.h"
 #include <vector>
 #include "wardrive.h"
 #include "M5GFX.h"
@@ -186,11 +187,11 @@ menu wpasec_setup_menu[] = {
 
 //menuID 5
 menu pwngotchi_menu[] = {
-    {"Switch to auto mode", 36},
-    {"Auto mode + wardriving", 14},
-    {"Whitelist editor", 38},
-    {"Handshakes file list", 39},
-    {"Personality editor", 57}
+  {"Switch to auto mode", 36},
+  {"Auto mode + wardriving", 14},
+  {"Whitelist editor", 38},
+  {"Handshakes file list", 39},
+  {"Personality editor", 57},
 };
 
 //menuID 6
@@ -202,6 +203,7 @@ menu settings_menu[] = {
   {"Display brightness", 41},
   {"Keyboard Sound", 42},
   {"Advertise Pwngrid presence", 60},
+  {"Edit text faces", 90},
   {"Connect to WiFi", 43},
   {"Manage saved networks", 32},
   {"Connect to WiFi on startup", 29},
@@ -470,7 +472,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi) {
     drawMenuList( pwngotchi_menu , 5, 5);
   }
   else if (menuID == 6){
-    drawMenuList( settings_menu , 6, 20);
+    drawMenuList( settings_menu , 6, 22);
   }  
   else if (menuID == 7){
     (wpa_sec_api_key.length()>5)?drawMenuList(wpasec_menu, 7, 3):drawMenuList(wpasec_setup_menu, 7, 1);
@@ -1300,12 +1302,17 @@ void runApp(uint8_t appID){
     #endif
     if(appID == 4){
       debounceDelay();
-      drawMenuList(pwngotchi_menu, 5 , 5);
+      drawMenuList(pwngotchi_menu, 5 , 6);
+    }
+    if(appID == 90){
+      debounceDelay();
+      runTextsEditor();
+      menuID = 0;
     }
     if(appID == 5){drawInfoBox("ERROR", "not implemented", "" ,  true, true);}
     if(appID == 6){
       debounceDelay();
-      drawMenuList(settings_menu ,6  , 20);
+      drawMenuList(settings_menu ,6  , 21);
     }
     if(appID == 7){
       debounceDelay();
@@ -1457,7 +1464,7 @@ void runApp(uint8_t appID){
         bool answear = drawQuestionBox("CONFIRMATION", "Operate only if you ", "have premision!");
         if(answear){
           menuID = 0;
-          String sub_menu[] = {"Stealth (legacy)", "Normal (beta)"};
+          String sub_menu[] = {"Stealth (legacy)", "Normal"};
           int8_t modeChoice = drawMultiChoice("Select mode:", sub_menu, 2, 2, 2);
           debounceDelay();
           if(modeChoice == -1){
@@ -3116,7 +3123,7 @@ void runApp(uint8_t appID){
         bool answear = drawQuestionBox("CONFIRMATION", "Operate only if you ", "have premision!");
         if(answear){
           menuID = 0;
-          String sub_menu[] = {"Stealth (legacy)", "Normal (beta)"};
+          String sub_menu[] = {"Stealth (legacy)", "Normal"};
           int8_t modeChoice = drawMultiChoice("Select mode:", sub_menu, 2, 2, 2);
           debounceDelay();
           if(modeChoice == -1){
@@ -3633,33 +3640,30 @@ void runApp(uint8_t appID){
         };
       
         int8_t choice = drawMultiChoiceLonger("Personality settings", personality_options, 21, 6, 4);
-        if(choice == 19 || choice == -1){
+        if(choice == 20 || choice == -1){
           savePersonality();
           menuID = 0;
           return;
         }
         else if(choice >= 15){
           bool valueToSet = getBoolInput(personality_options[choice], "Press t or f, then ENTER", false);
+          logMessage("Value to set: " + String(valueToSet ? "true" : "false") + "to " + personality_options[choice]);
           switch (choice) {
-            case 14:
+            case 15:
               pwnagotchi.sound_on_events = valueToSet;
               break;
-            case 15:
+            case 16:
               pwnagotchi.deauth_on = valueToSet;
               break;
-            case 16:
+            case 17:
               pwnagotchi.add_to_whitelist_on_success = valueToSet;
               break;
-            case 17:
+            case 18:
               pwnagotchi.add_to_whitelist_on_fail = valueToSet;
               break;
-            case 18:
+            case 19:
               pwnagotchi.activate_sniffer_on_deauth = valueToSet;
               break;
-            case 19:
-              savePersonality();
-              menuID = 0;
-              return;
             default:
               break;
           }
@@ -3667,6 +3671,7 @@ void runApp(uint8_t appID){
         }
         else{
           int16_t valueToSet = getNumberfromUser(personality_options[choice], "Enter new value", 60000);
+          logMessage("Value to set: " + String(valueToSet) + " to " + personality_options[choice]);
           if(valueToSet == -1){
             continue;
           }
@@ -3939,80 +3944,99 @@ void drawMenu() {
   //uint8_t test = main_menu[1].command; - how to acces 2`nd column - for me
 }
 
-String userInput(String tittle, String desc, uint8_t maxLenght){
-  uint8_t temp = 0;
-  String textTyped;
-  appRunning = true;
+String userInput(const String &prompt, String desc, int maxLen,  const String &initial){
   debounceDelay();
-  //bool loop = 1;
-  while (true){
-    drawTopCanvas();
-    drawBottomCanvas();
-    canvas_main.clear(bg_color_rgb565);
-    canvas_main.setTextSize(3);
-    for(uint8_t size = 0; size<3;size++){
-      if(canvas_main.textWidth(tittle) > 240){
-        canvas_main.setTextSize(3-size);
-      }
-      else{
-        break;
-      }
-    }
-    canvas_main.setTextColor(tx_color_rgb565);
-    canvas_main.setTextDatum(middle_center);
-    canvas_main.drawString(tittle, canvas_center_x, canvas_h / 4);
-    canvas_main.setTextSize(1);
-    canvas_main.drawString(desc, canvas_center_x, canvas_h * 0.9);
-    M5.update();
-    M5Cardputer.update();
+    String result = initial;
+    bool editing = true;
+    unsigned long lastKeyTime = 0;
     
-    keyboard_changed = M5Cardputer.Keyboard.isChange();
-    if(keyboard_changed){Sound(10000, 100, sound);}    
-    Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
-    for(auto i : status.word){
-      if(i=='`' && status.fn){
-        return  "";
-      }
-      textTyped = textTyped + i;
-      temp ++;
-      debounceDelay();
+    while (editing) {
+        drawTopCanvas();
+        drawBottomCanvas();
+        canvas_main.fillSprite(bg_color_rgb565);
+        canvas_main.setTextSize(1);
+        canvas_main.setTextColor(tx_color_rgb565);
+        
+        canvas_main.drawString(prompt, 6, 6);
+        
+        // Calculate lines needed for text
+        int maxWidth = canvas_main.width() - 16;
+        int lineHeight = 12;
+        int numLines = max(1, (int)((result.length() * 6) / maxWidth + 1));
+        int rectHeight = numLines * lineHeight + 8;
+        
+        canvas_main.drawRect(4, 24, canvas_main.width()-8, rectHeight, tx_color_rgb565);
+        canvas_main.setCursor(8, 28);
+        if(result.length() == 0) {
+            canvas_main.setTextColor(tx_color_rgb565 / 2); // Dim color for placeholder
+            canvas_main.print("<empty>");
+            canvas_main.setTextColor(tx_color_rgb565);
+        } else {
+            // Wrap text manually
+            if(result.length() * 6 <= maxWidth) {
+                canvas_main.print(result);
+            } else {
+                int start = 0;
+                int lineNum = 0;
+                while (start < result.length()) {
+                    canvas_main.setTextColor(tx_color_rgb565);
+                    int lineLen = min((maxWidth / 6), (int)result.length() - start);
+                    canvas_main.setCursor(8, 28 + (lineNum * lineHeight));
+                    canvas_main.print(result.substring(start, start + lineLen));
+                    start += lineLen;
+                    lineNum++;
+                }
+            }
+        }
+        
+        // Cursor - calculate position across lines
+        int charPos = result.length();
+        int charsPerLine = maxWidth / 6;
+        int cursorLine = charPos / charsPerLine;
+        int cursorX = 8 + ((charPos % charsPerLine) * 6);
+        int cursorY = 28 + (cursorLine * lineHeight);
+        
+        if ((millis() / 500) % 2) {
+            canvas_main.fillRect(cursorX, cursorY, 1, 10, tx_color_rgb565);
+        }
+        
+        canvas_main.drawString("ENTER:ok  ESC:cancel  BKSP:delete", 6, canvas_main.height()-12);
+        
+        pushAll();
+        M5.update();
+        M5Cardputer.update();
+        
+        if (millis() - lastKeyTime > 50) {
+            if (M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER)) {
+                debounceDelay();
+                editing = false;
+            } else if (M5Cardputer.Keyboard.isKeyPressed('`')) {
+                debounceDelay();
+                result = initial;
+                editing = false;
+            } else if (M5Cardputer.Keyboard.isKeyPressed(KEY_BACKSPACE)) {
+                debounceDelay();
+                if (result.length() > 0) {
+                    result = result.substring(0, result.length()-1);
+                }
+                lastKeyTime = millis();
+            } else {
+                // Check for printable characters
+                for (uint8_t i = 32; i < 127; i++) {
+                    if (M5Cardputer.Keyboard.isKeyPressed(i)) {
+                        if (result.length() < maxLen) {
+                            result += (char)i;
+                        }
+                        lastKeyTime = millis();
+                        debounceDelay();
+                        break;
+                    }
+                }
+            }
+        }
     }
-    if (status.del && temp >=1) {
-      textTyped.remove(textTyped.length() - 1);
-      temp --;
-      debounceDelay();
-    }
-    if (status.enter) {
-      break;
-    }
-    
-    if(temp > maxLenght){
-      drawInfoBox("Error", "Can't type more than " + String(maxLenght), " characters" , true, false);
-      textTyped.remove(textTyped.length() - 1);
-      temp --;
-      debounceDelay();
-    }
-    canvas_main.clear(bg_color_rgb565);
-    canvas_main.setTextSize(3);
-    canvas_main.setTextColor(tx_color_rgb565);
-    canvas_main.setTextDatum(middle_center);
-    canvas_main.drawString(tittle, canvas_center_x, canvas_h / 4);
-    canvas_main.setTextSize(1);
-    canvas_main.drawString(desc, canvas_center_x, canvas_h * 0.9);
-    canvas_main.setTextSize(1.5);
-    canvas_main.setCursor(0 , canvas_h /2);
-    canvas_main.println(textTyped);
-    //draw OK button
-    canvas_main.drawRect(canvas_center_x - (canvas_main.textWidth("OK")/2) -10, canvas_h - 32, (canvas_main.textWidth("OK")/2 )+ 30, 14, tx_color_rgb565);
-    canvas_main.setTextDatum(middle_center);
-    canvas_main.setTextSize(1);
-    canvas_main.drawString("OK", canvas_center_x, canvas_h - 25);
-    pushAll();
-  }
-  //drawInfoBox("Confirm value:", textTyped, true, false);
-  appRunning = false;
-  logMessage("Userinput returning: " + textTyped);
-  return textTyped;
+    debounceDelay();
+    return result;
 }
 
 String multiplyChar(char toMultiply, uint8_t literations){

@@ -59,11 +59,11 @@ bool coords_overlay = false;
 bool skip_file_manager_checks_in_dev = false;
 
 personality pwnagotchi = {
-    3000,      // nap_time
+    5000,      // nap_time
     100,    // delay_after_wifi_scan
     5000,   // delay_after_no_networks_found
     1000,   // delay_after_attack_fail
-    3000,   // delay_after_successful_attack
+    5000,   // delay_after_successful_attack
     150,     // deauth_packets_sent
     50,    // delay_after_deauth
     50,    // delay_after_picking_target
@@ -71,7 +71,7 @@ personality pwnagotchi = {
     100,  // delay_after_client_found
     true,   // sound_on_events
     true,   // deauth_on
-    10000,  // handshake_wait_time
+    5000,  // handshake_wait_time
     true,   // add_to_whitelist_on_success
     false,  // add_to_whitelist_on_fail
     true,   // activate_sniffer_on_deauth
