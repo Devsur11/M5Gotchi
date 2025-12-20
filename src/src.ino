@@ -179,7 +179,7 @@ void setup() {
   initColorSettings();
   initUi();
   preloadMoods();
-  initPwngrid();
+  
   // Ensure mood text/face files exist and load them from SD
   if (!initMoodsFromSD()) {
     logMessage("Moods: failed to initialize from SD, using defaults");
@@ -216,8 +216,11 @@ void setup() {
       }
     }
   }
-  
-  
+
+  //
+  initPwngrid();
+  // ^ please leave this line as it is, dont change its position, otherwise heap will corrupt(HOW!!?)
+
   // check if core dump exists
   #ifdef ENABLE_COREDUMP_LOGGING
   if (esp_core_dump_image_check() == ESP_OK) {
