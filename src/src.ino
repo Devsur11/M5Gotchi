@@ -168,7 +168,9 @@ void setup() {
   sdSPI.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
   if(initVars()){}
   else{
-    #ifndef BYPASS_SD_CHECK
+    #ifndef SKIP_SD_CHECK
+    initColorSettings();
+    initUi();
     drawInfoBox("ERROR!", "SD card is needed to work.", "Insert it and restart", false, true);
     while(true){delay(10);}
     #endif
@@ -198,10 +200,12 @@ void setup() {
     attemptConnectSavedNetworks();
     if(WiFi.status() == WL_CONNECTED){
       logMessage("Connected to WiFi on startup");
+      delay(1000); //wait a second to ensure connection is stable
     } else {
       logMessage("Failed to connect to WiFi on startup");
     }
     //lets now check for updates and if it exists, inform the user
+    logMessage(String(ESP.getFreeHeap()) + " bytes free heap before checking updates");
     if(checkUpdatesAtNetworkStart) {
       logMessage("Checking for updates on network start");
       if(check_for_new_firmware_version(false)) {

@@ -59,6 +59,10 @@ std::map<String, APFileContext> apFiles;
 bool targetAPSet = false;
 uint8_t targetBSSID[6];
 
+// PMKID globals
+volatile bool pmkidFound = false;
+String pmkidLastValue = "";
+
 void IRAM_ATTR wifi_sniffer_cb(void *buf, wifi_promiscuous_pkt_type_t type) {
     if (type != WIFI_PKT_MGMT && type != WIFI_PKT_DATA && type != WIFI_PKT_CTRL) {
         return;
@@ -102,6 +106,64 @@ void IRAM_ATTR wifi_sniffer_cb(void *buf, wifi_promiscuous_pkt_type_t type) {
             beaconFrameLen = beaconLen; // save corrected length
         }
         return; // skip further processing
+    }
+
+    // ---- Detect Association Response and parse RSN IE for PMKID ----
+    if (ftype == 0 && fsubtype == 1) { // mgmt + assoc response
+        int hdrlen = ieee80211_hdrlen(fc);
+        int pos = hdrlen + 4; // association fixed params: status(2) + AID(2)
+        while (pos + 2 <= len) {
+            uint8_t tag = payload[pos];
+            uint8_t tlen = payload[pos + 1];
+            if (pos + 2 + tlen > len) break;
+            if (tag == 0x30) { // RSN IE
+                const uint8_t* rsn = payload + pos + 2;
+                int rlen = tlen;
+                int p = 0;
+                // parse RSN IE safely
+                if (rlen < 4) break;
+                p += 2; // version
+                if (p + 4 > rlen) break;
+                p += 4; // group cipher
+                if (p + 2 > rlen) break;
+                uint16_t pairwise_count = rsn[p] | (rsn[p+1] << 8); p += 2;
+                if (p + 4 * pairwise_count > rlen) break;
+                p += 4 * pairwise_count;
+                if (p + 2 > rlen) break;
+                uint16_t akm_count = rsn[p] | (rsn[p+1] << 8); p += 2;
+                if (p + 4 * akm_count > rlen) break;
+                p += 4 * akm_count;
+                if (p + 2 > rlen) break;
+                p += 2; // RSN capabilities
+                if (p + 2 <= rlen) {
+                    uint16_t pmkid_count = rsn[p] | (rsn[p+1] << 8);
+                    p += 2;
+                    if (pmkid_count > 0 && p + 16 * pmkid_count <= rlen) {
+                        const uint8_t* pmkid_ptr = rsn + p;
+                        char hex[33];
+                        for (int i = 0; i < 16; i++) sprintf(hex + i*2, "%02X", pmkid_ptr[i]);
+                        hex[32] = '\0';
+                        pmkidFound = true;
+                        pmkidLastValue = String(hex);
+                        logMessage("PMKID found: " + pmkidLastValue + " from BSSID: " + macToString(payload + 16));
+                        // write to SD
+                        if (SD.begin(SD_CS, sdSPI, 1000000)) {
+                            if (!SD.exists("/pmkid")) SD.mkdir("/pmkid");
+                            char fname[64];
+                            const uint8_t* bssid = payload + 16;
+                            snprintf(fname, sizeof(fname), "/pmkid/%02X_%02X_%02X_%02X_%02X_%02X.txt",
+                                     bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5]);
+                            File f = SD.open(fname, FILE_APPEND);
+                            if (f) {
+                                f.println(pmkidLastValue);
+                                f.close();
+                            }
+                        }
+                    }
+                }
+            }
+            pos += 2 + tlen;
+        }
     }
 
     // ---- Only continue if beacon captured ----
@@ -532,4 +594,9 @@ bool isNewHandshake(){
     return true;
   }
   return false;
+}
+
+void clearPMKIDFlag(){
+        pmkidFound = false;
+        pmkidLastValue = "";
 }

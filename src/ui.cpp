@@ -11,6 +11,7 @@
 #include "settings.h"
 #include "pwnagothi.h"
 #include "EapolSniffer.h"
+#include "PMKIDGrabber.h"
 #include "mood.h"
 #include "updater.h"
 #include <Update.h>
@@ -148,6 +149,7 @@ menu main_menu[] = {
 menu wifi_menu[] = {
     {"Select Networks", 20},
     {"Clone & Details", 21},
+    {"PMKID Grabber", 61},
     {"Acces point", 22},
     {"Deauth", 23},
     {"Sniffing", 24}
@@ -458,7 +460,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi) {
     #endif
   } 
   else if (menuID == 2){
-    drawMenuList( wifi_menu , 2, 5);
+    drawMenuList( wifi_menu , 2, 6);
   }
   #ifdef USE_EXPERIMENTAL_APPS
   else if (menuID == 3){
@@ -472,7 +474,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi) {
     drawMenuList( pwngotchi_menu , 5, 5);
   }
   else if (menuID == 6){
-    drawMenuList( settings_menu , 6, 22);
+    drawMenuList( settings_menu , 6, 21);
   }  
   else if (menuID == 7){
     (wpa_sec_api_key.length()>5)?drawMenuList(wpasec_menu, 7, 3):drawMenuList(wpasec_setup_menu, 7, 1);
@@ -677,6 +679,7 @@ void drawMood(String face, String phrase) {
           logMessage("Failed to load font for mood face");
         }
         canvas_main.setTextColor(fg, bg);
+        canvas_main.setTextSize(0.35);
         canvas_main.drawString(face, 5, 30);
     }
 
@@ -1294,7 +1297,7 @@ void runApp(uint8_t appID){
   if(appID){
     if(appID == 1){
       debounceDelay();
-      drawMenuList( wifi_menu , 2, 5);
+      drawMenuList( wifi_menu , 2, 6);
     }
     #ifdef USE_EXPERIMENTAL_APPS
     if(appID == 2){drawMenuList(bluetooth_menu, 3, 6);}
@@ -2600,6 +2603,65 @@ void runApp(uint8_t appID){
       }
       
       menuID = 0;
+    }
+    if(appID == 61){
+      // PMKID Grabber app - uses wifiChoice if available
+      if(wifiChoice.equals("")){
+        drawInfoBox("Error", "No wifi selected", "Use 'Select Networks' first", true, false);
+        menuID = 0;
+        return;
+      }
+
+      drawInfoBox("Info", "Scanning for "+ wifiChoice, "Please wait", false, false);
+      int numNetworks = WiFi.scanNetworks();
+      if (numNetworks <= 0) {
+        drawInfoBox("Info", "No networks found", "Rescan in different location", true, false);
+        menuID = 0; return;
+      }
+
+      // Collect matches for chosen SSID
+      std::vector<int> matches;
+      for (int i = 0; i < numNetworks; i++) {
+        if (WiFi.SSID(i) == wifiChoice) matches.push_back(i);
+      }
+      if (matches.size() == 0) {
+        drawInfoBox("Info", "Selected SSID not found", "Rescan and select it first", true, false);
+        menuID = 0; return;
+      }
+
+      int pickedIndex = matches[0];
+      if (matches.size() > 1) {
+        // Let user pick BSSID/channel among duplicates
+        String list[matches.size()+1];
+        for (size_t k = 0; k < matches.size(); k++) {
+          int idx = matches[k];
+          list[k] = WiFi.BSSIDstr(idx) + " ch:" + String(WiFi.channel(idx));
+        }
+        list[matches.size()] = "Cancel";
+        int sel = drawMultiChoice("Pick BSSID:", list, matches.size()+1, 6, 0);
+        if (sel == -1 || sel == (int)matches.size()) { menuID = 0; return; }
+        pickedIndex = matches[sel];
+      }
+
+      const uint8_t* bssidPtr = WiFi.BSSID(pickedIndex);
+      int ch = WiFi.channel(pickedIndex);
+      if (!bssidPtr) {
+        drawInfoBox("Error", "Can't get BSSID", "Aborting", true, false);
+        menuID = 0; return;
+      }
+
+      if (drawQuestionBox("Proceed?", "Grab PMKID from:", wifiChoice)) {
+        drawInfoBox("PMKID", "Starting grabber...", "Please wait", false, false);
+        clearPMKIDFlag();
+        bool ok = GrabPMKIDForAP(bssidPtr, wifiChoice, ch);
+        if (ok) {
+          drawInfoBox("Success", "PMKID captured", pmkidLastValue, true, false);
+        } else {
+          drawInfoBox("Info", "No PMKID captured", "Try again later", true, false);
+        }
+      }
+      menuID = 0;
+      return;
     }
     if(appID == 24){
       String mmenu[] = {"Mac sniffing", "EAPOL sniffing"};

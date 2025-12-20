@@ -32,3 +32,8 @@ uint8_t getEAPOLOrder(uint8_t* buf);
 void setTargetAP(uint8_t* bssid, String apName1 = " ");
 void clearTargetAP();
 int SnifferPendingPackets();
+
+// PMKID reporting
+extern volatile bool pmkidFound;
+extern String pmkidLastValue;
+void clearPMKIDFlag();
