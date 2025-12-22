@@ -414,6 +414,9 @@ bool isPrevPressed() {
 
 #endif
 
+bool needsUiRedraw = true;
+static unsigned long lastRedrawTime = 0;
+
 void updateUi(bool show_toolbars, bool triggerPwnagothi) {
   if(pwnagothiMode && triggerPwnagothi){
     if(!stealth_mode){
@@ -423,9 +426,8 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi) {
       pwnagothiStealthLoop();
     }
   }
-  #ifndef LITE_VERSION
   keyboard_changed = M5Cardputer.Keyboard.isChange();
-  if(keyboard_changed){Sound(10000, 100, sound);}               
+  if(keyboard_changed){Sound(10000, 100, sound);}       
   if (toggleMenuBtnPressed()) {
     debounceDelay();
     if(pwnagothiMode){
@@ -435,17 +437,13 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi) {
       menu_current_opt = 0;
       menu_current_page = 1;
       menuID = 0;
+      needsUiRedraw = true;
     } else {
       menuID = 1;
       menu_current_opt = 0;
       menu_current_page = 1;
     }
   }
-  #endif
-
-  String mood_face = getCurrentMoodFace();
-  String mood_phrase = getCurrentMoodPhrase();
-
   drawTopCanvas();
   drawBottomCanvas();
 
@@ -459,6 +457,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi) {
     drawMenuList(main_menu, 1, 7);
     #endif
   } 
+  else if(appRunning){}
   else if (menuID == 2){
     drawMenuList( wifi_menu , 2, 6);
   }
@@ -508,15 +507,28 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi) {
   }
   else if (menuID == 0)
   {
-    drawMood(mood_face, mood_phrase);
+    //redraw only in 5 seconds intervals
+    unsigned long currentTime = millis();
+    if (currentTime - lastRedrawTime >= 5000 || needsUiRedraw) {
+      redrawUi(show_toolbars);
+      lastRedrawTime = currentTime;
+      needsUiRedraw = false;
+    }
   }
-  else if(appRunning){}
   #endif
-  #ifdef LITE_VERSION
-    drawMood(mood_face, mood_phrase);
-  #endif 
 
+  M5.Display.startWrite();
+  if (show_toolbars) {
+    canvas_top.pushSprite(0, 0);
+    canvas_bot.pushSprite(0, canvas_top_h + canvas_h);
+  }
+  canvas_main.pushSprite(0, canvas_top_h);
+  M5.Display.endWrite();
+}
+
+void redrawUi(bool show_toolbars) {
   // draw developer overlays on canvas_main before pushing to display
+  // NOTE: removed recursive call to updateUi to avoid stack overflow (updateUi -> redrawUi -> updateUi ...)
   if (coords_overlay) {
     // approximate coordinates of selected menu item
     if (menuID != 0) {
@@ -532,17 +544,14 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi) {
     }
   }
 
-  M5.Display.startWrite();
-  if (show_toolbars) {
-    canvas_top.pushSprite(0, 0);
-    canvas_bot.pushSprite(0, canvas_top_h + canvas_h);
-  }
-  canvas_main.pushSprite(0, canvas_top_h);
-  M5.Display.endWrite();
+  
   if(serial_overlay){
     loggerTask();
     delay(100);
   } 
+  String mood_face = getCurrentMoodFace();
+  String mood_phrase = getCurrentMoodPhrase();
+  drawMood(mood_face, mood_phrase);
 }
 
 void drawTopCanvas() {
@@ -631,7 +640,7 @@ void drawMood(String face, String phrase) {
     canvas_main.setColor(fg);
     canvas_main.setTextSize(1.5);
     canvas_main.setTextDatum(top_left);
-    canvas_main.setCursor(3, 10);
+    canvas_main.setCursor(3, 5);
     constexpr float XP_SCALE = 5.0f;
     constexpr float XP_EXPONENT = 0.75f;
 
@@ -658,8 +667,8 @@ void drawMood(String face, String phrase) {
 
     // draw bar
     int barX = textW + 10;
-    canvas_main.drawRect(barX, 10, barWidth, 10, tx_color_rgb565);
-    canvas_main.fillRect(barX, 10, filledWidth, 10, tx_color_rgb565);
+    canvas_main.drawRect(barX, 5, barWidth, 10, tx_color_rgb565);
+    canvas_main.fillRect(barX, 5, filledWidth, 10, tx_color_rgb565);
 
 
 
@@ -674,13 +683,13 @@ void drawMood(String face, String phrase) {
         }
     } else {
         // fallback: display face as text
-        if (canvas_main.loadFont(SD, "/Test.vlw")) {}
+        if (canvas_main.loadFont(SD, "/fonts/big.vlw")) {}
         else {
           logMessage("Failed to load font for mood face");
         }
         canvas_main.setTextColor(fg, bg);
         canvas_main.setTextSize(0.35);
-        canvas_main.drawString(face, 5, 30);
+        canvas_main.drawString(face, 5, 23);
     }
 
     // Draw phrase
@@ -688,13 +697,16 @@ void drawMood(String face, String phrase) {
     canvas_main.unloadFont();
     canvas_main.setTextSize(1.2);
     canvas_main.setTextColor(fg, bg);
-    canvas_main.setCursor(3, canvas_h - 40);
+    canvas_main.setCursor(3, canvas_h - 47);
     canvas_main.println("> " + phrase);
-    canvas_main.setTextSize(1);
-    canvas_main.setCursor(3, canvas_h - 10);
+    canvas_main.setTextSize(0.35);
+    canvas_main.setCursor(3, canvas_h - 19);
+    canvas_main.unloadFont();
+    canvas_main.loadFont(SD, "/fonts/small.vlw");
     if(getPwngridTotalPeers() > 0){
       canvas_main.println(getLastPeerFace() + " |||| " + getPwngridLastFriendName() + " (" + String(getPwngridLastSessionPwnedAmount()) + "/" + String(getPwngridLastPwnedAmount()) + ")");
     }
+    canvas_main.unloadFont();
 }
 
 struct unit {
@@ -765,90 +777,100 @@ void drawInfoBox(String tittle, String info, String info2, bool canBeQuit, bool 
   appRunning = false;
 }
 
-void drawHintBox(String text, uint64_t hintID) {
-  if(bitRead(hintsDisplayed, hintID)) {
+void drawHintBox(const String &text, uint8_t hintID) {
+  if (hintID >= 64) return; // guard against invalid bit indices
+  if (bitRead(hintsDisplayed, hintID)) {
     return;
   }
+
   appRunning = true;
   debounceDelay();
-  while(true){
-    if(true){
-      canvas_main.setTextDatum(middle_center);
-      canvas_main.setTextSize(1);
-      
-      uint8_t current_option = 1; // 0 = OK, 1 = Don't show again
-      bool selecting = true;
-      
-      while(selecting) {
-        canvas_main.fillScreen(bg_color_rgb565);
-        canvas_main.setTextColor(tx_color_rgb565);
-        canvas_main.clear(bg_color_rgb565);
-        canvas_main.setTextSize(1.5);
-        canvas_main.setTextDatum(top_left);
-        canvas_main.setCursor(1, 5);
-        canvas_main.println(text);
-        
-        // Draw buttons
-        canvas_main.setTextSize(1);
-        canvas_main.setTextDatum(middle_center);
-        
-        int btn1_x = canvas_center_x - 60;
-        int btn2_x = canvas_center_x + 40;
-        int btn_y = canvas_h * 0.9;
-        
-        // OK button
-        if(current_option == 0) {
-          canvas_main.drawRect(btn1_x - 20, btn_y - 7, 40, 14, tx_color_rgb565);
-          canvas_main.setTextColor(tx_color_rgb565);
-        } else {
-          canvas_main.setTextColor(tx_color_rgb565);
+
+  uint8_t current_option = 1; // 0 = OK, 1 = Don't show again
+  bool selecting = true;
+
+  while (selecting) {
+    canvas_main.fillScreen(bg_color_rgb565);
+    canvas_main.setTextColor(tx_color_rgb565);
+    canvas_main.clear(bg_color_rgb565);
+    canvas_main.setTextSize(1.5);
+    canvas_main.setTextDatum(top_left);
+    canvas_main.setCursor(1, 5);
+    canvas_main.println(text);
+
+    // Draw buttons
+    canvas_main.setTextSize(1);
+    canvas_main.setTextDatum(middle_center);
+
+    int btn1_x = canvas_center_x - 60;
+    int btn2_x = canvas_center_x + 40;
+    int btn_y = canvas_h * 0.9;
+
+    // OK button
+    if (current_option == 0) {
+      canvas_main.drawRect(btn1_x - 20, btn_y - 7, 40, 14, tx_color_rgb565);
+      canvas_main.setTextColor(tx_color_rgb565);
+    } else {
+      canvas_main.setTextColor(tx_color_rgb565);
+    }
+    canvas_main.drawString("OK", btn1_x, btn_y);
+
+    // Don't show again button
+    if (current_option == 1) {
+      canvas_main.drawRect(btn2_x - 60, btn_y - 7, 120, 14, tx_color_rgb565);
+      canvas_main.setTextColor(tx_color_rgb565);
+    } else {
+      canvas_main.setTextColor(tx_color_rgb565);
+    }
+    canvas_main.drawString("Don't show again", btn2_x, btn_y);
+
+    pushAll();
+    M5.update();
+    M5Cardputer.update();
+
+    // Use lightweight checks to avoid copying large structs onto the stack
+    keyboard_changed = M5Cardputer.Keyboard.isChange();
+    if (keyboard_changed) {
+      Sound(10000, 100, sound);
+    }
+
+    // Check arrow keys directly where possible
+    if (M5Cardputer.Keyboard.isKeyPressed(',')) {
+      current_option = 0;
+      debounceDelay();
+    } else if (M5Cardputer.Keyboard.isKeyPressed('/')) {
+      current_option = 1;
+      debounceDelay();
+    } else {
+      // Fallback: inspect keysState's small fields only when necessary
+      auto ks = M5Cardputer.Keyboard.keysState();
+      for (auto c : ks.word) {
+        if (c == ',') { // left arrow
+          current_option = 0;
+          debounceDelay();
+        } else if (c == '/') { // right arrow
+          current_option = 1;
+          debounceDelay();
         }
-        canvas_main.drawString("OK", btn1_x, btn_y);
-        
-        // Don't show again button
-        if(current_option == 1) {
-          canvas_main.drawRect(btn2_x - 60, btn_y - 7, 120, 14, tx_color_rgb565);
-          canvas_main.setTextColor(tx_color_rgb565);
-        } else {
-          canvas_main.setTextColor(tx_color_rgb565);
-        }
-        canvas_main.drawString("Don't show again", btn2_x, btn_y);
-        
-        pushAll();
-        M5.update();
-        M5Cardputer.update();
-        
-        keyboard_changed = M5Cardputer.Keyboard.isChange();
-        if(keyboard_changed){Sound(10000, 100, sound);}
-        
-        Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
-        
-        for(auto i : status.word) {
-          if(i == ',') { // left arrow
-            current_option = 0;
-            debounceDelay();
-          }
-          else if(i == '/') { // right arrow
-            current_option = 1;
-            debounceDelay();
-          }
-        }
-        
-        if(status.enter) {
-          if(current_option == 0) {
-            Sound(10000, 100, sound);
-            return;
-          }
-          else if(current_option == 1) {
-            bitSet(hintsDisplayed, hintID);
-            saveSettings();
-            Sound(10000, 100, sound);
-            return;
-          }
+      }
+
+      if (ks.enter) {
+        if (current_option == 0) {
+          Sound(10000, 100, sound);
+          selecting = false;
+        } else if (current_option == 1) {
+          bitSet(hintsDisplayed, hintID);
+          saveSettings();
+          Sound(10000, 100, sound);
+          selecting = false;
         }
       }
     }
+
+    // yield a little to reduce CPU pressure and avoid tight-loop stack issues
+    delay(10);
   }
+
   appRunning = false;
 }
 
@@ -1563,7 +1585,7 @@ void runApp(uint8_t appID){
       }
       String mmenu[int_peers + 1];
       for(uint8_t i = 0; i<int_peers; i++){
-        mmenu[i] = peers_list[i].face + " | " + peers_list[i].name;
+        mmenu[i] = peers_list[i].name;
       }
       int8_t choice = drawMultiChoice("Nearby pwngrid units", mmenu, int_peers, 2, 0);
       if(choice == -1){
@@ -1573,29 +1595,31 @@ void runApp(uint8_t appID){
       //Peer Details and addressbook addition
       uint8_t current_option;
       debounceDelay();
+      drawTopCanvas();
+      drawBottomCanvas();
+      canvas_main.fillScreen(bg_color_rgb565);
+      canvas_main.setTextColor(tx_color_rgb565);
+      canvas_main.clear(bg_color_rgb565);
+      canvas_main.setTextSize(0.4);
+      canvas_main.setTextDatum(middle_center);
+      canvas_main.loadFont(SD, "/fonts/small.vlw");
+      canvas_main.drawString(peers_list[choice].face, canvas_center_x, canvas_h / 8);
+      canvas_main.unloadFont();
+      canvas_main.setTextSize(1.5);
+      canvas_main.drawString(peers_list[choice].name, canvas_center_x, (canvas_h * 2)/8);
+      canvas_main.setTextSize(1);
+      canvas_main.drawString(peers_list[choice].identity, canvas_center_x, (canvas_h * 3)/8);
+      canvas_main.setTextSize(1.5);
+      canvas_main.drawString("PWND: " + String(peers_list[choice].pwnd_run) + "/" + String(peers_list[choice].pwnd_tot) + ", RSSI: " + String(peers_list[choice].rssi) , canvas_center_x, (canvas_h*4)/7 );
       while(true)
       {
-        drawTopCanvas();
-        drawBottomCanvas();
-        canvas_main.fillScreen(bg_color_rgb565);
-        canvas_main.setTextColor(tx_color_rgb565);
-        canvas_main.clear(bg_color_rgb565);
-        canvas_main.setTextSize(2);
-        canvas_main.setTextDatum(middle_center);
-        canvas_main.drawString(peers_list[choice].face, canvas_center_x, canvas_h / 8);
-        canvas_main.setTextSize(1.5);
-        canvas_main.drawString(peers_list[choice].name, canvas_center_x, (canvas_h * 2)/8);
-        canvas_main.setTextSize(1);
-        canvas_main.drawString(peers_list[choice].identity, canvas_center_x, (canvas_h * 3)/8);
-        canvas_main.setTextSize(1.5);
-        canvas_main.drawString("PWND: " + String(peers_list[choice].pwnd_run) + "/" + String(peers_list[choice].pwnd_tot) + ", RSSI: " + String(peers_list[choice].rssi) , canvas_center_x, (canvas_h*4)/7 );
         String options[] = {"Add to friends", "Send message", "Back"};
         canvas_main.setTextSize(1);
         canvas_main.setTextDatum(middle_left);
         canvas_main.drawString(options[0] + "   " + options[1] + "   " + options[2], 10, canvas_h - 30);
-        (current_option == 0) ? canvas_main.drawRect(6, canvas_h - 37, 90, 15, tx_color_rgb565): void();
-        (current_option == 1) ? canvas_main.drawRect(108, canvas_h - 37, 80, 15, tx_color_rgb565): void();
-        (current_option == 2) ? canvas_main.drawRect(200, canvas_h - 37, 27, 15, tx_color_rgb565): void();
+        canvas_main.drawRect(6, canvas_h - 37, 90, 15, (current_option == 0)? tx_color_rgb565: bg_color_rgb565);
+        canvas_main.drawRect(108, canvas_h - 37, 80, 15, (current_option == 1)? tx_color_rgb565: bg_color_rgb565);
+        canvas_main.drawRect(200, canvas_h - 37, 27, 15, (current_option == 2)? tx_color_rgb565: bg_color_rgb565);
         pushAll();
         M5.update();
         M5Cardputer.update();
@@ -4229,7 +4253,7 @@ int drawMultiChoice(String tittle, String toDraw[], uint8_t menuSize , uint8_t p
     canvas_main.setCursor(1, PADDING + 1);
     canvas_main.println(tittle);
     canvas_main.setTextSize(2);
-    char display_str[256] = ""; // Increased buffer size
+    static char display_str[256] = ""; // Use static to avoid large stack allocation
     uint8_t startIdx = (menu_current_page - 1) * 4;
     if (startIdx >= menuSize) startIdx = 0; // Prevent overflow
     
@@ -4306,7 +4330,6 @@ int drawMultiChoiceLonger(String tittle, String toDraw[], uint8_t menuSize , uin
     keyboard_changed = M5Cardputer.Keyboard.isChange();
     if(keyboard_changed){Sound(10000, 100, sound);}
     Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
-    ;
 
     canvas_main.clear(bg_color_rgb565);
     canvas_main.fillSprite(bg_color_rgb565); //Clears main display
@@ -4317,13 +4340,13 @@ int drawMultiChoiceLonger(String tittle, String toDraw[], uint8_t menuSize , uin
     canvas_main.setCursor(1, PADDING + 1);
     canvas_main.println(tittle);
     canvas_main.setTextSize(1);
-    char display_str[100] = "";
+    static char display_str[100] = "";
     uint16_t start = (menu_current_page - 1) * 8;
     uint16_t end = start + 8;
     if (end > menu_len) end = menu_len;
 
     for (uint16_t j = start; j < end; j++) {
-        sprintf(display_str, "%s %s", (tempOpt == j) ? ">" : " ",
+        snprintf(display_str, sizeof(display_str), "%s %s", (tempOpt == j) ? ">" : " ",
                 toDraw[j].c_str());
         int y = 8 + ((j - start) * 10) + 20;
         canvas_main.drawString(display_str, 0, y);

@@ -77,16 +77,29 @@ esp_err_t pwngridAdvertise(uint8_t channel, String face) {
   pal_json["policy"]["excited_num_epochs"] = 9999;
 
   serializeJson(pal_json, pal_json_str);
-  uint16_t pal_json_len = measureJson(pal_json);
-  uint8_t header_len = 2 + ((uint8_t)(pal_json_len / 255) * 2);
-  uint8_t pwngrid_beacon_frame[raw_beacon_len + pal_json_len + header_len];
+  // Use the actual byte length of the serialized string (handles multi-byte UTF-8)
+  size_t pal_json_len = pal_json_str.length();
+  if (pal_json_len == 0) {
+    return ESP_ERR_INVALID_ARG;
+  }
+
+  // Calculate number of AC headers needed (2 bytes each)
+  size_t headers = (pal_json_len + 254) / 255; // ceil(pal_json_len/255)
+  size_t header_len = headers * 2;
+  size_t total_len = raw_beacon_len + pal_json_len + header_len;
+
+  uint8_t *pwngrid_beacon_frame = (uint8_t *)malloc(total_len);
+  if (!pwngrid_beacon_frame) {
+    return ESP_ERR_NO_MEM;
+  }
+
   memcpy(pwngrid_beacon_frame, pwngrid_beacon_raw, raw_beacon_len);
 
   // Iterate through json string and copy it to beacon frame
   int frame_byte = raw_beacon_len;
-  for (int i = 0; i < pal_json_len; i++) {
+  for (size_t i = 0; i < pal_json_len; i++) {
     // Write AC and len tags before every 255 bytes
-    if (i == 0 || i % 255 == 0) {
+    if (i == 0 || (i % 255) == 0) {
       pwngrid_beacon_frame[frame_byte++] = 0xde;  // AC = 222
       uint8_t payload_len = 255;
       if (pal_json_len - i < 255) {
@@ -96,21 +109,16 @@ esp_err_t pwngridAdvertise(uint8_t channel, String face) {
       pwngrid_beacon_frame[frame_byte++] = payload_len;
     }
 
-    // Append json byte to frame
-    // If current byte is not ascii, add ? instead
-    uint8_t next_byte = (uint8_t)'?';
-    if (true){//isAscii(pal_json_str[i])) {
-      next_byte = (uint8_t)pal_json_str[i];
-    }
-
-    pwngrid_beacon_frame[frame_byte++] = next_byte;
+    // Append json byte to frame (keep raw UTF-8 bytes)
+    pwngrid_beacon_frame[frame_byte++] = (uint8_t)pal_json_str[i];
   }
 
   delay(102);
   // https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/network/esp_wifi.html#_CPPv417esp_wifi_80211_tx16wifi_interface_tPKvib
-  // vTaskDelay(103 / portTICK_PERIOD_MS);
+  // Send only the used portion of the buffer (frame_byte)
   esp_err_t result = esp_wifi_80211_tx(WIFI_IF_AP, pwngrid_beacon_frame,
-                                       sizeof(pwngrid_beacon_frame), false);
+                                       frame_byte, false);
+  free(pwngrid_beacon_frame);
   return result;
 }
 
@@ -207,8 +215,18 @@ void pwnSnifferCallback(void *buf, wifi_promiscuous_pkt_type_t type) {
         // Just grab the first 255 bytes of the pwnagotchi beacon
         // because that is where the name is
         for (int i = 38; i < len; i++) {
-          if (isAscii(snifferPacket->payload[i])) {
-            essid.concat((char)snifferPacket->payload[i]);
+          uint8_t b = (uint8_t)snifferPacket->payload[i];
+
+          // If we find an AC header marker, skip it and its length byte
+          if (b == 0xde) {
+            i++; // skip the next length byte
+            continue;
+          }
+
+          // Accept printable characters (>= 0x20) and common whitespace,
+          // and preserve UTF-8 bytes (>= 0x80 are >= 0x20 anyway)
+          if (b >= 0x20 || b == '\n' || b == '\r' || b == '\t') {
+            essid.concat((char)b);
           }
         }
 
@@ -257,7 +275,7 @@ void initPwngrid() {
   xTaskCreatePinnedToCore(
         pwngridAdvertiseLoop,      // Function to be executed
         "pwngridTx",    // Name of the task
-        2048,                      // Stack size (in bytes)
+        8192,                      // Stack size (in bytes) — increased to avoid stack overflow
         NULL,                      // Parameters to pass to the task
         1,                         // Priority (1 is the lowest priority)
         NULL,                      // Task handle

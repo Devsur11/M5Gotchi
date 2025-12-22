@@ -53,6 +53,7 @@ bool wifion(){
 #define MAX_PKT_SIZE 3000
 #define ROW_SIZE 40
 #define PADDING 10
+#define FONT_FILE_PATH "/Test.vlw"
 
 struct personality{
     uint16_t nap_time;

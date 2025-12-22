@@ -320,22 +320,29 @@ void setup() {
   // [4828][I][logger.cpp] VFS partition not found
   // [4832][I][logger.cpp] SPIFFS partition found at address: 670000
   // [4838][I][logger.cpp] Coredump partition found at address: 7f0000
+  logMessage("Evaluating install type for feature limitations...");
+  setMoodToStatus();
   if (part_spiffs && part_spiffs->address == 0x670000 && app1_size == 0x330000 && part_coredump && !part_vfs && part_app0->size == 0x330000) {
     logMessage("Generic install detected!");
+    if(newVersionAvailable) {
+      drawHintBox("A new firmware version is available!\nPlease update via the menu\nPlease note tha bugs from older version will not be reviewed!", 3);
+    }
+    logMessage("No feature limitations applied.");
+    drawHintBox("Hi there!\nPress esc to open menu.\nUse arrows to navigate.\nSometimes keyboard.\nLook around, and enjoy!", 2);
+    return;
   }
   else {
     logMessage("Custom install detected, removing update functionality to prevent bricking!");
     limitFeatures = true;
   }
 
-  if(((hintsDisplayed & 0b1) == 0) && limitFeatures){
+  if(limitFeatures){
     drawHintBox("For the best experience please use M5Burner to install this firmware.", 1);
   }
   drawHintBox("Hi there!\nPress esc to open menu.\nUse arrows to navigate.\nSometimes keyboard.\nLook around, and enjoy!", 2);
   if(newVersionAvailable) {
     drawHintBox("A new firmware version is available!\nPlease update via the menu\nPlease note tha bugs from older version will not be reviewed!", 3);
   }
-  setMoodToStatus();
 }
 
 void loop() {

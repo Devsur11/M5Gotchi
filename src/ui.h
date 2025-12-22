@@ -32,6 +32,7 @@ void trigger(uint8_t trigID);
 void drawInfoBox(String tittle, String info, String info2, bool canBeQuit, bool isCritical);
 bool activityRewarded();
 void initUi();
+void redrawUi(bool show_toolbars = false);
 void drawMood(String face, String phrase);
 void drawTopCanvas();
 void drawRightBar();
@@ -69,7 +70,7 @@ bool registerNewMessage(message newMess);
 std::vector<message> loadMessageHistory(const String &unitName);
 void renderMessages(M5Canvas &canvas, const std::vector<message> &messages, int scrollOffset);
 String findIncomingFingerprint(const std::vector<message> &messages);
-void drawHintBox(String text, uint64_t hintID);
+void drawHintBox(const String &text, uint8_t hintID);
 #ifdef ENABLE_COREDUMP_LOGGING
 void sendCrashReport();
 #endif
