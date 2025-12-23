@@ -93,12 +93,17 @@ void sendCoredump() {
   logMessage("Core dump image found via esp_core_dump_image_get");
   logMessage("Core dump addr: " + String(addr) + ", size: " + String(size));
 
-  uint8_t buffer[chunkSize];
+  uint8_t *buffer = (uint8_t*)malloc(chunkSize);
+  if (!buffer) {
+    logMessage("Failed to allocate coredump buffer");
+    return;
+  }
   // Worst-case Base64 size for chunkSize bytes
   size_t maxB64 = (chunkSize * 4 / 3) + 8;
   char *base64Out = (char*)malloc(maxB64);
   if (!base64Out) {
     logMessage("Failed to allocate base64 buffer");
+    free(buffer);
     return;
   }
 
@@ -135,6 +140,7 @@ void sendCoredump() {
   }
 
   free(base64Out);
+  free(buffer);
   client.publish(mqttTopic, ("End from esp32, mac: " + String(WiFi.macAddress())).c_str(), true);
   logMessage("Core dump sent successfully");
   delay(500); // Ensure all messages are sent before disconnecting
@@ -155,6 +161,7 @@ void initM5() {
 
 void setup() {
   Serial.begin(115200);
+  printHeapInfo();
   logMessage("System booting...");
   initM5();
   logMessage("Board ID: " + String(M5.getBoard()));
@@ -175,10 +182,13 @@ void setup() {
     while(true){delay(10);}
     #endif
   }
+  logMessage("Heap after vars init:");
+  printHeapInfo();
   M5.Display.setBrightness(brightness);
   initColorSettings();
   initUi();
   preloadMoods();
+  
   
   // Ensure mood text/face files exist and load them from SD
   if (!initMoodsFromSD()) {
@@ -188,6 +198,8 @@ void setup() {
   }
   setMoodToStartup();
   updateUi(false, false);
+  logMessage("Heap after mood preload:");
+  printHeapInfo();
   wifion();
   
   #ifdef ENABLE_COREDUMP_LOGGING
@@ -198,6 +210,8 @@ void setup() {
   bool newVersionAvailable = false;
   if(connectWiFiOnStartup){
     attemptConnectSavedNetworks();
+    logMessage("Heap after attempting WiFi connect:");
+    printHeapInfo();
     if(WiFi.status() == WL_CONNECTED){
       logMessage("Connected to WiFi on startup");
       delay(1000); //wait a second to ensure connection is stable
@@ -216,7 +230,8 @@ void setup() {
       }
     }
   }
-
+  logMessage("Heap after WiFi init:");
+  printHeapInfo();
   //
   initPwngrid();
   // ^ please leave this line as it is, dont change its position, otherwise heap will corrupt(HOW!!?)
@@ -263,7 +278,8 @@ void setup() {
   #endif
   #endif
 
-  
+  logMessage("Heap after Pwngrid init:");
+  printHeapInfo();
 
   if(pwnagothiModeEnabled) {
     logMessage("Pwnagothi mode enabled");

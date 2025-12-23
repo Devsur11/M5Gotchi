@@ -1,18 +1,19 @@
 #include "pwngrid.h"
 #include "mood.h"
+#include <vector>
 
-uint8_t pwngrid_friends_tot = 0;
-pwngrid_peer pwngrid_peers[255];
+static const size_t PWNGRID_MAX_PEERS = 64;
+std::vector<pwngrid_peer> pwngrid_peers;
 String pwngrid_last_friend_name = "";
 uint16_t pwngrid_last_pwned_session_amount = 0;
 uint16_t pwngrid_last_pwned_amount = 0;
 String lastPeerFace = "";
 
 uint16_t getPwngridLastSessionPwnedAmount() { return pwngrid_last_pwned_session_amount; }
-uint8_t getPwngridTotalPeers() { return pwngrid_friends_tot; }
+uint8_t getPwngridTotalPeers() { return (uint8_t)pwngrid_peers.size(); }
 String getPwngridLastFriendName() { return pwngrid_last_friend_name; }
 uint16_t getPwngridLastPwnedAmount() { return pwngrid_last_pwned_amount; }
-pwngrid_peer *getPwngridPeers() { return pwngrid_peers; }
+pwngrid_peer *getPwngridPeers() { return pwngrid_peers.empty() ? nullptr : pwngrid_peers.data(); }
 String getLastPeerFace() { return lastPeerFace; }
 
 void pwngridAdvertiseLoop(void *pvParameters) {
@@ -125,42 +126,78 @@ esp_err_t pwngridAdvertise(uint8_t channel, String face) {
 void pwngridAddPeer(JsonDocument &json, signed int rssi) {
   String identity = json["identity"].as<String>();
 
-  bool newPeer = true;
-
-  for (uint8_t i = 0; i < pwngrid_friends_tot; i++) {
-    // Check if peer identity is already in peers array
+  // Update existing peer if present
+  for (size_t i = 0; i < pwngrid_peers.size(); i++) {
     if (pwngrid_peers[i].identity == identity) {
-      newPeer = false;
+      auto &p = pwngrid_peers[i];
+      p.rssi = rssi;
+      p.last_ping = millis();
+      p.gone = false;
+      p.name = json["name"].as<String>();
+      p.face = json["face"].as<String>();
+      p.epoch = json["epoch"].as<int>();
+      p.grid_version = json["grid_version"].as<String>();
+      p.pwnd_run = json["pwnd_run"].as<int>();
+      p.pwnd_tot = json["pwnd_tot"].as<int>();
+      p.session_id = json["session_id"].as<String>();
+      p.timestamp = json["timestamp"].as<int>();
+      p.uptime = json["uptime"].as<int>();
+      p.version = json["version"].as<String>();
+
+      pwngrid_last_friend_name = p.name;
+      lastPeerFace = p.face;
+      pwngrid_last_pwned_amount = p.pwnd_tot;
+      pwngrid_last_pwned_session_amount = p.pwnd_run;
+      return;
     }
   }
 
-  pwngrid_peers[pwngrid_friends_tot].rssi = rssi;
-  pwngrid_peers[pwngrid_friends_tot].last_ping = millis();
-  pwngrid_peers[pwngrid_friends_tot].gone = false;
-  pwngrid_peers[pwngrid_friends_tot].name = json["name"].as<String>();
-  pwngrid_peers[pwngrid_friends_tot].face = json["face"].as<String>();
-  pwngrid_peers[pwngrid_friends_tot].epoch = json["epoch"].as<int>();
-  pwngrid_peers[pwngrid_friends_tot].grid_version =
-      json["grid_version"].as<String>();
-  pwngrid_peers[pwngrid_friends_tot].identity = identity;
-  pwngrid_peers[pwngrid_friends_tot].pwnd_run = json["pwnd_run"].as<int>();
-  pwngrid_peers[pwngrid_friends_tot].pwnd_tot = json["pwnd_tot"].as<int>();
-  pwngrid_peers[pwngrid_friends_tot].session_id =
-      json["session_id"].as<String>();
-  pwngrid_peers[pwngrid_friends_tot].timestamp = json["timestamp"].as<int>();
-  pwngrid_peers[pwngrid_friends_tot].uptime = json["uptime"].as<int>();
-  pwngrid_peers[pwngrid_friends_tot].version = json["version"].as<String>();
-  pwngrid_last_friend_name = pwngrid_peers[pwngrid_friends_tot].name;
-  lastPeerFace = pwngrid_peers[pwngrid_friends_tot].face;
-  pwngrid_last_pwned_amount = pwngrid_peers[pwngrid_friends_tot].pwnd_tot;
-  pwngrid_last_pwned_session_amount = pwngrid_peers[pwngrid_friends_tot].pwnd_run;
-  if(newPeer){pwngrid_friends_tot++;}
+  // New peer - construct and insert (or replace if we hit the cap)
+  pwngrid_peer newp;
+  newp.rssi = rssi;
+  newp.last_ping = millis();
+  newp.gone = false;
+  newp.name = json["name"].as<String>();
+  newp.face = json["face"].as<String>();
+  newp.epoch = json["epoch"].as<int>();
+  newp.grid_version = json["grid_version"].as<String>();
+  newp.identity = identity;
+  newp.pwnd_run = json["pwnd_run"].as<int>();
+  newp.pwnd_tot = json["pwnd_tot"].as<int>();
+  newp.session_id = json["session_id"].as<String>();
+  newp.timestamp = json["timestamp"].as<int>();
+  newp.uptime = json["uptime"].as<int>();
+  newp.version = json["version"].as<String>();
+
+  if (pwngrid_peers.size() < PWNGRID_MAX_PEERS) {
+    pwngrid_peers.push_back(newp);
+  } else {
+    // Try to find a gone peer to reuse
+    int idx = -1;
+    for (size_t i = 0; i < pwngrid_peers.size(); i++) {
+      if (pwngrid_peers[i].gone) { idx = (int)i; break; }
+    }
+    if (idx == -1) {
+      // Replace the oldest peer
+      uint32_t oldest = UINT32_MAX;
+      for (size_t i = 0; i < pwngrid_peers.size(); i++) {
+        if ((uint32_t)pwngrid_peers[i].last_ping < oldest) { oldest = pwngrid_peers[i].last_ping; idx = (int)i; }
+      }
+      if (idx == -1) idx = 0;
+    }
+    pwngrid_peers[idx] = newp;
+  }
+
+  pwngrid_last_friend_name = newp.name;
+  lastPeerFace = newp.face;
+  pwngrid_last_pwned_amount = newp.pwnd_tot;
+  pwngrid_last_pwned_session_amount = newp.pwnd_run;
 }
 
 const int away_threshold = 120000;
 
 void checkPwngridGoneFriends() {
-  for (uint8_t i = 0; i < pwngrid_friends_tot; i++) {
+  for (size_t i = 0; i < pwngrid_peers.size(); i++) {
     // Check if peer is away for more then
     int away_secs = pwngrid_peers[i].last_ping - millis();
     if (away_secs > away_threshold) {

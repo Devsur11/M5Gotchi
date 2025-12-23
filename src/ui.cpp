@@ -457,7 +457,6 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi) {
     drawMenuList(main_menu, 1, 7);
     #endif
   } 
-  else if(appRunning){}
   else if (menuID == 2){
     drawMenuList( wifi_menu , 2, 6);
   }

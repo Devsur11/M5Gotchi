@@ -7,7 +7,6 @@
 // image size: 240/40 px otherwise it will be oerrided!!!
 
 std::map<String, MoodImage> moods;
-JPEGDEC jpeg;
 int imgW = 0;
 int imgH = 0;
 int rowBytes = 0;
@@ -84,6 +83,7 @@ void preloadMoods() {
         logMessage("Parsing mood file: " + filePath);
 
         lastPath = filePath; // store the correct, absolute path
+        JPEGDEC jpeg; // local decoder instance to free RAM when not decoding
         if (jpeg.open(filePath.c_str(),
                       jpegOpenFile,
                       jpegCloseFile,
