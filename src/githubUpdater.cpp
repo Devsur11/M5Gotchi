@@ -6,9 +6,56 @@
 #include <FS.h>
 #include <ArduinoJson.h>
 #include <SD.h>
+#include <M5GFX.h>
+#include "M5Cardputer.h"
+
+static int ota_progress = 0;
+static int ota_total = 0;
+
 
 extern const char github_root_cert_pem_start[] asm("_binary_certs_github_root_cert_pem_start");
 extern const char github_root_cert_pem_end[] asm("_binary_certs_github_root_cert_pem_end");
+
+void draw_progress_bar(int percent) {
+  const int x = 0;
+  const int y = 0;
+  const int w = M5.Display.width();
+  const int h = 16;
+
+  M5.Display.fillRect(x, y, w, M5.Display.height(), TFT_BLACK);
+  M5.Display.drawRect(x, y, w, h, TFT_WHITE);
+  int fill = (w - 2) * percent / 100;
+  M5.Display.fillRect(x + 1, y + 1, fill, h - 2, TFT_WHITE);
+
+  M5.Display.setCursor(x, y + 20);
+  M5.Display.setTextColor(TFT_WHITE, TFT_BLACK);
+  M5.Display.printf("Updating... %d%%   \n", percent);
+  M5.Display.println("M5Gotchi Updater v2.0");
+  M5.Display.println("\nDON'T TURN OFF THE DEVICE!, otherwise it may brick!");
+}
+
+esp_err_t ota_http_event_handler(esp_http_client_event_t *evt) {
+  switch (evt->event_id) {
+    case HTTP_EVENT_ON_HEADER:
+      if (strcasecmp(evt->header_key, "Content-Length") == 0) {
+        ota_total = atoi(evt->header_value);
+      }
+      break;
+
+    case HTTP_EVENT_ON_DATA:
+      if (ota_total > 0) {
+        ota_progress += evt->data_len;
+        int percent = (ota_progress * 100) / ota_total;
+        draw_progress_bar(percent);
+      }
+      break;
+
+    default:
+      break;
+  }
+  return ESP_OK;
+}
+
 
 static bool ensure_temp_dir() {
   if (!SD.exists(TEMP_DIR)) {
@@ -44,12 +91,21 @@ static bool download_file(const char* url, const char* dest_path) {
     esp_http_client_cleanup(client);
     return false;
   }
+  int contentLength = esp_http_client_get_content_length(client);
   char buffer[512];
   int read_len;
   size_t total = 0;
   while ((read_len = esp_http_client_read(client, buffer, sizeof(buffer))) > 0) {
     f.write((const uint8_t*)buffer, read_len);
     total += read_len;
+    if (read_len > 0) {
+        int progress = (total * 100) / contentLength;
+        M5.Display.fillRect(0, 0, M5.Display.width(), 40, TFT_BLACK);
+        M5.Display.setTextColor(TFT_WHITE);
+        M5.Display.drawString("Downloading...", 10, 10);
+        M5.Display.drawString(String(progress) + "%", M5.Display.width() - 50, 10);
+        M5.Display.fillRect(10, 25, (M5.Display.width() - 20) * progress / 100, 10, TFT_GREEN);
+    }
   }
   f.flush();
   f.close();
@@ -158,9 +214,15 @@ bool ota_update_from_url(bool lite) {
   esp_http_client_config_t config = {
     .url = bin_url,
     .cert_pem = github_root_cert_pem_start,
+    .event_handler = ota_http_event_handler,
   };
 
+
   // Use esp_https_ota with file
+  ota_progress = 0;
+  ota_total = 0;
+  draw_progress_bar(0);
+
   esp_err_t ret = esp_https_ota(&config);
   SD.remove(TEMP_BIN_PATH);
 

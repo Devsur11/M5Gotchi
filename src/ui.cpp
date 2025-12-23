@@ -2678,7 +2678,7 @@ void runApp(uint8_t appID){
       if (drawQuestionBox("Proceed?", "Grab PMKID from:", wifiChoice)) {
         drawInfoBox("PMKID", "Starting grabber...", "Please wait", false, false);
         clearPMKIDFlag();
-        bool ok = GrabPMKIDForAP(bssidPtr, wifiChoice, ch);
+        bool ok = GrabPMKIDForAP(bssidPtr, ch, 30000); // 30s timeout
         if (ok) {
           drawInfoBox("Success", "PMKID captured", pmkidLastValue, true, false);
         } else {

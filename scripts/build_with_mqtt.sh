@@ -71,23 +71,6 @@ fi
 cp "$FULL_BIN_PATH" ../firmware/firmware.bin
 echo "✅ Full firmware copied to firmware/firmware.bin"
 
-# Step 6: Copy lite binary to /firmware/lite.bin
-LITE_BIN_PATH=$(find .pio/build/cardputer-lite -type f -name "firmware.bin" | head -n 1)
-if [ ! -f "$LITE_BIN_PATH" ]; then
-    echo "❌ Lite firmware.bin not found!"
-    exit 1
-fi
-cp "$LITE_BIN_PATH" ../firmware/lite.bin
-echo "✅ Lite firmware copied to firmware/lite.bin"
-
-STICK_BIN_PATH=$(find .pio/build/m5stick-c -type f -name "firmware.bin" | head -n 1)
-if [ ! -f "$STICK_BIN_PATH" ]; then
-    echo "❌ M5Stick firmware.bin not found!"
-    exit 1
-fi
-cp "$STICK_BIN_PATH" firmware/stick.bin
-echo "✅ M5Stick firmware copied to firmware/stick.bin"
-
 # Step 7: Create firmware.json with full URL
 DATE=$(date +%F)
 cat <<EOF > firmware/firmware.json
@@ -99,27 +82,8 @@ cat <<EOF > firmware/firmware.json
 }
 EOF
 
-# Step 8: Create lite.json with full URL
-cat <<EOF > firmware/lite.json
-{
-  "version": "$VERSION",
-  "file": "$REPO_URL/lite.bin",
-  "date": "$DATE",
-  "notes": "Lite version"
-}
-EOF
-
-cat <<EOF > firmware/stick.json
-{
-  "version": "$VERSION",
-  "file": "$REPO_URL/stick.bin",
-  "date": "$DATE",
-  "notes": "M5StickC version"
-}
-EOF
 
 esptool.py --chip esp32s3 merge_bin -o full.bin   --flash_mode dio   --flash_freq 80m   --flash_size 8MB   0x0000 .pio/build/Cardputer-full/bootloader.bin   0x8000 .pio/build/Cardputer-full/partitions.bin   0xE000 ../../Documents/boot_app0.bin   0x10000 .pio/build/Cardputer-full/firmware.bin
-esptool.py --chip esp32s3 merge_bin -o lite.bin   --flash_mode dio   --flash_freq 80m   --flash_size 8MB   0x0000 .pio/build/cardputer-lite/bootloader.bin   0x8000 .pio/build/cardputer-lite/partitions.bin   0xE000 ../../Documents/boot_app0.bin   0x10000 .pio/build/cardputer-lite/firmware.bin
 
 echo "✅ Metadata files with full download URLs created"
 
