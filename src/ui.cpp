@@ -701,11 +701,13 @@ void drawMood(String face, String phrase) {
     canvas_main.setTextSize(0.35);
     canvas_main.setCursor(3, canvas_h - 19);
     canvas_main.unloadFont();
-    canvas_main.loadFont(SD, "/fonts/small.vlw");
+    
     if(getPwngridTotalPeers() > 0){
+      canvas_main.loadFont(SD, "/fonts/small.vlw");
       canvas_main.println(getLastPeerFace() + " |||| " + getPwngridLastFriendName() + " (" + String(getPwngridLastSessionPwnedAmount()) + "/" + String(getPwngridLastPwnedAmount()) + ")");
+      canvas_main.unloadFont();
     }
-    canvas_main.unloadFont();
+    
 }
 
 struct unit {
