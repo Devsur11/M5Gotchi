@@ -26,18 +26,28 @@ static const char* PROTECTED_FILES[] = {
   "token.json",
   "contacts.json",
   "id_rsa",
-  "id_rsa.pub"
+  "id_rsa.pub",
+  "big.vlw",
+  "small.vlw",
+  "first_seen.csv",
+  "faces.txt",
+  "texts.txt",
+  "cracks.conf"
 };
 
 static const char* PROTECTED_FOLDERS[] = {
   "pwngrid",
   "keys",
   "chats",
-  "handshake"
+  "handshake",
+  "fonts",
+  "wardriving",
+  "temp",
+  "moods"
 };
 
-static const int NUM_PROTECTED_FILES = 8;
-static const int NUM_PROTECTED_FOLDERS = 4;
+static const int NUM_PROTECTED_FILES = 14;
+static const int NUM_PROTECTED_FOLDERS = 8;
 
 // Check if a file/folder path is protected
 static bool isPathProtected(const String &path) {

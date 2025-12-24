@@ -127,6 +127,9 @@ bool pwnagothiBegin(){
         logMessage("WiFi init failed");
         return false;
     }
+    allTimeDeauths = lastSessionDeauths;
+    allSessionTime = lastSessionTime;
+    allTimePeers = lastSessionPeers;
     lastSessionDeauths = 0;
     lastSessionCaptures = 0;
     lastSessionPeers = 0;
@@ -402,8 +405,11 @@ void pwnagothiLoop(){
                 saveSettings();
                 if(pwnagotchi.sound_on_events){
                     Sound(800, 150, true);
+                    delay(150);
                     Sound(500, 150, true);
+                    delay(150);
                     Sound(300, 200, true);
+                    delay(200);
                 }
                 break;
             }
@@ -413,6 +419,7 @@ void pwnagothiLoop(){
     setIDLEMood();
     updateUi(true, false);
     delay(pwnagotchi.nap_time);
+    allTimeEpochs++;
 }
 
 
@@ -630,8 +637,11 @@ void pwnagothiStealthLoop(){
                 saveSettings();
                 if(pwnagotchi.sound_on_events){
                     Sound(800, 150, true);
+                    delay(150);
                     Sound(500, 150, true);
+                    delay(150);
                     Sound(300, 200, true);
+                    delay(200);
                 }
                 break;
             }
@@ -640,6 +650,7 @@ void pwnagothiStealthLoop(){
     setIDLEMood();
     logMessage("Waiting " + String(pwnagotchi.nap_time/1000) + " seconds for next attack...");
     updateUi(true, false);
+    allTimeEpochs++;
     delay(pwnagotchi.nap_time);
 }
 

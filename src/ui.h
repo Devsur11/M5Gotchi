@@ -38,7 +38,7 @@ void drawTopCanvas();
 void drawRightBar();
 void drawBottomCanvas();
 void drawMenu();
-void updateUi(bool show_toolbars = false, bool triggerPwnagothi = true);
+void updateUi(bool show_toolbars = false, bool triggerPwnagothi = true, bool overrideDelay = false);
 void runApp(uint8_t appID = 0);
 inline void resetSprite();
 String userInput(const String &prompt, String desc, int maxLen,  const String &initial = "");
@@ -71,6 +71,8 @@ std::vector<message> loadMessageHistory(const String &unitName);
 void renderMessages(M5Canvas &canvas, const std::vector<message> &messages, int scrollOffset);
 String findIncomingFingerprint(const std::vector<message> &messages);
 void drawHintBox(const String &text, uint8_t hintID);
+void drawStats();
+
 #ifdef ENABLE_COREDUMP_LOGGING
 void sendCrashReport();
 #endif

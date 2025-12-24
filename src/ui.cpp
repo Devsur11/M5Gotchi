@@ -40,7 +40,7 @@ M5Canvas bar_right2(&M5.Display);
 M5Canvas bar_right3(&M5.Display);
 M5Canvas bar_right4(&M5.Display);
 
-#ifndef LITE_VERSION
+
 static const char * const funny_ssids[] = {
   "Mom Use This One",
   "Abraham Linksys",
@@ -127,21 +127,17 @@ static const char * const broken_ssids[]{
   "WiFi_???",
   "SSID_Broken",
 };
-#endif
+
 
 // menuID 1
 menu main_menu[] = {
     {"Manual mode", 1},
     {"Auto mode", 4},
     {"WPA-SEC companion", 55},
-    #ifdef USE_EXPERIMENTAL_APPS
-    {"Bluetooth", 2},
-    {"IR", 3},
-    {"Bad USB", 5},
-    #endif
     {"Pwngrid companion", 7},
     {"Wardriving companion", 8},
     {"File manager", 70},
+    {"Stats", 5},
     {"Config", 6}
 };
 
@@ -154,27 +150,6 @@ menu wifi_menu[] = {
     {"Deauth", 23},
     {"Sniffing", 24}
 };
-#ifdef USE_EXPERIMENTAL_APPS
-
-//menuID 3
-menu bluetooth_menu[] = {
-    {"BLE Spam", 25},
-    {"Connect to phone", 26},
-    {"Emulate BT Keyboard", 27},
-    {"Chat", 28}, 
-    {"Scan", 29},
-    {"Turn off", 30}
-};
-
-//menuID 4
-menu IR_menu[] = {
-    {"Saved remotes", 31},
-    {"Send IR", 32},
-    {"Recerve IR", 33},
-    {"Learn new Remote", 34},
-    {"Import from SD", 35}
-};
-#endif
 
 //menuID 7
 menu wpasec_menu[] = {
@@ -395,7 +370,7 @@ void initUi() {
 
 uint8_t returnBrightness(){return currentBrightness;}
 
-#ifndef LITE_VERSION
+
 
 bool toggleMenuBtnPressed() {
   return (keyboard_changed && (M5Cardputer.Keyboard.isKeyPressed('`')));
@@ -412,12 +387,10 @@ bool isPrevPressed() {
   return keyboard_changed && (M5Cardputer.Keyboard.isKeyPressed(';'));
 }
 
-#endif
-
 bool needsUiRedraw = true;
 static unsigned long lastRedrawTime = 0;
 
-void updateUi(bool show_toolbars, bool triggerPwnagothi) {
+void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
   if(pwnagothiMode && triggerPwnagothi){
     if(!stealth_mode){
       pwnagothiLoop();
@@ -433,7 +406,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi) {
     if(pwnagothiMode){
       return;
     }
-    if (menuID == true) {
+    if (menuID==1) {
       menu_current_opt = 0;
       menu_current_page = 1;
       menuID = 0;
@@ -444,30 +417,22 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi) {
       menu_current_page = 1;
     }
   }
-  drawTopCanvas();
-  drawBottomCanvas();
-
-  #ifndef LITE_VERSION
+  if(overrideDelay){
+    redrawUi(show_toolbars);
+  }
+  if(show_toolbars)
+  {  drawTopCanvas();
+    drawBottomCanvas();
+  }
+  
   if (menuID == 1) {
     menu_current_pages = 2;
     menu_len = 6;
-    #ifdef USE_EXPERIMENTAL_APPS
     drawMenuList(main_menu, 1, 8);
-    #else
-    drawMenuList(main_menu, 1, 7);
-    #endif
   } 
   else if (menuID == 2){
     drawMenuList( wifi_menu , 2, 6);
   }
-  #ifdef USE_EXPERIMENTAL_APPS
-  else if (menuID == 3){
-    drawMenuList( bluetooth_menu , 3, 6);
-  }
-  else if (menuID == 4){
-    drawMenuList( IR_menu , 4, 5);
-  }
-  #endif
   else if (menuID == 5){
     drawMenuList( pwngotchi_menu , 5, 5);
   }
@@ -508,13 +473,13 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi) {
   {
     //redraw only in 5 seconds intervals
     unsigned long currentTime = millis();
-    if (currentTime - lastRedrawTime >= 5000 || needsUiRedraw) {
+    if (currentTime - lastRedrawTime >= 10000 || needsUiRedraw) {
       redrawUi(show_toolbars);
       lastRedrawTime = currentTime;
       needsUiRedraw = false;
     }
   }
-  #endif
+  
 
   M5.Display.startWrite();
   if (show_toolbars) {
@@ -669,7 +634,20 @@ void drawMood(String face, String phrase) {
     canvas_main.drawRect(barX, 5, barWidth, 10, tx_color_rgb565);
     canvas_main.fillRect(barX, 5, filledWidth, 10, tx_color_rgb565);
 
-
+    if(prev_level != level){
+      prev_level = level;
+      //level up sound
+      Sound(784, 80, pwnagotchi.sound_on_events);   // G5
+      delay(80);
+      Sound(988, 80, pwnagotchi.sound_on_events);   // B5
+      delay(80);
+      Sound(1319, 80, pwnagotchi.sound_on_events);  // E6
+      delay(80);
+      Sound(1568, 200, pwnagotchi.sound_on_events); // G6
+      delay(200);
+      saveSettings();
+      phrase = "Level up! I am now level " + String(level) + "!";
+    }
 
     if (moods.count(face + ".jpg")) {
         MoodImage &m = moods[face + ".jpg"];
@@ -875,7 +853,7 @@ void drawHintBox(const String &text, uint8_t hintID) {
   appRunning = false;
 }
 
-#ifndef LITE_VERSION
+
 
 #include <esp_sntp.h>
 
@@ -1322,10 +1300,8 @@ void runApp(uint8_t appID){
       debounceDelay();
       drawMenuList( wifi_menu , 2, 6);
     }
-    #ifdef USE_EXPERIMENTAL_APPS
-    if(appID == 2){drawMenuList(bluetooth_menu, 3, 6);}
-    if(appID == 3){drawMenuList(IR_menu, 4, 5 );}
-    #endif
+    if(appID == 2){}
+    if(appID == 3){}
     if(appID == 4){
       debounceDelay();
       drawMenuList(pwngotchi_menu, 5 , 6);
@@ -1335,7 +1311,7 @@ void runApp(uint8_t appID){
       runTextsEditor();
       menuID = 0;
     }
-    if(appID == 5){drawInfoBox("ERROR", "not implemented", "" ,  true, true);}
+    if(appID == 5){drawStats();}
     if(appID == 6){
       debounceDelay();
       drawMenuList(settings_menu ,6  , 21);
@@ -4817,7 +4793,7 @@ inline void drawWifiInfoScreen(String wifiName, String wifiMac, String wifiRRSI,
   }
 }
 
-#endif
+
 
 void pushAll(){
   if(coords_overlay){loggerTask(); delay(100);}
@@ -4838,7 +4814,7 @@ void updateM5(){
 }
 
 
-#ifndef LITE_VERSION
+
 
 #include <vector>
 
@@ -5112,8 +5088,6 @@ int brightnessPicker(){
   }
 }
 
-#endif
-
 void debounceDelay(){
   while(M5Cardputer.Keyboard.isPressed() != 0){
     M5.update();
@@ -5125,6 +5099,103 @@ void debounceDelay(){
   delay(40);
   M5Cardputer.update();
   M5.update();
+}
+
+void drawSysInfo(){
+  drawTopCanvas();
+  drawBottomCanvas();
+  canvas_main.fillSprite(bg_color_rgb565);
+  canvas_main.setTextColor(tx_color_rgb565);
+  canvas_main.setTextSize(2);
+  canvas_main.setTextDatum(top_left);
+  canvas_main.setCursor(1, PADDING + 1);
+  canvas_main.println("System Stats");
+  canvas_main.setTextSize(1);
+  canvas_main.println("");
+  canvas_main.println("Free Heap: " + String(ESP.getFreeHeap()) + " bytes");
+  canvas_main.println("Sketch Size: " + String(ESP.getSketchSize()/1024) + " KB");
+  canvas_main.println("Sketch Free: " + String(ESP.getFreeSketchSpace()/1024) + " KB");
+  canvas_main.println("CPU Frequency: " + String(ESP.getCpuFreqMHz()) + " MHz");
+  canvas_main.println("Chip ID: " + String(ESP.getChipModel()) + " Rev " + String(ESP.getChipRevision()));
+  canvas_main.println("Flash Size: " + String(ESP.getFlashChipSize()/1024/1024) + " MB");
+  canvas_main.println("Flash Speed: " + String(ESP.getFlashChipSpeed()/1000000) + " MHz");
+  pushAll();
+  debounceDelay();
+  while(true){
+    M5.update();
+    M5Cardputer.update();
+    Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
+    if (status.fn) {
+      for (auto k : status.word) {
+        if (k == '`') {
+          debounceDelay();
+          return;
+        }
+      }
+    }
+    delay(100);
+  }
+}
+
+void drawStats(){
+  canvas_main.fillSprite(bg_color_rgb565);
+  canvas_main.setTextColor(tx_color_rgb565);
+  canvas_main.setTextSize(2);
+  canvas_main.setTextDatum(top_left);
+  canvas_main.setCursor(5, 5);
+  canvas_main.println("Usage statistics");
+  canvas_main.setTextSize(1);
+  canvas_main.println("");
+  canvas_main.drawString("Prev run", 5, 25);
+  canvas_main.drawString("Total", canvas_main.width()/2, 25);
+  canvas_main.drawString("HS: " + String(lastSessionCaptures), 5, 35);
+  canvas_main.drawString("HS: " + String(pwned_ap), canvas_main.width()/2, 35);
+  canvas_main.drawString("P: " + String(lastSessionPeers), 5, 45);
+  canvas_main.drawString("P: " + String(allTimePeers), canvas_main.width()/2, 45);
+  canvas_main.drawString("D: " + String(lastSessionDeauths), 5, 55);
+  canvas_main.drawString("D: " + String(allTimeDeauths), canvas_main.width()/2, 55);
+  canvas_main.drawString("E: " + String(allTimeEpochs), canvas_main.width()/2, 65);
+  canvas_main.drawString("T: " + String(lastSessionTime/60000) + "m", 5, 65);
+  canvas_main.drawString("T: " + String(allSessionTime/60000) + "m", canvas_main.width()/2, 75);
+  //now lets draw progress bar with level info and amont of captures user needs to advance to next level
+  constexpr float XP_SCALE = 5.0f;
+  constexpr float XP_EXPONENT = 0.75f;
+
+  uint16_t level = (uint16_t)floor(pow(pwned_ap / XP_SCALE, XP_EXPONENT));
+
+  float prev_level_xp = XP_SCALE * pow(level, 1.0f / XP_EXPONENT);
+  float next_level_xp = XP_SCALE * pow(level + 1, 1.0f / XP_EXPONENT);
+
+  float to_next_level = next_level_xp - pwned_ap;
+  float progress = (pwned_ap - prev_level_xp) / (next_level_xp - prev_level_xp);
+  canvas_main.drawString("Level: " + String(level) + ". Next level in: " + String((uint16_t)to_next_level) + " handshakes", 5, 85);
+  //draw progress bar
+  uint8_t bar_x = 5;
+  uint8_t bar_y = 94;
+  uint8_t bar_w = canvas_main.width() - 10;
+  uint8_t bar_h = 10;
+  canvas_main.drawRect(bar_x, bar_y, bar_w, bar_h, tx_color_rgb565);
+  canvas_main.fillRect(bar_x, bar_y, bar_w * progress, bar_h, tx_color_rgb565);
+  pushAll();
+  debounceDelay();
+  while(true){
+    M5.update();
+    M5Cardputer.update();
+    Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
+    if (true) {
+      for (auto k : status.word) {
+        if (k == '`') {
+          debounceDelay();
+          return;
+        }
+      }
+    }
+    if(isOkPressed()){
+      debounceDelay();
+      return;
+    }
+    delay(100);
+  }
 }
 
 #ifdef ENABLE_COREDUMP_LOGGING
@@ -5179,4 +5250,5 @@ void sendCrashReport(){
   sendCoredump();
   drawInfoBox("Report sent", "Thank you for helping", "to improve this software!", true, false);
 }
+
 #endif

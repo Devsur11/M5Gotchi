@@ -140,3 +140,8 @@ extern long lastSessionTime;
 extern uint8_t lastSessionPeers;
 uint16_t tot_happy_epochs;
 uint16_t tot_sad_epochs;
+extern uint32_t allTimeDeauths;
+extern uint32_t allTimeEpochs;
+extern uint16_t allTimePeers;
+extern long long allSessionTime;
+extern uint16_t prev_level;

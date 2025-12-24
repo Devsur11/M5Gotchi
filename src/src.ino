@@ -202,8 +202,33 @@ void setup() {
   updateUi(false, false);
   logMessage("Heap after mood preload:");
   printHeapInfo();
-  wifion();
   
+  //lets gen random mac to setup unique identity
+  uint8_t mac[6];
+
+  // generate random MAC
+  for (int i = 0; i < 6; i++) {
+    mac[i] = random(0, 256);
+  }
+
+  // fix MAC rules
+  mac[0] &= 0xFE; // clear multicast bit
+  mac[0] |= 0x02; // set locally administered bit
+
+  esp_err_t err;
+
+  // WiFi must NOT be started yet
+  WiFi.mode(WIFI_STA); // this calls esp_wifi_init internally but not start
+
+  err = esp_wifi_set_mac(WIFI_IF_STA, mac);
+  if (err != ESP_OK) {
+    fLogMessage("set_mac failed: %s\n", esp_err_to_name(err));
+  }
+
+  // now start WiFi
+  wifion();
+  logMessage("Generated and set random MAC address: " + String(WiFi.macAddress()));
+
   #ifdef ENABLE_COREDUMP_LOGGING
   esp_core_dump_init();
   #endif
@@ -212,8 +237,6 @@ void setup() {
   bool newVersionAvailable = false;
   if(connectWiFiOnStartup){
     attemptConnectSavedNetworks();
-    logMessage("Heap after attempting WiFi connect:");
-    printHeapInfo();
     if(WiFi.status() == WL_CONNECTED){
       logMessage("Connected to WiFi on startup");
       delay(1000); //wait a second to ensure connection is stable
@@ -221,7 +244,6 @@ void setup() {
       logMessage("Failed to connect to WiFi on startup");
     }
     //lets now check for updates and if it exists, inform the user
-    logMessage(String(ESP.getFreeHeap()) + " bytes free heap before checking updates");
     if(checkUpdatesAtNetworkStart) {
       logMessage("Checking for updates on network start");
       if(check_for_new_firmware_version(false)) {
@@ -232,11 +254,9 @@ void setup() {
       }
     }
   }
-  logMessage("Heap after WiFi init:");
-  printHeapInfo();
+
   fontSetup();
-  logMessage("Heap after font setup:");
-  printHeapInfo();
+
   //
   initPwngrid();
   // ^ please leave this line as it is, dont change its position, otherwise heap will corrupt(HOW!!?)
@@ -283,15 +303,13 @@ void setup() {
   #endif
   #endif
 
-  logMessage("Heap after Pwngrid init:");
-  printHeapInfo();
-
   if(pwnagothiModeEnabled) {
     logMessage("Pwnagothi mode enabled");
     pwnagothiBegin();
   } else {
     logMessage("Pwnagothi mode disabled");
   }
+
   initPwngrid();
   esp_task_wdt_deinit();
   esp_task_wdt_init(60, false); 
@@ -343,6 +361,8 @@ void setup() {
   // [4838][I][logger.cpp] Coredump partition found at address: 7f0000
   logMessage("Evaluating install type for feature limitations...");
   setMoodToStatus();
+  updateUi(true, false, true);
+  logMessage("Evaluating install type for feature limitations...");
   if (part_spiffs && part_spiffs->address == 0x670000 && app1_size == 0x330000 && part_coredump && !part_vfs && part_app0->size == 0x330000) {
     logMessage("Generic install detected!");
     if(newVersionAvailable) {
@@ -364,6 +384,7 @@ void setup() {
   if(newVersionAvailable) {
     drawHintBox("A new firmware version is available!\nPlease update via the menu\nPlease note tha bugs from older version will not be reviewed!", 3);
   }
+  
 }
 
 void loop() {

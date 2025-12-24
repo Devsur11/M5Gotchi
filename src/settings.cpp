@@ -44,6 +44,11 @@ uint lastSessionDeauths = 0;
 uint lastSessionCaptures = 0;
 long lastSessionTime = 0;
 uint8_t lastSessionPeers = 0;
+uint32_t allTimeDeauths = 0;
+uint32_t allTimeEpochs = 0;
+uint16_t allTimePeers = 0;
+long long allSessionTime = 0;
+uint16_t prev_level = 0;
 
 // Keep track of which hints have been displayed using bitmask
 // Each bit represents a different hint
@@ -395,6 +400,21 @@ bool initVars() {
         if(config["lastSessionPeers"].is<uint8_t>()) lastSessionPeers = config["lastSessionPeers"].as<uint8_t>();
         else configChanged = true;
 
+        if(config["allTimeDeauths"].is<uint32_t>()) allTimeDeauths = config["allTimeDeauths"].as<uint32_t>();
+        else configChanged = true;
+
+        if(config["allTimeEpochs"].is<uint32_t>()) allTimeEpochs = config["allTimeEpochs"].as<uint32_t>();
+        else configChanged = true;
+
+        if(config["allTimePeers"].is<uint16_t>()) allTimePeers = config["allTimePeers"].as<uint16_t>();
+        else configChanged = true;
+
+        if(config["allSessionTime"].is<long long>()) allSessionTime = config["allSessionTime"].as<long long>();
+        else configChanged = true;
+
+        if(config["prev_level"].is<uint16_t>()) prev_level = config["prev_level"].as<uint16_t>();
+        else configChanged = true;
+
         if(configChanged) {
             logMessage("Config file missing values, will be updated");
         }
@@ -447,6 +467,11 @@ bool initVars() {
     config["lastSessionCaptures"] = lastSessionCaptures;
     config["lastSessionTime"] = lastSessionTime;
     config["lastSessionPeers"] = lastSessionPeers;
+    config["allTimeDeauths"] = allTimeDeauths;
+    config["allTimeEpochs"] = allTimeEpochs;
+    config["allTimePeers"] = allTimePeers;
+    config["allSessionTime"] = allSessionTime;
+    config["prev_level"] = prev_level;
 
     if (configChanged) {
         logMessage("Config updated with missing/default values, saving...");
@@ -507,6 +532,11 @@ bool saveSettings(){
     config["lastSessionCaptures"] = lastSessionCaptures;
     config["lastSessionTime"] = lastSessionTime;
     config["lastSessionPeers"] = lastSessionPeers;
+    config["allTimeDeauths"] = allTimeDeauths;
+    config["allTimeEpochs"] = allTimeEpochs;
+    config["allTimePeers"] = allTimePeers;
+    config["allSessionTime"] = allSessionTime;
+    config["prev_level"] = prev_level;
 
     logMessage("JSON data creation successful, proceeding to save");
     FConf = SD.open(NEW_CONFIG_FILE, FILE_WRITE, false);
