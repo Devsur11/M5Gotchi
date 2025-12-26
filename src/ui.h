@@ -19,6 +19,7 @@ struct unit {
   String fingerprint;
 };
 
+extern QueueHandle_t unitQueue;
 extern uint16_t bg_color_rgb565;
 extern uint16_t tx_color_rgb565;
 

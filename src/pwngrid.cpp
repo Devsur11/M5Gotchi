@@ -1,6 +1,7 @@
 #include "pwngrid.h"
 #include "mood.h"
 #include <vector>
+#include "ui.h"
 
 static const size_t PWNGRID_MAX_PEERS = 64;
 std::vector<pwngrid_peer> pwngrid_peers;
@@ -15,6 +16,22 @@ String getPwngridLastFriendName() { return pwngrid_last_friend_name; }
 uint16_t getPwngridLastPwnedAmount() { return pwngrid_last_pwned_amount; }
 pwngrid_peer *getPwngridPeers() { return pwngrid_peers.empty() ? nullptr : pwngrid_peers.data(); }
 String getLastPeerFace() { return lastPeerFace; }
+
+void enqueueUnit(const String &name, const String &identity) {
+  if (!unitQueue) return;
+
+  unit_msg_t msg;
+  memset(&msg, 0, sizeof(msg));
+
+  name.substring(0, UNIT_NAME_MAX - 1)
+      .toCharArray(msg.name, UNIT_NAME_MAX);
+
+  identity.substring(0, UNIT_FP_MAX - 1)
+          .toCharArray(msg.fingerprint, UNIT_FP_MAX);
+
+  xQueueSend(unitQueue, &msg, 0); // no blocking, drop if full
+}
+
 
 void pwngridAdvertiseLoop(void *pvParameters) {
     while (true) {
@@ -187,6 +204,12 @@ void pwngridAddPeer(JsonDocument &json, signed int rssi) {
     }
     pwngrid_peers[idx] = newp;
   }
+
+  if ((pwngrid_peers.size() < PWNGRID_MAX_PEERS) && add_new_units_to_friends) {
+    pwngrid_peers.push_back(newp);
+    enqueueUnit(newp.name, newp.identity);
+  }
+
 
   pwngrid_last_friend_name = newp.name;
   lastPeerFace = newp.face;

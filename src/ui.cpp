@@ -277,6 +277,21 @@ uint16_t bg_color_rgb565 ;//= TFT_WHITE;
 uint16_t tx_color_rgb565 ;//= TFT_BLACK;
 bool sleep_mode = false; 
 SemaphoreHandle_t buttonSemaphore;
+QueueHandle_t unitQueue;
+
+void unitWriterTask(void *pv) {
+  unit_msg_t msg;
+
+  for (;;) {
+    if (xQueueReceive(unitQueue, &msg, portMAX_DELAY)) {
+      unit u;
+      u.name = msg.name;
+      u.fingerprint = msg.fingerprint;
+
+      addUnitToAddressBook(u);
+    }
+  }
+}
 
 void esp_will_beg_for_its_life() {
   int *ptr = nullptr;
@@ -348,6 +363,17 @@ void initColorSettings(){
 }
 
 void initUi() {
+  unitQueue = xQueueCreate(8, sizeof(unit_msg_t));
+  xTaskCreatePinnedToCore(
+    unitWriterTask,
+    "unitWriter",
+    4096,
+    NULL,
+    2,
+    NULL,
+    0
+  );
+
   attachInterrupt(digitalPinToInterrupt(0), handleInterrupt, FALLING);
   buttonSemaphore = xSemaphoreCreateBinary();
   xTaskCreate(buttonTask, "ButtonTask", 4096, NULL, 1, NULL);

@@ -40,11 +40,10 @@ bool wifion(){
 #define TEMP_BIN_PATH   TEMP_DIR "/update.bin"
 #define NEW_CONFIG_FILE "/m5gothi.conf"
 #define PERSONALITY_FILE "/personality.conf"
-//#define LITE_VERSION
+#define UNIT_NAME_MAX 32
+#define UNIT_FP_MAX   64
 #define SERIAL_LOGS
-//#define SKIP_AUTO_UPDATE
 //#define BYPASS_SD_CHECK
-//#define USE_EXPERIMENTAL_APPS
 #define SD_CS    12  // G12
 #define SD_MOSI  14  // G14
 #define SD_SCK   40  // G40
@@ -53,7 +52,6 @@ bool wifion(){
 #define MAX_PKT_SIZE 3000
 #define ROW_SIZE 40
 #define PADDING 10
-#define FONT_FILE_PATH "/Test.vlw"
 
 struct personality{
     uint16_t nap_time;
@@ -78,6 +76,11 @@ struct personality{
     uint16_t client_discovery_timeout;
     uint16_t gps_fix_timeout;
 };
+
+typedef struct {
+  char name[UNIT_NAME_MAX];
+  char fingerprint[UNIT_FP_MAX];
+} unit_msg_t;
 
 bool initVars();
 bool saveSettings();
