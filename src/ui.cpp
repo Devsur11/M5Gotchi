@@ -5348,7 +5348,7 @@ void drawStats(){
 
   float to_next_level = next_level_xp - pwned_ap;
   float progress = (pwned_ap - prev_level_xp) / (next_level_xp - prev_level_xp);
-  canvas_main.drawString("Level: " + String(level) + ". Next level in: " + String((uint16_t)to_next_level) + " handshakes", 5, 85);
+  canvas_main.drawString("Level: " + String(level) + ". Next level in: " + String((uint16_t)to_next_level) + " handshakes", 0, 85);
   //draw progress bar
   uint8_t bar_x = 5;
   uint8_t bar_y = 94;
@@ -5366,12 +5366,14 @@ void drawStats(){
       for (auto k : status.word) {
         if (k == '`') {
           debounceDelay();
+          menuID = 0;
           return;
         }
       }
     }
-    if(isOkPressed()){
+    if(M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER)) {
       debounceDelay();
+      menuID = 0;
       return;
     }
     delay(100);
