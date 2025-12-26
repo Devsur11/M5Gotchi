@@ -145,3 +145,5 @@ extern uint32_t allTimeEpochs;
 extern uint16_t allTimePeers;
 extern long long allSessionTime;
 extern uint16_t prev_level;
+extern bool randomise_mac_at_boot;
+extern bool add_new_units_to_friends;

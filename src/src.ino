@@ -21,12 +21,6 @@
 #include "esp_partition.h"
 #include "fontDownloader.h"
 
-const esp_partition_t *coredump_part =
-    esp_partition_find_first(ESP_PARTITION_TYPE_DATA,
-                             ESP_PARTITION_SUBTYPE_DATA_COREDUMP,
-                             NULL);
-
-
 bool firstSoundEnable;
 bool isSoundPlayed = false;
 
@@ -203,26 +197,28 @@ void setup() {
   logMessage("Heap after mood preload:");
   printHeapInfo();
   
-  //lets gen random mac to setup unique identity
-  uint8_t mac[6];
+  if(randomise_mac_at_boot){
+    //lets gen random mac to setup unique identity
+    uint8_t mac[6];
 
-  // generate random MAC
-  for (int i = 0; i < 6; i++) {
-    mac[i] = random(0, 256);
-  }
+    // generate random MAC
+    for (int i = 0; i < 6; i++) {
+      mac[i] = random(0, 256);
+    }
 
-  // fix MAC rules
-  mac[0] &= 0xFE; // clear multicast bit
-  mac[0] |= 0x02; // set locally administered bit
+    // fix MAC rules
+    mac[0] &= 0xFE; // clear multicast bit
+    mac[0] |= 0x02; // set locally administered bit
 
-  esp_err_t err;
+    esp_err_t err;
 
-  // WiFi must NOT be started yet
-  WiFi.mode(WIFI_STA); // this calls esp_wifi_init internally but not start
+    // WiFi must NOT be started yet
+    WiFi.mode(WIFI_STA); // this calls esp_wifi_init internally but not start
 
-  err = esp_wifi_set_mac(WIFI_IF_STA, mac);
-  if (err != ESP_OK) {
-    fLogMessage("set_mac failed: %s\n", esp_err_to_name(err));
+    err = esp_wifi_set_mac(WIFI_IF_STA, mac);
+    if (err != ESP_OK) {
+      fLogMessage("set_mac failed: %s\n", esp_err_to_name(err));
+    }
   }
 
   // now start WiFi
@@ -258,8 +254,13 @@ void setup() {
   fontSetup();
 
   //
-  initPwngrid();
-  // ^ please leave this line as it is, dont change its position, otherwise heap will corrupt(HOW!!?)
+  if(advertisePwngrid) {
+    logMessage("Pwngrid advertisement enabled");
+    initPwngrid();
+  } else {
+    logMessage("Pwngrid advertisement disabled");
+  }
+  // ^ please leave this as it is, dont change its position, otherwise heap will corrupt(HOW!!?)
 
   // check if core dump exists
   #ifdef ENABLE_COREDUMP_LOGGING

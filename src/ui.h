@@ -14,6 +14,11 @@ struct menu {
   int command;
 };
 
+struct unit {
+  String name;
+  String fingerprint;
+};
+
 extern uint16_t bg_color_rgb565;
 extern uint16_t tx_color_rgb565;
 
@@ -72,6 +77,8 @@ void renderMessages(M5Canvas &canvas, const std::vector<message> &messages, int 
 String findIncomingFingerprint(const std::vector<message> &messages);
 void drawHintBox(const String &text, uint8_t hintID);
 void drawStats();
+void drawSysInfo();
+bool addUnitToAddressBook(const unit u);
 
 #ifdef ENABLE_COREDUMP_LOGGING
 void sendCrashReport();

@@ -49,6 +49,8 @@ uint32_t allTimeEpochs = 0;
 uint16_t allTimePeers = 0;
 long long allSessionTime = 0;
 uint16_t prev_level = 0;
+bool randomise_mac_at_boot = true;
+bool add_new_units_to_friends = false;
 
 // Keep track of which hints have been displayed using bitmask
 // Each bit represents a different hint
@@ -415,6 +417,12 @@ bool initVars() {
         if(config["prev_level"].is<uint16_t>()) prev_level = config["prev_level"].as<uint16_t>();
         else configChanged = true;
 
+        if(config["randomise_mac_at_boot"].is<bool>()) randomise_mac_at_boot = config["randomise_mac_at_boot"].as<bool>();
+        else configChanged = true;
+
+        if(config["add_new_units_to_friends"].is<bool>()) add_new_units_to_friends = config["add_new_units_to_friends"].as<bool>();
+        else configChanged = true;
+
         if(configChanged) {
             logMessage("Config file missing values, will be updated");
         }
@@ -472,6 +480,8 @@ bool initVars() {
     config["allTimePeers"] = allTimePeers;
     config["allSessionTime"] = allSessionTime;
     config["prev_level"] = prev_level;
+    config["randomise_mac_at_boot"] = randomise_mac_at_boot;
+    config["add_new_units_to_friends"] = add_new_units_to_friends;
 
     if (configChanged) {
         logMessage("Config updated with missing/default values, saving...");
@@ -537,6 +547,8 @@ bool saveSettings(){
     config["allTimePeers"] = allTimePeers;
     config["allSessionTime"] = allSessionTime;
     config["prev_level"] = prev_level;
+    config["randomise_mac_at_boot"] = randomise_mac_at_boot;
+    config["add_new_units_to_friends"] = add_new_units_to_friends;
 
     logMessage("JSON data creation successful, proceeding to save");
     FConf = SD.open(NEW_CONFIG_FILE, FILE_WRITE, false);

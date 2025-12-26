@@ -177,14 +177,16 @@ menu settings_menu[] = {
   {"Change Hostname/name", 40},
   {"UI Theme", 50},
   {"Skip EAPOL integrity check", 49},
+  {"Randomise mac at startup", 34},
   {"Display brightness", 41},
   {"Keyboard Sound", 42},
   {"Advertise Pwngrid presence", 60},
+  {"Add all met pwnagotchis to friends", 35},
   {"Edit text faces", 90},
   {"Connect to WiFi", 43},
   {"Manage saved networks", 32},
   {"Connect to WiFi on startup", 29},
-  {"Check for updates at network start", 33},
+  {"At boot, check for updates", 33},
   {"GPS GPIO pins", 30},
   {"Log GPS data after handshake", 31},
   {"GO button press function", 59},
@@ -192,6 +194,7 @@ menu settings_menu[] = {
   {"Update system", 44},
   {"Factory reset", 51},
   {"About M5Gotchi", 45},
+  {"System info", 3},
   {"Power off system", 46},
   {"Reboot system", 56}
 };
@@ -437,7 +440,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
     drawMenuList( pwngotchi_menu , 5, 5);
   }
   else if (menuID == 6){
-    drawMenuList( settings_menu , 6, 21);
+    drawMenuList( settings_menu , 6, 24);
   }  
   else if (menuID == 7){
     (wpa_sec_api_key.length()>5)?drawMenuList(wpasec_menu, 7, 3):drawMenuList(wpasec_setup_menu, 7, 1);
@@ -688,10 +691,6 @@ void drawMood(String face, String phrase) {
     
 }
 
-struct unit {
-  String name;
-  String fingerprint;
-};
 
 // Function to serialize the `unit` struct to a JsonObject
 void serializeUnit(const unit& u, JsonObject& obj) {
@@ -1290,6 +1289,50 @@ String isoTimestampToDateTimeString(String isoTimestamp) {
     return date + " " + time;
 }
 
+bool addUnitToAddressBook(const unit u) {
+    File file = SD.open(ADDRES_BOOK_FILE, FILE_READ);
+    if (!file) {
+        logMessage("Failed to open address book for reading.");
+        return false;
+    }
+
+    JsonDocument doc;
+    DeserializationError err = deserializeJson(doc, file);
+    file.close();
+    if (err) {
+        logMessage("Failed to parse address book: " + String(err.c_str()));
+        return false;
+    }
+
+    JsonArray arr = doc.as<JsonArray>();
+
+    // Check for duplicates
+    for (JsonObject obj : arr) {
+        String existingFingerprint = obj["fingerprint"] | "";
+        if (existingFingerprint == u.fingerprint) {
+            logMessage("Unit with fingerprint already exists in address book.");
+            return true; // Duplicate found
+        }
+    }
+
+    // Add new unit
+    JsonObject newObj = arr.createNestedObject();
+    serializeUnit(u, newObj);
+
+    // Write back to file
+    file = SD.open(ADDRES_BOOK_FILE, FILE_WRITE);
+    if (!file) {
+        logMessage("Failed to open address book for writing.");
+        return false;
+    }
+
+    serializeJson(doc, file);
+    file.close();
+
+    logMessage("Added unit to address book: " + u.name);
+    return true;
+}
+
 void runApp(uint8_t appID){
   logMessage("App started running, ID:"+ String(appID));
   menu_current_opt = 0;
@@ -1301,7 +1344,9 @@ void runApp(uint8_t appID){
       drawMenuList( wifi_menu , 2, 6);
     }
     if(appID == 2){}
-    if(appID == 3){}
+    if(appID == 3){
+      drawSysInfo();
+    }
     if(appID == 4){
       debounceDelay();
       drawMenuList(pwngotchi_menu, 5 , 6);
@@ -1314,7 +1359,7 @@ void runApp(uint8_t appID){
     if(appID == 5){drawStats();}
     if(appID == 6){
       debounceDelay();
-      drawMenuList(settings_menu ,6  , 21);
+      drawMenuList(settings_menu,6,23);
     }
     if(appID == 7){
       debounceDelay();
@@ -3179,8 +3224,40 @@ void runApp(uint8_t appID){
       if(saveSettings()) drawInfoBox("Saved","Setting updated", "", true, false);
       menuID = 0; return;
     }
-    if(appID == 34){}
-    if(appID == 35){}
+    if(appID == 34){
+      //randomise mac option menu
+      String menu[] = {"On", "Off", "Back"};
+      uint8_t answer = drawMultiChoice("Randomise MAC", menu, 3, 6, 0);
+      if(answer == 0){
+        randomise_mac_at_boot = true;
+        saveSettings();
+        drawInfoBox("Info", "Randomise MAC", "Enabled", true, false);
+      }
+      else if(answer == 1){
+        randomise_mac_at_boot = false;
+        saveSettings();
+        drawInfoBox("Info", "Randomise MAC", "Disabled", true, false);
+      }
+      menuID = 0;
+      return;
+    }
+    if(appID == 35){
+      // setting "add_new_units_to_friends"
+      String options[] = {"Off", "On", "Back"};
+      uint8_t answer = drawMultiChoice("Add new units to friends", options, 3, 6, 0);
+      if(answer == 0){
+        add_new_units_to_friends = false;
+        saveSettings();
+        drawInfoBox("Info", "Add new units to friends", "Disabled", true, false);
+      }
+      else if(answer == 1){
+        add_new_units_to_friends = true;
+        saveSettings();
+        drawInfoBox("Info", "Add new units to friends", "Enabled", true, false);
+      }
+      menuID = 0;
+      return;
+    }
     if(appID == 36){
       if(!pwnagothiMode){
         bool answear = drawQuestionBox("CONFIRMATION", "Operate only if you ", "have premision!");
@@ -5124,14 +5201,10 @@ void drawSysInfo(){
   while(true){
     M5.update();
     M5Cardputer.update();
-    Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
-    if (status.fn) {
-      for (auto k : status.word) {
-        if (k == '`') {
-          debounceDelay();
-          return;
-        }
-      }
+    if(isOkPressed()) break;
+    if(M5Cardputer.Keyboard.isKeyPressed('`')) {
+      debounceDelay();
+      return;
     }
     delay(100);
   }
