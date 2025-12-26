@@ -466,7 +466,88 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
     drawMenuList( pwngotchi_menu , 5, 5);
   }
   else if (menuID == 6){
-    drawMenuList( settings_menu , 6, 24);
+    //lets modify each setting based on current value
+    char val_1[50];
+    char val_2[50];
+    char val_3[55];
+    char val_4[45];
+    char val_5[60];
+    char val_6[75];
+    char val_7[65];
+    char val_8[65];
+    char val_9[70];
+
+    snprintf(val_1, sizeof(val_1),
+            "M5Gotchi auto mode on boot: %s",
+            pwnagothiModeEnabled ? "ON" : "OFF");
+
+    snprintf(val_2, sizeof(val_2),
+            "Skip EAPOL integrity check: %s",
+            skip_eapol_check ? "ON" : "OFF");
+
+    snprintf(val_3, sizeof(val_3),
+            "Randomise mac at startup: %s",
+            randomise_mac_at_boot ? "ON" : "OFF");
+
+    snprintf(val_4, sizeof(val_4),
+            "Keyboard Sound: %s",
+            sound ? "ON" : "OFF");
+
+    snprintf(val_5, sizeof(val_5),
+            "Advertise Pwngrid presence: %s",
+            advertisePwngrid ? "ON" : "OFF");
+
+    snprintf(val_6, sizeof(val_6),
+            "Add all met pwnagotchis to friends: %s",
+            add_new_units_to_friends ? "ON" : "OFF");
+
+    snprintf(val_7, sizeof(val_7),
+            "Connect to WiFi on startup: %s",
+            connectWiFiOnStartup ? "ON" : "OFF");
+
+    snprintf(val_8, sizeof(val_8),
+            "At boot, check for updates: %s",
+            checkUpdatesAtNetworkStart ? "ON" : "OFF");
+
+    snprintf(val_9, sizeof(val_9),
+            "Log GPS data after handshake: %s",
+            getLocationAfterPwn ? "ON" : "OFF");
+
+    char val_10[40];
+    snprintf(val_10, sizeof(val_10),
+            "Log to SD: %s",
+            sd_logging ? "ON" : "OFF");
+
+
+    menu new_settings_menu[] = {
+      { val_1, 48 },
+      { "Change Hostname/name", 40 },
+      { "UI Theme", 50 },
+      { val_2, 49 },
+      { val_3, 34 },
+      { "Display brightness", 41 },
+      { val_4, 42 },
+      { val_5, 60 },
+      { val_6, 35 },
+      { "Edit text faces", 90 },
+      { "Connect to WiFi", 43 },
+      { "Manage saved networks", 32 },
+      { val_7, 29 },
+      { val_8, 33 },
+      { "GPS GPIO pins", 30 },
+      { val_9, 31 },
+      { "GO button press function", 59 },
+      { val_10, 58 },
+      { "Update system", 44 },
+      { "Factory reset", 51 },
+      { "About M5Gotchi", 45 },
+      { "System info", 3 },
+      { "Power off system", 46 },
+      { "Reboot system", 56 }
+    };
+
+
+    drawMenuList( new_settings_menu , 6, 24);
   }  
   else if (menuID == 7){
     (wpa_sec_api_key.length()>5)?drawMenuList(wpasec_menu, 7, 3):drawMenuList(wpasec_setup_menu, 7, 1);
