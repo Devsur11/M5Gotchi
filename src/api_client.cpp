@@ -16,6 +16,8 @@ static const char *Endpoint = "https://api.pwnagotchi.ai/api/v1";
 static String token = "";
 static const char *tokenPath = "/pwngrid/token.json";
 static String keysPathGlobal = "/pwngrid/keys";
+extern const char pwngid_root_ca_pem_start[] asm("_binary_certs_pwngrid_root_ca_pem_start");
+extern const char pwngid_root_ca_pem_end[] asm("_binary_certs_pwngrid_root_ca_pem_end");
 
 #include <esp_sntp.h>
 
@@ -150,7 +152,7 @@ static String httpPostJson(const String &url, const String &json, bool auth) {
         return String();
     }
     WiFiClientSecure *client = new WiFiClientSecure();
-    client->setInsecure(); // TODO: replace with cert verification
+    client->setCACert(pwngid_root_ca_pem_start);
     HTTPClient https;
     https.begin(*client, url);
     https.addHeader("Content-Type", "application/json");
@@ -177,7 +179,7 @@ static String httpGet(const String &url, bool auth) {
         return String();
     }
     WiFiClientSecure *client = new WiFiClientSecure();
-    client->setInsecure();
+    client->setCACert(pwngid_root_ca_pem_start);
     HTTPClient https;
     https.begin(*client, url);
     if (auth && token.length()) https.addHeader("Authorization", "Bearer " + token);
@@ -256,10 +258,8 @@ bool api_client::enrollWithGrid() {
 
     // no auth header
     logMessage("Data for enrol created, sending...");
-    logMessage("Enroll payload: " + out);
     String resp = httpPostJson(String(Endpoint) + "/unit/enroll", out, false);
     logMessage("Response got, proceeding to parse...");
-    logMessage("Enroll response: " + resp);
     if (resp.isEmpty()) {
         logMessage("enroll: empty response");
         return false;

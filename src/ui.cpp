@@ -278,6 +278,7 @@ uint16_t tx_color_rgb565 ;//= TFT_BLACK;
 bool sleep_mode = false; 
 SemaphoreHandle_t buttonSemaphore;
 QueueHandle_t unitQueue;
+uint8_t prevMID;
 
 void unitWriterTask(void *pv) {
   unit_msg_t msg;
@@ -455,15 +456,16 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
   }
   
   if (menuID == 1) {
-    menu_current_pages = 2;
-    menu_len = 6;
     drawMenuList(main_menu, 1, 8);
+    prevMID = 1;
   } 
   else if (menuID == 2){
     drawMenuList( wifi_menu , 2, 6);
+    prevMID = 2;
   }
   else if (menuID == 5){
     drawMenuList( pwngotchi_menu , 5, 5);
+    prevMID = 5;
   }
   else if (menuID == 6){
     //lets modify each setting based on current value
@@ -530,7 +532,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
       { val_5, 60 },
       { val_6, 35 },
       { "Edit text faces", 90 },
-      { "Connect to WiFi", 43 },
+      { (WiFi.status() == WL_CONNECTED)? "Disconnect from wifi":"Connect to wifi", 43 },
       { "Manage saved networks", 32 },
       { val_7, 29 },
       { val_8, 33 },
@@ -548,9 +550,11 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
 
 
     drawMenuList( new_settings_menu , 6, 24);
+    prevMID = 6;
   }  
   else if (menuID == 7){
     (wpa_sec_api_key.length()>5)?drawMenuList(wpasec_menu, 7, 3):drawMenuList(wpasec_setup_menu, 7, 1);
+    prevMID = 7;
   }
   else if (menuID == 8){
     File toUpload = SD.open("/pwngrid/cracks.conf");
@@ -567,6 +571,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
       drawMenuList(temp, 8, 7);
     }
     else (pwngrid_indentity.length()>10)? drawMenuList(pwngrid_menu, 8, 7): drawMenuList(pwngrid_menu, 8, 1);
+    prevMID = 8;
   }
   else if (menuID == 9){
     if(wiggle_api_key.length() > 5){
@@ -575,15 +580,21 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
     else{
       drawMenuList(wardrivingMenuWithWiggleUnsett, 9, 3);
     }
+    prevMID = 9;
   }
   else if (menuID == 99) {
     drawMenuList(devtools_menu, 99, 12);
+    prevMID = 99;
   }
   else if (menuID == 0)
   {
     //redraw only in 5 seconds intervals
     unsigned long currentTime = millis();
     if (currentTime - lastRedrawTime >= 10000 || needsUiRedraw) {
+      if(prevMID){
+        drawInfoBox("", "Refreshing data...", "", false, false);
+        prevMID=0;
+      }
       redrawUi(show_toolbars);
       lastRedrawTime = currentTime;
       needsUiRedraw = false;
@@ -3482,6 +3493,13 @@ void runApp(uint8_t appID){
       menuID = 0;
     }
     if(appID == 43){
+      if((WiFi.status() == WL_CONNECTED)){
+        WiFi.disconnect();
+        wifion();
+        drawInfoBox("Info", "WiFi disconnected", "", true, false);
+        menuID = 0;
+        return;
+      }
       wifion();
       drawInfoBox("Scanning...", "Scanning for networks...", "Please wait", false, false);
       int numNetworks = WiFi.scanNetworks();
