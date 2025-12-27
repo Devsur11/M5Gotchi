@@ -391,13 +391,13 @@ void setup() {
 void loop() {
   M5.update();
   M5Cardputer.update();
+  updateUi(true);
   if(M5Cardputer.Keyboard.isKeyPressed(KEY_OPT) && M5Cardputer.Keyboard.isKeyPressed(KEY_LEFT_CTRL) && M5Cardputer.Keyboard.isKeyPressed(KEY_FN)){
     // Toggle dev menu instead of crashing the device
     drawInfoBox("DevTools", "Opening developer tools...", "", false, false);
     delay(200);
     runApp(99);
   }
-  updateUi(true);
 }
 
 void Sound(int frequency, int duration, bool sound){

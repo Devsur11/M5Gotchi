@@ -423,6 +423,9 @@ bool initVars() {
         if(config["add_new_units_to_friends"].is<bool>()) add_new_units_to_friends = config["add_new_units_to_friends"].as<bool>();
         else configChanged = true;
 
+        if(config["lastSessionCaptures"].is<uint>()) lastSessionCaptures = config["lastSessionCaptures"].as<uint>();
+        else configChanged = true;
+
         if(configChanged) {
             logMessage("Config file missing values, will be updated");
         }

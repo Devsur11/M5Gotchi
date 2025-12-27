@@ -26,8 +26,8 @@ void enqueueUnit(const String &name, const String &identity) {
   name.substring(0, UNIT_NAME_MAX - 1)
       .toCharArray(msg.name, UNIT_NAME_MAX);
 
-  identity.substring(0, UNIT_FP_MAX - 1)
-          .toCharArray(msg.fingerprint, UNIT_FP_MAX);
+  identity.toCharArray(msg.fingerprint, UNIT_FP_MAX);
+
 
   xQueueSend(unitQueue, &msg, 0); // no blocking, drop if full
 }
