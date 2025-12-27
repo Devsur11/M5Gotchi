@@ -21,6 +21,8 @@ extern const uint8_t _binary_certs_wpa_sec_root_pem_end[]   asm("_binary_certs_w
 // forward declarations for async upload helper
 static bool startWpaSecUploadAsync(const char* a0, const char* a1, const char* a2, unsigned int a3);
 
+
+
 String userInputFromWebServer(String titleOfEntryToGet) {
     String api_key = "";
     bool api_key_received = false;
@@ -63,6 +65,17 @@ String userInputFromWebServer(String titleOfEntryToGet) {
             request->send(400, "text/plain", "Bad Request");
         }
     });
+    server.onNotFound([&](AsyncWebServerRequest *request) {
+        String captivePortalHtml = "<!DOCTYPE html><html><head><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+                      "<title>Setup</title></head><body style='display:flex;justify-content:center;align-items:center;height:100vh;'>"
+                      "<form action='/submit' method='post'>"
+                      "<h2>" + titleOfEntryToGet + "</h2>"
+                      "<input type='text' name='input' style='width:250px;height:30px;font-size:16px;text-align:center;' required><br><br>"
+                      "<input type='submit' value='Submit' style='width:100px;height:30px;'>"
+                      "</form></body></html>";
+        request->send(200, "text/html", captivePortalHtml);
+    });
+
 
     server.begin();
     logMessage("WebServer started. Connect to SSID 'CardputerSetup' and enter your key.");

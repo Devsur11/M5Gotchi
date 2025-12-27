@@ -131,123 +131,138 @@ static const char * const broken_ssids[]{
 
 // menuID 1
 menu main_menu[] = {
-    {"Manual mode", 1},
-    {"Auto mode", 4},
-    {"WPA-SEC companion", 55},
-    {"Pwngrid companion", 7},
-    {"Wardriving companion", 8},
-    {"File manager", 70},
-    {"Stats", 5},
-    {"Config", 6}
+    {"Manual Control", 1},        // Manual mode
+    {"Auto Mode", 4},             // Auto mode
+    {"WPA-SEC", 55},              // WPA-SEC companion
+    {"Pwngrid", 7},               // Pwngrid companion
+    {"Wardriving", 8},            // Wardriving companion
+    {"Files", 70},                // File manager
+    {"Statistics", 5},            // Stats
+    {"Settings", 6}               // Config
 };
 
-//menuID 2
+// menuID 2
 menu wifi_menu[] = {
-    {"Select Networks", 20},
-    {"Clone & Details", 21},
-    {"PMKID Grabber", 61},
-    {"Acces point", 22},
-    {"Deauth", 23},
-    {"Sniffing", 24}
+    {"Networks", 20},             // Select Networks
+    {"Clone / Details", 21},      // Clone & Details
+    {"PMKID Capture", 61},        // PMKID Grabber
+    {"Access Point", 22},         // Acces point
+    {"Deauthentication", 23},     // Deauth
+    {"Packet Sniffing", 24}       // Sniffing
 };
 
-//menuID 7
+// menuID 7
 menu wpasec_menu[] = {
-  {"Sync with server", 52},
-  {"Check cracked results", 53},
-  {"Change API key", 54}
+  {"Sync Server", 52},           // Sync with server
+  {"Cracked Results", 53},      // Check cracked results
+  {"API Key", 54}                // Change API key
 };
 
 menu wpasec_setup_menu[] = {
-  {"Setup WPA-SEC API key", 54}
+  {"Set API Key", 54}            // Setup WPA-SEC API key
 };
 
-//menuID 5
+// menuID 5
 menu pwngotchi_menu[] = {
-  {"Switch to auto mode", 36},
-  {"Auto mode + wardriving", 14},
-  {"Whitelist editor", 38},
-  {"Handshakes file list", 39},
-  {"Personality editor", 57},
+  {"Enable Auto Mode", 36},      // Switch to auto mode
+  {"Auto + Wardriving", 14},     // Auto mode + wardriving
+  {"Whitelist", 38},             // Whitelist editor
+  {"Handshakes", 39},            // Handshakes file list
+  {"Personality", 57},           // Personality editor
 };
 
-//menuID 6
+// menuID 6
 menu settings_menu[] = {
-  {"M5Gotchi auto mode on boot", 48},
-  {"Change Hostname/name", 40},
-  {"UI Theme", 50},
-  {"Skip EAPOL integrity check", 49},
-  {"Randomise mac at startup", 34},
-  {"Display brightness", 41},
-  {"Keyboard Sound", 42},
-  {"Advertise Pwngrid presence", 60},
-  {"Add all met pwnagotchis to friends", 35},
-  {"Edit text faces", 90},
-  {"Connect to WiFi", 43},
-  {"Manage saved networks", 32},
-  {"Connect to WiFi on startup", 29},
-  {"At boot, check for updates", 33},
-  {"GPS GPIO pins", 30},
-  {"Log GPS data after handshake", 31},
-  {"GO button press function", 59},
-  {"Log to SD", 58},
-  {"Update system", 44},
-  {"Factory reset", 51},
-  {"About M5Gotchi", 45},
-  {"System info", 3},
-  {"Power off system", 46},
-  {"Reboot system", 56}
+  // Startup / Boot behavior
+  {"Auto Mode on Boot", 48},             // M5Gotchi auto mode on boot
+  {"Auto-Connect WiFi", 29},             // On startup, connect to wifi
+  {"Check Updates on Boot", 33},         // At boot, check for updates
+  {"Random MAC on Boot", 34},            // Randomise mac at startup
+
+  // Network / WiFi
+  {"WiFi Connect", 43},                   // Connect to WiFi
+  {"Saved Networks", 32},                 // Manage saved networks
+  {"GPS Pins", 30},                       // GPS GPIO pins
+  {"GPS Logging", 31},                    // Log GPS data after handshake
+  {"Pwngrid Broadcast", 60},              // Advertise Pwngrid presence
+
+  // Interface / Display
+  {"Theme", 50},                          // UI Theme
+  {"Brightness", 41},                     // Display brightness
+  {"Key Sounds", 42},                     // Keyboard Sound
+  {"Text Faces", 90},                     // Edit text faces
+
+  // User / Device
+  {"Device Name", 40},                    // Change Hostname/name
+  {"GO Button Action", 59},               // GO button press function
+  {"Auto-Add Friends", 35},               // Add all met pwnagotchis to friends
+
+  // Logging / Storage
+  {"SD Logging", 58},                     // Log to SD
+
+  // System / Maintenance
+  {"System Update", 44},                  // Update system
+  {"Factory Reset", 51},                  // Factory reset
+  {"System Info", 3},                     // System info
+  {"About", 45},                          // About M5Gotchi
+  {"Power Off", 46},                      // Power off system
+  {"Reboot", 56},                         // Reboot system
+
+  // Optional / advanced
+  {"Skip EAPOL Check", 49}                // Skip EAPOL integrity check
 };
+
 
 menu gps_pins_menu[] = {
-  {"Use default pins", 30},
-  {"Set custom pins", 31},
+  {"Default Pins", 30},                   // Use default pins
+  {"Custom Pins", 31}                     // Set custom pins
 };
 
-//menuID 8
+// menuID 8
 menu pwngrid_menu[] = {
-  {"Units met", 16},
-  {"Messages inbox", 10},
-  {"Quick message", 11},
-  {"Frends list", 17},
-  {"No new captured networks to send", 0},
-  {"View identity/fingerprint", 13},
-  {"Reset pwngrid/fingerprint", 15}
+  {"Units Met", 16},                      // Units met
+  {"Inbox", 10},                          // Messages inbox
+  {"Quick Message", 11},                  // Quick message
+  {"Friends", 17},                        // Frends list
+  {"Nothing to Send", 0},                 // No new captured networks to send
+  {"Identity", 13},                       // View identity/fingerprint
+  {"Reset Identity", 15}                  // Reset pwngrid/fingerprint
 };
 
 menu pwngrid_not_enrolled_menu[] = {
-  {"Enroll with Pwngrid", 12}
+  {"Enroll Device", 12}                    // Enroll with Pwngrid
 };
 
 // devtools menu
 menu devtools_menu[] = {
-  {"Toggle dev mode", 100},
-  {"Set global var", 101},
-  {"Set global var (freeform)", 108},
-  {"Run app by ID", 102},
-  {"Color picker (BG)", 103},
-  {"Color picker (TX)", 104},
-  {"Toggle coords overlay", 105},
-  {"Toggle serial overlay", 106},
-  {"Skip file checks in dev", 107},
-  {"Speed scan test", 109},
-  {"Coordinate picker", 110},
-  {"Crash test", 111}
+  {"Dev Mode", 100},                       // Toggle dev mode
+  {"Set Variable", 101},                   // Set global var
+  {"Set Variable (Raw)", 108},             // Set global var (freeform)
+  {"Run App by ID", 102},                  // Run app by ID
+  {"BG Color Picker", 103},                // Color picker (BG)
+  {"Text Color Picker", 104},              // Color picker (TX)
+  {"Coords Overlay", 105},                 // Toggle coords overlay
+  {"Serial Overlay", 106},                 // Toggle serial overlay
+  {"Skip File Checks", 107},               // Skip file checks in dev
+  {"Scan Speed Test", 109},                // Speed scan test
+  {"Coordinate Picker", 110},              // Coordinate picker
+  {"Crash Test", 111}                      // Crash test
 };
 
-//menuID 9 
+// menuID 9 
 menu wardrivingMenuWithWiggle[] = {
-  {"Wardriving mode", 18},
-  {"View logs", 19},
-  {"Upload to Wiggle.net", 28},
-  {"Reset Wiggle.net config", 27}
+  {"Start Wardriving", 18},                // Wardriving mode
+  {"View Logs", 19},                       // View logs
+  {"Upload to Wiggle", 28},                // Upload to Wiggle.net
+  {"Reset Wiggle Config", 27}              // Reset Wiggle.net config
 };
 
 menu wardrivingMenuWithWiggleUnsett[] = {
-  {"Wardriving mode", 18},
-  {"View logs", 19},
-  {"Set up Wiggle.net api key", 25},
+  {"Start Wardriving", 18},                // Wardriving mode
+  {"View Logs", 19},                       // View logs
+  {"Set Wiggle API Key", 25}               // Set up Wiggle.net api key
 };
+
 
 bool appRunning;
 bool userInputVar;
@@ -469,84 +484,108 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
   }
   else if (menuID == 6){
     //lets modify each setting based on current value
-    char val_1[50];
-    char val_2[50];
-    char val_3[55];
-    char val_4[45];
-    char val_5[60];
-    char val_6[75];
-    char val_7[65];
-    char val_8[65];
-    char val_9[70];
+    // lets modify each setting based on current value
+    char val_1[50];   // Auto Mode on Boot
+    char val_2[55];   // Auto-Connect WiFi
+    char val_3[55];   // Check Updates on Boot
+    char val_4[55];   // Random MAC on Boot
+    char val_5[45];   // WiFi Connect
+    char val_6[70];   // GPS Pins
+    char val_7[70];   // GPS Logging
+    char val_8[42];   // Key Sounds
+    char val_9[50];   // Pwngrid Broadcast
+    char val_10[75];  // Auto-Add Friends
+    char val_11[50];  // SD Logging
+    char val_12[45];  // Skip EAPOL Check
 
     snprintf(val_1, sizeof(val_1),
-            "M5Gotchi auto mode on boot: %s",
+            "Auto Mode on Boot: %s",
             pwnagothiModeEnabled ? "ON" : "OFF");
 
     snprintf(val_2, sizeof(val_2),
-            "Skip EAPOL integrity check: %s",
-            skip_eapol_check ? "ON" : "OFF");
-
-    snprintf(val_3, sizeof(val_3),
-            "Randomise mac at startup: %s",
-            randomise_mac_at_boot ? "ON" : "OFF");
-
-    snprintf(val_4, sizeof(val_4),
-            "Keyboard Sound: %s",
-            sound ? "ON" : "OFF");
-
-    snprintf(val_5, sizeof(val_5),
-            "Advertise Pwngrid presence: %s",
-            advertisePwngrid ? "ON" : "OFF");
-
-    snprintf(val_6, sizeof(val_6),
-            "Add all met pwnagotchis to friends: %s",
-            add_new_units_to_friends ? "ON" : "OFF");
-
-    snprintf(val_7, sizeof(val_7),
-            "Connect to WiFi on startup: %s",
+            "Auto-Connect WiFi: %s",
             connectWiFiOnStartup ? "ON" : "OFF");
 
-    snprintf(val_8, sizeof(val_8),
-            "At boot, check for updates: %s",
+    snprintf(val_3, sizeof(val_3),
+            "Check Updates on Boot: %s",
             checkUpdatesAtNetworkStart ? "ON" : "OFF");
 
-    snprintf(val_9, sizeof(val_9),
-            "Log GPS data after handshake: %s",
+    snprintf(val_4, sizeof(val_4),
+            "Random MAC on Boot: %s",
+            randomise_mac_at_boot ? "ON" : "OFF");
+
+    snprintf(val_5, sizeof(val_5),
+            "WiFi Connect: %s",
+            (WiFi.status() == WL_CONNECTED) ? "Disconnect" : "Connect");
+
+    snprintf(val_6, sizeof(val_6),
+            "GPS Pins: %s",
+            !useCustomGPSPins ? "Default" : "Custom");
+
+    snprintf(val_7, sizeof(val_7),
+            "GPS Logging: %s",
             getLocationAfterPwn ? "ON" : "OFF");
 
-    char val_10[40];
+    snprintf(val_8, sizeof(val_8),
+            "Key Sounds: %s",
+            sound ? "ON" : "OFF");
+
+    snprintf(val_9, sizeof(val_9),
+            "Pwngrid Broadcast: %s",
+            advertisePwngrid ? "ON" : "OFF");
+
     snprintf(val_10, sizeof(val_10),
-            "Log to SD: %s",
+            "Auto-Add Friends: %s",
+            add_new_units_to_friends ? "ON" : "OFF");
+
+    snprintf(val_11, sizeof(val_11),
+            "SD Logging: %s",
             sd_logging ? "ON" : "OFF");
 
+    snprintf(val_12, sizeof(val_12),
+            "Skip EAPOL Check: %s",
+            skip_eapol_check ? "ON" : "OFF");
 
     menu new_settings_menu[] = {
-      { val_1, 48 },
-      { "Change Hostname/name", 40 },
-      { "UI Theme", 50 },
-      { val_2, 49 },
-      { val_3, 34 },
-      { "Display brightness", 41 },
-      { val_4, 42 },
-      { val_5, 60 },
-      { val_6, 35 },
-      { "Edit text faces", 90 },
-      { (WiFi.status() == WL_CONNECTED)? "Disconnect from wifi":"Connect to wifi", 43 },
-      { "Manage saved networks", 32 },
-      { val_7, 29 },
-      { val_8, 33 },
-      { "GPS GPIO pins", 30 },
-      { val_9, 31 },
-      { "GO button press function", 59 },
-      { val_10, 58 },
-      { "Update system", 44 },
-      { "Factory reset", 51 },
-      { "About M5Gotchi", 45 },
-      { "System info", 3 },
-      { "Power off system", 46 },
-      { "Reboot system", 56 }
+        // Startup / Boot behavior
+        { val_1, 48 },   // Auto Mode on Boot
+        { val_2, 29 },   // Auto-Connect WiFi
+        { val_3, 33 },   // Check Updates on Boot
+        { val_4, 34 },   // Random MAC on Boot
+
+        // Network / WiFi
+        { val_5, 43 },   // WiFi Connect
+        { "Saved Networks", 32 },  // Manage saved networks
+        { val_6, 30 },   // GPS Pins
+        { val_7, 31 },   // GPS Logging
+        { val_9, 60 },   // Pwngrid Broadcast
+
+        // Interface / Display
+        { "Theme", 50 },       // UI Theme
+        { "Brightness", 41 },  // Display brightness
+        { val_8, 42 },         // Key Sounds
+        { "Text Faces", 90 },  // Edit text faces
+
+        // User / Device
+        { "Device Name", 40 }, // Change Hostname/name
+        { "GO Button Action", 59 }, // GO button press function
+        { val_10, 35 },        // Auto-Add Friends
+
+        // Logging / Storage
+        { val_11, 58 },        // SD Logging
+
+        // System / Maintenance
+        { "System Update", 44 },
+        { "Factory Reset", 51 },
+        { "System Info", 3 },
+        { "About", 45 },
+        { "Power Off", 46 },
+        { "Reboot", 56 },
+
+        // Optional / Advanced
+        { val_12, 49 }         // Skip EAPOL Check
     };
+
 
 
     drawMenuList( new_settings_menu , 6, 24);
@@ -1148,7 +1187,7 @@ void pwngridMessenger() {
     runApp(43);
     if(WiFi.status() != WL_CONNECTED){
       drawInfoBox("ERROR!", "No network connection", "Operation abort!", true, false);
-      menuID = 0;
+      menuID = 8;
       return;
     }
   }
@@ -1159,7 +1198,7 @@ void pwngridMessenger() {
   drawInfoBox("Please wait", "Syncing inbox", "with pwngrid...", false, false);
   if(api_client::init(KEYS_FILE) == false){
     drawInfoBox("ERROR!", "Pwngrid init failed!", "Try restarting!", true, false);
-    menuID = 0;
+    menuID = 8;
     return;
   }
   api_client::pollInbox();
@@ -1189,7 +1228,7 @@ void pwngridMessenger() {
     File contacts = SD.open(ADDRES_BOOK_FILE, FILE_READ, false);
     if(contacts.size()<5){
       drawInfoBox("Info", "No frends found.", "Go outside and meet some!", true, false);
-      menuID = 0;
+      menuID = 8;
       return;
     }
     JsonDocument contacts_json;
@@ -1198,7 +1237,7 @@ void pwngridMessenger() {
     if (err) {
         logMessage("Failed to parse contacts: " + String(err.c_str()));
         drawInfoBox("ERROR", "Contacts load failed!", "Check SD card.", true, false);
-        menuID = 0;
+        menuID = 8;
         return;
     }
 
@@ -1229,14 +1268,14 @@ void pwngridMessenger() {
     }
     result = drawMultiChoice("Select chat recepient:", names, namesSize, 0, 0);
     if(result == -1){
-      menuID=0;
+      menuID = 8;
       return;
     }
     File newChat = SD.open("/pwngrid/chats/" + names[result], FILE_WRITE, true);
     newChat.close();
   }
   else if(result == -1){
-    menuID = 0;
+    menuID = 8;
     return;
   }
   else{
@@ -1282,6 +1321,7 @@ void pwngridMessenger() {
         if (scroll < 0) scroll = 0;
         if (scroll > maxScroll) scroll = maxScroll;
         if(i=='`'){
+          menuID = 8;
           return;
         }
         if(!typingMessage && i == 'd'){
@@ -1289,7 +1329,7 @@ void pwngridMessenger() {
             dir.close();
             SD.remove("/pwngrid/chats/" + chats[result]);
             drawInfoBox("Sucess", "Chat removed", "", true, false);
-            menuID =0;
+            menuID = 8;
             return;
           }
         }
@@ -1324,7 +1364,7 @@ void pwngridMessenger() {
         File contacts = SD.open(ADDRES_BOOK_FILE, FILE_READ, false);
         if(contacts.size()<5){
           drawInfoBox("ERROR!", "SD card error!.", "Required files not found!", true, false);
-          menuID = 0;
+          menuID = 8;
           return;
         }
         JsonDocument contacts_json;
@@ -1333,7 +1373,7 @@ void pwngridMessenger() {
         if (err) {
             logMessage("Failed to parse contacts: " + String(err.c_str()));
             drawInfoBox("ERROR", "Contacts load failed!", "Check SD card.", true, false);
-            menuID = 0;
+            menuID = 8;
             return;
         }
 
@@ -1455,7 +1495,7 @@ void runApp(uint8_t appID){
   logMessage("App started running, ID:"+ String(appID));
   menu_current_opt = 0;
   menu_current_page = 1;
-  menuID = 0; 
+  //menuID = 0; 
   if(appID){
     if(appID == 1){
       debounceDelay();
@@ -1464,6 +1504,7 @@ void runApp(uint8_t appID){
     if(appID == 2){}
     if(appID == 3){
       drawSysInfo();
+      menuID = 6;
     }
     if(appID == 4){
       debounceDelay();
@@ -1472,9 +1513,12 @@ void runApp(uint8_t appID){
     if(appID == 90){
       debounceDelay();
       runTextsEditor();
-      menuID = 0;
+      menuID = 6;
     }
-    if(appID == 5){drawStats();}
+    if(appID == 5){
+      drawStats(); 
+      menuID = 1;
+    }
     if(appID == 6){
       debounceDelay();
       drawMenuList(settings_menu,6,23);
@@ -1490,6 +1534,7 @@ void runApp(uint8_t appID){
     if(appID == 9){}
     if(appID == 10){
       pwngridMessenger();
+      menuID = 8;
     }
     if(appID == 11){
       drawInfoBox("Info", "Please wait", "", false, false);
@@ -1499,7 +1544,7 @@ void runApp(uint8_t appID){
         runApp(43);
         if(WiFi.status() != WL_CONNECTED){
           drawInfoBox("ERROR!", "No network connection", "Message send abort", true, false);
-          menuID = 0;
+          menuID = 8;
           return;
         }
       }
@@ -1513,6 +1558,7 @@ void runApp(uint8_t appID){
 
       if (err) {
           logMessage("Failed to parse contacts: " + String(err.c_str()));
+          menuID = 8;
           return;
       }
 
@@ -1520,7 +1566,7 @@ void runApp(uint8_t appID){
       logMessage("Array size: " + String(contacts_arr.size()));
       if(contacts_arr.size() == 0){
         drawInfoBox("Info", "No frends found", "Add to text them", true, false);
-        menuID = 0;
+        menuID = 8;
         return;
       }
       std::vector<unit> contacts_vector;
@@ -1545,6 +1591,7 @@ void runApp(uint8_t appID){
           drawInfoBox("Error!", "Error sending message", "Try again or check logs", true, false);
         }
       }
+      menuID = 8;
     }
     if(appID == 12){
       if(!(WiFi.status() == WL_CONNECTED)){
@@ -1553,7 +1600,7 @@ void runApp(uint8_t appID){
         runApp(43);
         if(WiFi.status() != WL_CONNECTED){
           drawInfoBox("ERROR!", "No network connection", "Enrol abort", true, false);
-          menuID = 0;
+          menuID = 8;
           return;
         }
       }
@@ -1569,7 +1616,7 @@ void runApp(uint8_t appID){
       if(api_client::init(KEYS_FILE)){
         if(!(WiFi.status() == WL_CONNECTED)){
           drawInfoBox("ERROR!", "Connect to wifi", "to proceed", true, false);
-          menuID = 0;
+          menuID = 8;
           return;
         }
         drawInfoBox("Info", "Enroling with pwngrid...", "This may take a while", false, false);
@@ -1579,13 +1626,14 @@ void runApp(uint8_t appID){
         else{
           drawInfoBox("Error", "Something went wrong", "Try again later.", true, false);
         }
-        menuID = 0;
+        menuID = 8;
         return;
       }
       else{
         drawInfoBox("Error", "Keygen failed", "Try restarting!", true, false);
       }
-
+      menuID = 8;
+      return;
     }
     if(appID == 13){
       M5Canvas identity_canvas(&M5.Display);
@@ -1609,31 +1657,33 @@ void runApp(uint8_t appID){
         M5Cardputer.update();
         auto keysState = M5Cardputer.Keyboard.keysState();
         if(keysState.enter){
-          menuID = 0;
+          menuID = 8;
           return;
         }
         for(auto i : keysState.word){
           if(i=='`'){
-            menuID = 0;
+            menuID = 8;
             return;
           }
         }
       }
+      menuID = 8;
     }
     if(appID == 70){
       debounceDelay();
       sdmanager::runFileManager();
+      menuID = 1;
     }
     if(appID == 14){
       if(!pwnagothiMode){
         bool answear = drawQuestionBox("CONFIRMATION", "Operate only if you ", "have premision!");
         if(answear){
-          menuID = 0;
+          menuID = 5;
           String sub_menu[] = {"Stealth (legacy)", "Normal"};
           int8_t modeChoice = drawMultiChoice("Select mode:", sub_menu, 2, 2, 2);
           debounceDelay();
           if(modeChoice == -1){
-            menuID = 0;
+            menuID = 5;
             return;
           }
           if(modeChoice==0){
@@ -1643,25 +1693,25 @@ void runApp(uint8_t appID){
             stealth_mode = false;
           }
           drawInfoBox("INITIALIZING", "Pwnagothi mode initialization", "please wait...", false, false);
-          menuID = 0;
+          menuID = 5;
           if(pwnagothiBegin()){
             auto_mode_and_wardrive = true;
             pwnagothiMode = true;
-            menuID = 0;
+            menuID = 5;
             return;
           }
           else{
             drawInfoBox("ERROR", "Pwnagothi init failed!", "", true, false);
             pwnagothiMode = false;
           }
-          menuID = 0;
+          menuID = 5;
           return;
         }
       }
       else{
         drawInfoBox("WTF?!", "Pwnagothi mode is on", "Can't you just look at UI!??", true, true);
       }
-      menuID = 0;
+      menuID = 5;
       return;
     }
     if(appID == 15){
@@ -1708,15 +1758,17 @@ void runApp(uint8_t appID){
         delay(5000);
         pwngrid_indentity = new_indetity;
         saveSettings();
-        menuID = 0;
+        menuID = 8;
         return;
       }
+      menuID = 8;
+      return;
     }
     if(appID == 16){
       uint8_t int_peers = getPwngridTotalPeers();
       if(int_peers == 0){
         drawInfoBox("Info", "No nearby pwngrid units", "Try again later", true, false);
-        menuID = 0;
+        menuID = 8;
         return;
       }
       pwngrid_peer peers_list[int_peers];
@@ -1729,7 +1781,7 @@ void runApp(uint8_t appID){
       }
       int8_t choice = drawMultiChoice("Nearby pwngrid units", mmenu, int_peers, 2, 0);
       if(choice == -1){
-        menuID = 0;
+        menuID = 8;
         return;
       }
       //Peer Details and addressbook addition
@@ -1778,7 +1830,7 @@ void runApp(uint8_t appID){
         }
         if(keys_status.enter){
           if(current_option == 2){
-            menuID = 0;
+            menuID = 8;
             debounceDelay();
             return;
           }
@@ -1830,7 +1882,7 @@ void runApp(uint8_t appID){
               contactsFile.close();
             }
             drawInfoBox("Sucess", "Unit added to frend", "list, text to it now!", true, false);
-            menuID = 0;
+            menuID = 8;
             return;
           }
           if(current_option == 1){
@@ -1840,18 +1892,18 @@ void runApp(uint8_t appID){
               runApp(43);
               if(WiFi.status() != WL_CONNECTED){
                 drawInfoBox("ERROR!", "No network connection", "Message send abort", true, false);
-                menuID = 0;
+                menuID = 8;
                 return;
               }
             }
             if(api_client::init(KEYS_FILE) == false){
               drawInfoBox("ERROR!", "Pwngrid init failed!", "Try restarting!", true, false);
-              menuID = 0;
+              menuID = 8;
               return;
             }
             String message = userInput("Message:", "Type message content:", 100);
             if(!(message.length()>1)){
-              menuID = 0;
+              menuID = 8;
               return;
             }
             drawInfoBox("Sending...", "Sneding message", "Please wait", false, false);
@@ -1861,11 +1913,13 @@ void runApp(uint8_t appID){
             else{
               drawInfoBox("Error", "Message not send.", "Something went wrong!", true, false);
             }
-            menuID = 0;
+            menuID = 8;
             return;
           }
         }
       }
+      menuID = 8;
+      return;
     }
     if(appID == 17){
       debounceDelay();
@@ -1875,6 +1929,7 @@ void runApp(uint8_t appID){
 
       if (err) {
           logMessage("Failed to parse contacts: " + String(err.c_str()));
+          menuID = 8;
           return;
       }
 
@@ -1901,7 +1956,7 @@ void runApp(uint8_t appID){
       names[contacts_vector.size()] = "Add new";
       int16_t result = (arrSize!=0)? drawMultiChoice("Select contact to manage:", names, contacts_vector.size() + 1, 0, 0): 0;
       if(result<0){
-        menuID = 0;
+        menuID = 8;
         return;
       }
       else if(result == contacts_vector.size() ){
@@ -1910,7 +1965,7 @@ void runApp(uint8_t appID){
         String subMenu[3] = {"via keyboard", "via PC/Phone", "back"};
         result = drawMultiChoice("Type unit fingerprint:", subMenu, 3, 0, 0);
         if(result==2 || result==-1){
-          menuID = 0;
+          menuID = 8;
           return;
         }
         else if(result == 0){
@@ -1920,7 +1975,7 @@ void runApp(uint8_t appID){
             runApp(43);
             if(WiFi.status() != WL_CONNECTED){
               drawInfoBox("ERROR!", "No network connection", "Unit add abort!", true, false);
-              menuID = 0;
+              menuID = 8;
               return;
             }
           }
@@ -1930,7 +1985,7 @@ void runApp(uint8_t appID){
           name = api_client::getNameFromFingerprint(fingerprint);
           if(fingerprint.length() < 10){
             drawInfoBox("ERROR!", "Unit not found", "Check fingerprint!", true, false);
-            menuID = 0;
+            menuID = 8;
             return;
           }
         }
@@ -1943,20 +1998,20 @@ void runApp(uint8_t appID){
             runApp(43);
             if(WiFi.status() != WL_CONNECTED){
               drawInfoBox("ERROR!", "No network connection", "Unit add abort!", true, false);
-              menuID = 0;
+              menuID = 8;
               return;
             }
           }
           drawInfoBox("Info", "Parsing unit name", "Please wait", false, false);
           if(api_client::init(KEYS_FILE) == false){
             drawInfoBox("ERROR!", "Key init failed", "Try restarting!", true, false);
-            menuID = 0;
+            menuID = 8;
             return;
           }
           name = api_client::getNameFromFingerprint(fingerprint);
           if(fingerprint.length() < 10 ){
             drawInfoBox("ERROR!", "Unit not found", "Check fingerprint!", true, false);
-            menuID = 0;
+            menuID = 8;
             return;
           }
         }
@@ -2005,7 +2060,7 @@ void runApp(uint8_t appID){
           contactsFile.close();
         }
         drawInfoBox("Sucess", "Unit added to frend", "list, text to it now!", true, false);
-        menuID = 0;
+        menuID = 8;
         return;
       }
       uint8_t current_option;
@@ -2047,7 +2102,7 @@ void runApp(uint8_t appID){
         }
         if(keys_status.enter){
           if(current_option == 1){
-            menuID = 0;
+            menuID = 8;
             return;
           }
           if (current_option == 0) {
@@ -2088,11 +2143,13 @@ void runApp(uint8_t appID){
             }
           
             drawInfoBox("Sucess", "Unit deleted", "bye bye", true, false);
-            menuID = 0;
+            menuID = 8;
             return;
         }
         }
       }
+      menuID = 8;
+      return;
     }
     if(appID == 18){
       drawInfoBox("Insert cap!", "Instert lora cap now", "then press enter.", true, false);
@@ -2120,7 +2177,7 @@ void runApp(uint8_t appID){
         for(auto i : keysState.word){
           if(i=='`')
           {logMessage("Wardriver stopped by user");
-          menuID = 0;
+          menuID = 9;
           return;}
         }
         speedScan();
@@ -2160,6 +2217,8 @@ void runApp(uint8_t appID){
         delay(1000);
 
       }
+      menuID = 9;
+      return;
     }
     if(appID == 19){
       File csvFile;
@@ -2174,7 +2233,7 @@ void runApp(uint8_t appID){
       }
       if (!csvFile) {
         drawInfoBox("Error", "File not found", "Wrong selection?", true, false);
-        menuID = 0;
+        menuID = 9;
         return;
       }
       drawInfoBox("Info", "Loading CSV...", "", false, false);
@@ -2192,7 +2251,7 @@ void runApp(uint8_t appID){
 
       if (totalLines < 3) {
       drawInfoBox("Info", "CSV file is empty or invalid", "", true, false);
-      menuID = 0;
+      menuID = 9;
       return;
       }
       
@@ -2439,7 +2498,7 @@ void runApp(uint8_t appID){
           break;
         }
         if (k == '`') {
-          menuID = 0;
+          menuID = 9;
           return;
         }
         }
@@ -2534,7 +2593,10 @@ void runApp(uint8_t appID){
         debounceDelay();
         }
       }
-      }}
+      }
+      menuID = 9;
+      return;
+    }
     if(appID == 20){
       wifion();
       drawInfoBox("Info", "Scanning for wifi...", "Please wait", false, false);
@@ -2542,7 +2604,7 @@ void runApp(uint8_t appID){
       String wifinets[numNetworks+1];
       if (numNetworks == 0) {
         drawInfoBox("Info", "No wifi nearby", "Abort.", true, false);
-        menuID = 0;
+        menuID = 2;
         return;
       } else {
         // Przechodzimy przez wszystkie znalezione sieci i zapisujemy ich nazwy w liście
@@ -2558,7 +2620,9 @@ void runApp(uint8_t appID){
       intWifiChoice = wifisel;
       logMessage("Selected wifi: "+ wifiChoice);
       drawInfoBox("Succes", wifiChoice, "Was selected", true, false);
-      menuID = 0;
+      debounceDelay();
+      menuID = 2;
+      return;
     }
     if(appID == 21){
       if(wifiChoice.equals("")){
@@ -2568,7 +2632,7 @@ void runApp(uint8_t appID){
         drawWifiInfoScreen(WiFi.SSID(intWifiChoice), WiFi.BSSIDstr(intWifiChoice), String(WiFi.RSSI(intWifiChoice)), String(WiFi.channel(intWifiChoice)));
       }
       
-      menuID = 0;
+      menuID = 2;
     }
     if(appID == 22){
       String appList[] = {"Phishing form", "Beacon spam", "AP mode", "Turn OFF"};
@@ -2624,14 +2688,14 @@ void runApp(uint8_t appID){
           broadcastFakeSSIDs( rickroll_ssids, 8, sound);
           menu_current_opt = 0;
           menu_current_page = 1;
-          menuID = 0;
+          menuID = 2;
           }
         else if (ssidChoice==3){
           String* BeaconList = makeList("Create spam list", 48, false, 30);
           broadcastFakeSSIDs( BeaconList , sizeof(BeaconList), sound);
         }
         else{
-          menuID = 0;
+          menuID = 2;
           return;
         }
       }
@@ -2642,7 +2706,7 @@ void runApp(uint8_t appID){
             WiFi.mode(WIFI_MODE_NULL);
             apMode = false;
             wifiChoice = "";
-            menuID = 0;
+            menuID = 2;
             return;
             }
         }
@@ -2681,15 +2745,13 @@ void runApp(uint8_t appID){
         bool answear = drawQuestionBox("Power AP off?", "Are you sure?", "");
         if (answear){
           WiFi.mode(WIFI_MODE_NULL);
+          wifion();
           apMode = false;
           wifiChoice = "";
           }
       }
-      menu_current_opt = 0;
-      menu_current_page = 1;
-      menuID = 0;
-      
-      menuID = 0;
+      menuID = 2;
+      return;
     }
     if(appID == 23){
       bool answwear = drawQuestionBox("WARNING!", "This is illegal to use not", "on your network! Continue?");
@@ -2731,7 +2793,7 @@ void runApp(uint8_t appID){
           }
           int8_t target = drawMultiChoice("Select target.", clients, clientLen , 0, 0);
           if(target==-1){
-            menuID = 0;
+            menuID = 2;
             clearClients();
             return;
           }
@@ -2766,13 +2828,14 @@ void runApp(uint8_t appID){
         }
       }
       
-      menuID = 0;
+      menuID = 2;
+      return;
     }
     if(appID == 61){
       // PMKID Grabber app - uses wifiChoice if available
       if(wifiChoice.equals("")){
         drawInfoBox("Error", "No wifi selected", "Use 'Select Networks' first", true, false);
-        menuID = 0;
+        menuID = 2;
         return;
       }
 
@@ -2780,7 +2843,8 @@ void runApp(uint8_t appID){
       int numNetworks = WiFi.scanNetworks();
       if (numNetworks <= 0) {
         drawInfoBox("Info", "No networks found", "Rescan in different location", true, false);
-        menuID = 0; return;
+        menuID = 2; 
+        return;
       }
 
       // Collect matches for chosen SSID
@@ -2790,7 +2854,7 @@ void runApp(uint8_t appID){
       }
       if (matches.size() == 0) {
         drawInfoBox("Info", "Selected SSID not found", "Rescan and select it first", true, false);
-        menuID = 0; return;
+        menuID = 2; return;
       }
 
       int pickedIndex = matches[0];
@@ -2803,7 +2867,7 @@ void runApp(uint8_t appID){
         }
         list[matches.size()] = "Cancel";
         int sel = drawMultiChoice("Pick BSSID:", list, matches.size()+1, 6, 0);
-        if (sel == -1 || sel == (int)matches.size()) { menuID = 0; return; }
+        if (sel == -1 || sel == (int)matches.size()) { menuID = 2; return; }
         pickedIndex = matches[sel];
       }
 
@@ -2811,7 +2875,7 @@ void runApp(uint8_t appID){
       int ch = WiFi.channel(pickedIndex);
       if (!bssidPtr) {
         drawInfoBox("Error", "Can't get BSSID", "Aborting", true, false);
-        menuID = 0; return;
+        menuID = 2; return;
       }
 
       if (drawQuestionBox("Proceed?", "Grab PMKID from:", wifiChoice)) {
@@ -2824,7 +2888,7 @@ void runApp(uint8_t appID){
           drawInfoBox("Info", "No PMKID captured", "Try again later", true, false);
         }
       }
-      menuID = 0;
+      menuID = 2;
       return;
     }
     if(appID == 24){
@@ -2833,8 +2897,8 @@ void runApp(uint8_t appID){
       menu_current_pages = 2;
       uint8_t answerrr = drawMultiChoice("Sniffing", mmenu, 2, 1, 0);
       if(answerrr == 0){
-        String mmenuu[] = {"Auto switch" ,"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"};
-        answerrr = drawMultiChoice("Select chanel", mmenuu, 13, 1, 0);
+        String mmenuu[] = {"Auto switch" ,"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"};
+        answerrr = drawMultiChoice("Select chanel", mmenuu, 14, 1, 0);
         if(true){
           uint8_t chanelSwitch = 1;
           static unsigned long lastSwitchTime = millis();
@@ -2887,7 +2951,7 @@ void runApp(uint8_t appID){
               if(i=='`' && status.fn){
               esp_wifi_set_promiscuous(false);
               WiFi.mode(WIFI_MODE_NULL);
-              menuID = 0;
+              menuID = 2;
               return;
               }
             }
@@ -2921,7 +2985,7 @@ void runApp(uint8_t appID){
             Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
             for(auto i : status.word){
               if(i=='`' && status.fn){
-                menuID = 0;
+                menuID = 2;
                 return;
               }
             }
@@ -2963,11 +3027,12 @@ void runApp(uint8_t appID){
         }
         else{
           drawInfoBox("Error!", "Can't init EAPOL sniffer.", "Check SD card!", true, false);
-          menuID = 0;
+          menuID = 2;
           return;
         }
       }
-      
+      menuID = 2;
+      return;
     }
     if(appID == 25){
       String new_wiggle_api_key = "";
@@ -2981,25 +3046,27 @@ void runApp(uint8_t appID){
         new_wiggle_api_key = userInputFromWebServer("Wiggle.net API key");
       }
       else{
-        menuID = 0;
+        menuID = 9;
         return;
       }
       if(new_wiggle_api_key.length() <10){
         drawInfoBox("Error", "Key too short", "Operation abort", true, false);
-        menuID = 0;
+        menuID = 9;
         return;
       }
       wiggle_api_key = new_wiggle_api_key;
       if(saveSettings()){
         drawInfoBox("Succes", "Wiggle API key", "was changed", true, false);
-        menuID = 0;
+        menuID = 9;
         return;
       }
       else{
         drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);
-        menuID = 0;
+        menuID =9;
         return;
       }
+      menuID = 9;
+      return;
     }
     if(appID == 26){
       drawInfoBox("Info", "Please wait", "", false, false);
@@ -3009,7 +3076,7 @@ void runApp(uint8_t appID){
         runApp(43);
         if(WiFi.status() != WL_CONNECTED){
           drawInfoBox("ERROR!", "No network connection", "Stats send abort", true, false);
-          menuID = 0;
+          menuID = 8;
           return;
         }
       }
@@ -3022,7 +3089,7 @@ void runApp(uint8_t appID){
       else{
         drawInfoBox("ERROR!", "Upload failed!", "Check network!", true, false);
       }
-      menuID = 0;
+      menuID = 8;
       return; 
     }
     if(appID == 27){
@@ -3030,16 +3097,17 @@ void runApp(uint8_t appID){
         wiggle_api_key = "";
         if(saveSettings()){
           drawInfoBox("Succes", "Wigle.net API key", "was removed", true, false);
-          menuID = 0;
+          menuID = 9;
           return;
         }
         else{
           drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);
-          menuID = 0;
+          menuID = 9;
           return;
         }
       }
-      menuID = 0;
+      menuID = 9;
+      return;
     }
     if(appID == 28){
       drawInfoBox("Info", "Please wait", "", false, false);
@@ -3049,7 +3117,7 @@ void runApp(uint8_t appID){
         runApp(43);
         if(WiFi.status() != WL_CONNECTED){
           drawInfoBox("ERROR!", "No network connection", "Upload abort", true, false);
-          menuID = 0;
+          menuID = 9;
           return;
         }
       }
@@ -3057,7 +3125,7 @@ void runApp(uint8_t appID){
       String file = sdmanager::selectFile(".csv");
       if(file == ""){
         drawInfoBox("Error", "No file selected", "Operation abort", true, false);
-        menuID = 0; 
+        menuID = 9; 
         return;
       }
       drawInfoBox("Uploading", "Please wait", "This may take some time...", false, false);
@@ -3071,7 +3139,7 @@ void runApp(uint8_t appID){
       else{
         statusToCode = statusCode;
         drawInfoBox("ERROR!", "Upload failed!", "Status code: " + String(statusToCode), true, false);
-        menuID = 0;
+        menuID = 9;
         return;
       }
       if(statusToCode == 200){
@@ -3086,6 +3154,8 @@ void runApp(uint8_t appID){
       else{
         drawInfoBox("ERROR!", "Upload failed!", "Status code: " + String(statusToCode), true, false);
       }
+      menuID = 9;
+      return;
     }
     if(appID == 29){
       // Toggle connect to WiFi on startup
@@ -3098,7 +3168,7 @@ void runApp(uint8_t appID){
       } else {
         drawInfoBox("ERROR", "Failed to save setting", "Check SD card", true, false);
       }
-      menuID = 0;
+      menuID = 6;
       return;
     }
     if(appID == 30){
@@ -3120,7 +3190,7 @@ void runApp(uint8_t appID){
           if(saveSettings()) drawInfoBox("Saved", "Custom GPS pins set", "", true, false);
         }
       }
-      menuID = 0;
+      menuID = 6;
       return;
     }
     if(appID == 31){
@@ -3132,7 +3202,7 @@ void runApp(uint8_t appID){
       if(saveSettings()){
         drawInfoBox("Saved", "Setting updated", "", true, false);
       }
-      menuID = 0;
+      menuID = 6;
       return;
     }
     if(appID == 32){
@@ -3149,23 +3219,23 @@ void runApp(uint8_t appID){
       for(size_t i=0;i<vlist.size(); ++i) arr[i] = vlist[i];
       int8_t choice = drawMultiChoice("Saved networks", arr, vlist.size(), 0, 0);
       delete[] arr;
-      if(choice == -1 || choice == n+1){ menuID = 0; return; }
+      if(choice == -1 || choice == n+1){ menuID =6; return; }
       else if(choice == n){
         // Add new network
         drawInfoBox("Scanning...","Scanning for networks","Please wait", false, false);
         int numNetworks = WiFi.scanNetworks();
-        if(numNetworks == 0){ drawInfoBox("Info","No networks found","", true, false); menuID=0; return; }
+        if(numNetworks == 0){ drawInfoBox("Info","No networks found","", true, false); menuID=6; return; }
         std::vector<String> wifinets;
         for (int i = 0; i < numNetworks; i++) wifinets.push_back(WiFi.SSID(i));
         String *warr = new String[wifinets.size()];
         for (size_t i = 0; i < wifinets.size(); ++i) warr[i] = wifinets[i];
         int idx = drawMultiChoice("Select network:", warr, wifinets.size(), 6, 3);
         delete[] warr;
-        if(idx == -1){ menuID = 0; return; }
+        if(idx == -1){ menuID = 6; return; }
         String pass = userInput("Password", "Enter wifi password", 30);
         if(addSavedNetwork(wifinets[idx], pass, false)) drawInfoBox("Saved", "Network added", "", true, false);
         else drawInfoBox("ERROR", "Failed to save network", "", true, false);
-        menuID = 0; return;
+        menuID = 6; return;
       } else {
         // selected existing network - options: connect, remove, toggle auto
         size_t idx = choice;
@@ -3193,7 +3263,7 @@ void runApp(uint8_t appID){
           drawInfoBox("Removed","Network removed", "", true, false);
         }
       }
-      menuID = 0; return;
+      menuID = 6; return;
     }
     if(appID == 99){
       debounceDelay();
@@ -3211,6 +3281,7 @@ void runApp(uint8_t appID){
       dev_mode = !dev_mode;
       drawInfoBox("Dev Mode", dev_mode?"Enabled":"Disabled", "", true, false);
       saveSettings();
+      menuID = 99;
       return;
     }
     if(appID == 101){
@@ -3218,6 +3289,7 @@ void runApp(uint8_t appID){
       String varList[] = {"hostname","bg_color","tx_color","sound","brightness","pwnagothiMode","sd_logging","skip_eapol_check","advertisePwngrid","pwned_ap","dev_mode","toogle_pwnagothi_with_gpio0","lite_mode_wpa_sec_sync_on_startup","skip_file_manager_checks_in_dev"};
       String picked = "";
       int choice = drawMultiChoice("Set variable", varList, 11, 99, 0);
+      if(choice == -1) return;
       if (choice >= 0 && choice < 14) {
         picked = varList[choice];
         String val = userInput("Set var", "New value for " + picked + ":", 128);
@@ -3340,7 +3412,7 @@ void runApp(uint8_t appID){
       uint8_t choice = drawMultiChoice("Check updates on network start?", opts, 2, 6, initial);
       checkUpdatesAtNetworkStart = (choice == 1);
       if(saveSettings()) drawInfoBox("Saved","Setting updated", "", true, false);
-      menuID = 0; return;
+      menuID = 6; return;
     }
     if(appID == 34){
       //randomise mac option menu
@@ -3356,7 +3428,7 @@ void runApp(uint8_t appID){
         saveSettings();
         drawInfoBox("Info", "Randomise MAC", "Disabled", true, false);
       }
-      menuID = 0;
+      menuID = 6;
       return;
     }
     if(appID == 35){
@@ -3373,19 +3445,19 @@ void runApp(uint8_t appID){
         saveSettings();
         drawInfoBox("Info", "Add new units to friends", "Enabled", true, false);
       }
-      menuID = 0;
+      menuID = 6;
       return;
     }
     if(appID == 36){
-      if(!pwnagothiMode){
+      {
         bool answear = drawQuestionBox("CONFIRMATION", "Operate only if you ", "have premision!");
         if(answear){
-          menuID = 0;
+          menuID = 5;
           String sub_menu[] = {"Stealth (legacy)", "Normal"};
           int8_t modeChoice = drawMultiChoice("Select mode:", sub_menu, 2, 2, 2);
           debounceDelay();
           if(modeChoice == -1){
-            menuID = 0;
+            menuID = 5;
             return;
           }
           if(modeChoice==0){
@@ -3395,47 +3467,40 @@ void runApp(uint8_t appID){
             stealth_mode = false;
           }
           drawInfoBox("INITIALIZING", "Pwnagothi mode initialization", "please wait...", false, false);
-          menuID = 0;
+          menuID = 5;
           if(pwnagothiBegin()){
             pwnagothiMode = true;
-            menuID = 0;
+            menuID = 5;
             return;
           }
           else{
             drawInfoBox("ERROR", "Pwnagothi init failed!", "", true, false);
             pwnagothiMode = false;
           }
-          menuID = 0;
+          menuID = 5;
           return;
         }
       }
-      else{
-        drawInfoBox("WTF?!", "Pwnagothi mode is on", "Can't you just look at UI!??", true, true);
-      }
-      menuID = 0;
+      menuID = 5;
       return;
     }
-    if(appID == 37){
-      pwnagothiMode = false;
-      WiFi.mode(WIFI_MODE_NULL);
-      drawInfoBox("INFO", "Auto mode turned off", "Enabled manual mode", true, false);
-      menuID = 0;
-    }
+    if(appID == 37){}
     if(appID == 38){
       editWhitelist();
-      menuID = 0;
+      menuID = 5;
+      return;
     }
     if(appID == 39){
       drawInfoBox("Info", "Reading SD card...", "Please wait", false, false);
       if(!SD.begin(SD_CS, sdSPI, 1000000)) {
         drawInfoBox("Error", "Cannot open SD card", "Check SD card!", true, true);
-        menuID = 0;
+        menuID = 5;
         return;
       }
       File root = SD.open("/handshake");
       if (!root || !root.isDirectory()) {
         drawInfoBox("Error", "Cannot open /handshakes", "Check SD card!", true, true);
-        menuID = 0;
+        menuID = 5;
         return;
       }
       String fileList[50];
@@ -3449,55 +3514,58 @@ void runApp(uint8_t appID){
       }
       if (fileCount == 0) {
         drawInfoBox("Info", "No handshakes found", "", true, false);
-        menuID = 0;
+        menuID = 5;
         return;
       }
       drawMultiChoiceLonger("Handshakes:", fileList, fileCount, 5, 3);
       
-      menuID = 0;
+      menuID = 5;
+      return;
     }
     if(appID == 40){
-        String name = userInput("New value", "Change Hostname to:", 18);
-        if(name != ""){
-          hostname = name;
-          if(saveSettings()){
-            menuID = 0;
-            return;
-          }
-          else{drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);}
-          menuID = 0;
+      String name = userInput("New value", "Change Hostname to:", 18);
+      if(name != ""){
+        hostname = name;
+        if(saveSettings()){
+          menuID = 6;
           return;
         }
-        drawInfoBox("Name invalid", "Null inputed,", "operation abort", true, false);
-        menuID = 0;
+        else{drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);}
+        menuID = 6;
         return;
+      }
+      drawInfoBox("Name invalid", "Null inputed,", "operation abort", true, false);
+      menuID = 6;
+      return;
     }
     if(appID == 41){
       brightnessPicker();
       if(saveSettings()){
-        menuID = 0;
+        menuID = 6;
         return;
       }
       else{drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);}
-      menuID = 0;
+      menuID = 6;
+      return;
     }
     if(appID == 42){
       String selection[] = {"Off", "On"};
       debounceDelay();
       sound = drawMultiChoice("Sound", selection, 2, 6, 2);
       if(saveSettings()){
-        menuID = 0;
+        menuID = 6;
         return;
       }
       else{drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);}
-      menuID = 0;
+      menuID = 6;
+      return;
     }
     if(appID == 43){
       if((WiFi.status() == WL_CONNECTED)){
         WiFi.disconnect();
         wifion();
         drawInfoBox("Info", "WiFi disconnected", "", true, false);
-        menuID = 0;
+        menuID = 6;
         return;
       }
       wifion();
@@ -3506,7 +3574,7 @@ void runApp(uint8_t appID){
       String wifinets[50];
       if (numNetworks == 0) {
         drawInfoBox("Info", "No wifi nearby", "Abort.", true, false);
-        menuID = 0;
+        menuID = 6;
         return;
       }
       else {
@@ -3527,7 +3595,7 @@ void runApp(uint8_t appID){
               counter = 0;
               if(WiFi.isConnected()){
                 drawInfoBox("Connected", "Connected succesfully to", String(WiFi.SSID()) , true, false);
-                menuID = 0;
+                menuID = 6;
                 return;
               }
             }
@@ -3539,12 +3607,12 @@ void runApp(uint8_t appID){
       wifinets[numNetworks] = "Rescan";
       uint8_t wifisel = drawMultiChoice("Select WIFI network:", wifinets, numNetworks + 1, 6, 3);
       if(wifisel == -1){
-        menuID = 0;
+        menuID = 6;
         return;
       }
       if(wifisel == numNetworks){
         runApp(43);
-        menuID = 0;
+        menuID = 6;
         return;
       }
       String password = userInput("Password", "Enter wifi password" , 30);
@@ -3564,7 +3632,7 @@ void runApp(uint8_t appID){
         // Ensure network is saved (and flag it as connect-on-start by default)
         addSavedNetwork(savedApSSID, savedAPPass, true);
         if(saveSettings()){
-          menuID = 0;
+          menuID = 6;
           return;
         }
         else{drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);}
@@ -3572,12 +3640,13 @@ void runApp(uint8_t appID){
       else{
         drawInfoBox("Error", "Connection failed", "Maybe wrong password...", true, false);
       }
-      menuID = 0;
+      menuID = 6;
+      return;
     }
     if(appID == 44){
       if(limitFeatures){
         drawInfoBox("ERROR", "Update disabled", "Please use M5Burner version", true, false);
-        menuID = 0;
+        menuID = 6;
         return;
       }
       String tempMenu[] = {"From SD", "From WIFI", "From Github"};
@@ -3597,31 +3666,21 @@ void runApp(uint8_t appID){
         updateFromGithub();
         drawInfoBox("ERROR!", "Update failed!", "Try again or contact dev", true, false);
       }
-      menuID = 0;
-      }
+      menuID = 6;
+      return;
+    }
     if(appID == 45){
-      drawInfoBox("M5Gotchi", "v" + String(CURRENT_VERSION) + " by Devsur11  ", "www.github.com/Devsur11 ", true, false);
+      drawInfoBox("M5Gotchi", "v" + String(CURRENT_VERSION) + " by Devsur11  ", "www.github.com/Devsur11/M5Gotchi ", true, false);
+      menuID = 6;
+      return;
     }
     if(appID == 46){
       M5.Display.fillScreen(tx_color_rgb565);
       esp_deep_sleep_start(); 
-      menuID = 0;
-      }
-    if(appID == 47){
-      String options[] = {"Turn ON", "Turn OFF", "Back"};
-      int choice = drawMultiChoice("WiFi Power", options, 3, 2, 0);
-      if (choice == 0) {
-        wifion();
-        drawInfoBox("WiFi", "WiFi turned ON", "", true, false);
-      } else if (choice == 1) {
-        WiFi.mode(WIFI_MODE_NULL);
-        drawInfoBox("WiFi", "WiFi turned OFF", "", true, false);
-      } else {
-        menuID = 0;
-        return;
-      }
-      menuID = 0;
+      menuID = 6;
+      return;
     }
+    if(appID == 47){}
     if(appID == 48){
       String options[] = {"Enable", "Disable", "Back"};
       int choice = drawMultiChoice("Pwnagothi on boot", options, 3, 6, 0);
@@ -3629,7 +3688,7 @@ void runApp(uint8_t appID){
         pwnagothiModeEnabled = true;
         if (saveSettings()) {
           drawInfoBox("Success", "Pwnagothi will run", "on boot", true, false);
-          menuID = 0;
+          menuID = 6;
           return;
         } else {
           drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);
@@ -3638,16 +3697,17 @@ void runApp(uint8_t appID){
         pwnagothiModeEnabled = false;
         if (saveSettings()) {
           drawInfoBox("Success", "Pwnagothi will NOT run", "on boot", true, false);
-          menuID = 0;
+          menuID = 6;
           return;
         } else {
           drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);
         }
       } else {
-        menuID = 0;
+        menuID = 6;
         return;
       }
-      menuID = 0;
+      menuID = 6;
+      return;
     }
     if(appID == 49){
       String options[] = {"Enable", "Disable", "Back"};
@@ -3656,7 +3716,7 @@ void runApp(uint8_t appID){
         skip_eapol_check = false;
         if (saveSettings()) {
           drawInfoBox("Success", "EAPOL check enabled", "", true, false);
-          menuID = 0;
+          menuID = 6;
           return;
         } else {
           drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);
@@ -3665,70 +3725,148 @@ void runApp(uint8_t appID){
         skip_eapol_check = true;
         if (saveSettings()) {
           drawInfoBox("Success", "EAPOL check disabled", "", true, false);
-          menuID = 0;
+          menuID = 6;
           return;
         } else {
           drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);
         }
       } else {
-        menuID = 0;
+        menuID =6;
         return;
       }
-      menuID = 0;
+      menuID = 6;
       return;
     }
     if(appID == 50){
-      String themeOptions[] = {"White mode", "Dark mode", "Custom", "Back"};
-      int themeChoice = drawMultiChoice("Theme", themeOptions, 4, 6, 0);
+      String themeOptions[] = {"White", "Dark", "Blue", "Green", "Red", "Purple", "Orange", "Custom", "Back"};
+      int themeChoice = drawMultiChoice("Theme", themeOptions, 9, 6, 0);
 
-      if (themeChoice == 0) {
-        bg_color = "#FFFFFFFF";
-        tx_color = "#000000";
-        if (saveSettings()) {
-          drawInfoBox("Theme", "White mode applied", "Restarting...", false, false);
+      switch(themeChoice) {
+        case 0: // White
+          bg_color = "#FFFFFFFF";
+          tx_color = "#000000";
+          if (saveSettings()) {
+            drawInfoBox("Theme", "White applied", "Restarting...", false, false);
+            delay(1000);
+            ESP.restart();
+          } else {
+            drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);
+          }
+          break;
+
+        case 1: // Dark
+          bg_color = "#000000FF";
+          tx_color = "#FFFFFFFF";
+          if (saveSettings()) {
+            drawInfoBox("Theme", "Dark applied", "Restarting...", false, false);
+            delay(1000);
+            ESP.restart();
+          } else {
+            drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);
+          }
+          break;
+
+        case 2: // Blue
+          bg_color = "#001F3FFF"; // navy
+          tx_color = "#FFFFFFFF";
+          if (saveSettings()) {
+            drawInfoBox("Theme", "Blue applied", "Restarting...", false, false);
+            delay(1000);
+            ESP.restart();
+          } else {
+            drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);
+          }
+          break;
+
+        case 3: // Green
+          bg_color = "#2ECC40FF"; // bright green
+          tx_color = "#000000FF";
+          if (saveSettings()) {
+            drawInfoBox("Theme", "Green applied", "Restarting...", false, false);
+            delay(1000);
+            ESP.restart();
+          } else {
+            drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);
+          }
+          break;
+
+        case 4: // Red
+          bg_color = "#FF4136FF"; // red
+          tx_color = "#FFFFFFFF";
+          if (saveSettings()) {
+            drawInfoBox("Theme", "Red applied", "Restarting...", false, false);
+            delay(1000);
+            ESP.restart();
+          } else {
+            drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);
+          }
+          break;
+
+        case 5: // Purple
+          bg_color = "#B10DC9FF"; // purple
+          tx_color = "#FFFFFFFF";
+          if (saveSettings()) {
+            drawInfoBox("Theme", "Purple applied", "Restarting...", false, false);
+            delay(1000);
+            ESP.restart();
+          } else {
+            drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);
+          }
+          break;
+
+        case 6: // Orange
+          bg_color = "#FF851BFF"; // orange
+          tx_color = "#000000FF";
+          if (saveSettings()) {
+            drawInfoBox("Theme", "Orange applied", "Restarting...", false, false);
+            delay(1000);
+            ESP.restart();
+          } else {
+            drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);
+          }
+          break;
+
+        case 7: { // Custom
+          drawInfoBox("Custom Theme", "Pick background color", "Ensure text is visible!", false, false);
           delay(1000);
-          ESP.restart();
-        } else {
-          drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);
-        }
-      } else if (themeChoice == 1) {
-        bg_color = "#000000";
-        tx_color = "#FFFFFFFF";
-        if (saveSettings()) {
-          drawInfoBox("Theme", "Dark mode applied", "Restarting...", false, false);
+          String customBg = colorPickerUI(false, "#000000FF");
+          if (customBg == "exited") break;
+
+          drawInfoBox("Custom Theme", "Pick text color", "Ensure text is visible!", false, false);
           delay(1000);
-          ESP.restart();
-        } else {
-          drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);
+          String customTx = colorPickerUI(true, customBg);
+          if (customTx == "exited") break;
+
+          if(customBg == customTx) {
+            drawInfoBox("Error", "Text and background colors", "cannot be the same!", true, false);
+            break;
+          }
+
+          bg_color = customBg;
+          tx_color = customTx;
+          if (saveSettings()) {
+            drawInfoBox("Theme", "Custom applied", "Restarting...", false, false);
+            delay(1000);
+            ESP.restart();
+          } else {
+            drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);
+          }
+          break;
         }
-      } else if (themeChoice == 2) {
-        drawInfoBox("Custom Theme", "Set background color with picker", "Make sure to see text!", false, false);
-        delay(5000);
-        String customBg = colorPickerUI(false, "#000000ff");
-        if (customBg == "exited") return;
-        drawInfoBox("Custom Theme", "Set text color with picker", "Make sure to see text!", false, false);
-        delay(5000);
-        String customTx = colorPickerUI(true, customBg);
-        if (customTx == "exited") return;
-        bg_color = customBg;
-        tx_color = customTx;
-        if (saveSettings()) {
-          drawInfoBox("Theme", "Custom theme applied", "Restarting...", false, false);
-          delay(1000);
-          ESP.restart();
-        } else {
-          drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);
-        }
-      } else {
-        menuID = 0;
-        return;
+
+        default: // Back
+          menuID = 6;
+          return;
       }
-      menuID = 0;
+
+      // always return to settings menu if not restarting
+      menuID = 6;
+      return;
     }
     if(appID == 51){
       bool confirm = drawQuestionBox("Factory Reset", "Delete all config data?", "", "Press 'y' to confirm, 'n' to cancel");
       if (!confirm) {
-        menuID = 0;
+        menuID = 6;
         return;
       }
       drawInfoBox("Factory Reset", "Deleting config data...", "", false, false);
@@ -3738,35 +3876,69 @@ void runApp(uint8_t appID){
         SD.remove("/uploaded.json");
         SD.remove("/cracked.json");
         SD.remove(PERSONALITY_FILE);
+        //recursevely delete "fonts" "wardrive" "handshake" folders
+        File fontsDir = SD.open("/fonts");
+        if (fontsDir && fontsDir.isDirectory()) {
+          File fontFile = fontsDir.openNextFile();
+          while (fontFile) {
+            SD.remove(String(fontFile.name()).c_str());
+            fontFile = fontsDir.openNextFile();
+          }
+          fontsDir.close();
+          SD.rmdir("/fonts");
+        }
+        File wardriveDir = SD.open("/wardrive");
+        if (wardriveDir && wardriveDir.isDirectory()) {
+          File wardriveFile = wardriveDir.openNextFile();
+          while (wardriveFile) {
+            SD.remove(String(wardriveFile.name()).c_str());
+            wardriveFile = wardriveDir.openNextFile();
+          }
+          wardriveDir.close();
+          SD.rmdir("/wardrive");
+        }
+        File handshakeDir = SD.open("/handshake");
+        if (handshakeDir && handshakeDir.isDirectory()) {
+          File handshakeFile = handshakeDir.openNextFile();
+          while (handshakeFile) {
+            SD.remove(String(handshakeFile.name()).c_str());
+            handshakeFile = handshakeDir.openNextFile();
+          }
+          handshakeDir.close();
+          SD.rmdir("/handshake");
+        }
+
+
         drawInfoBox("Success", "Data deleted", "Restarting...", false, false);
         delay(1000);
         ESP.restart();
       } else {
         drawInfoBox("Error", "Data files not found", "Nothing to delete", true, false);
-        menuID = 0;
+        menuID = 6;
         return;
       }
+      menuID = 6;
+      return;
     }
     if(appID == 52){
       if(WiFi.status() == WL_CONNECTED){
         if(wpa_sec_api_key.equals("")){
           drawInfoBox("Error", "No API key set", "Set it first!", true, false);
-          menuID = 0;
+          menuID = 7;
           return;
         }
         else{
           drawInfoBox("Syncing", "Syncing data with WPASec", "Please wait...", false, false);
           processWpaSec(wpa_sec_api_key.c_str());
           drawInfoBox("Done", "Sync finished", "Press enter to continue", true, false);
-          menuID = 0;
-          appID = 0;
+          menuID = 7;
           return;
         }
       }
       else{
         drawInfoBox("Error", "No wifi connection", "Connect to wifi in settings!", true, false);
       }
-      menuID = 0;
+      menuID = 7;
       return;
     }    
     if(appID == 53){
@@ -3774,7 +3946,7 @@ void runApp(uint8_t appID){
         File crackedFile = SD.open("/cracked.json", FILE_READ);
         if (!crackedFile) {
           drawInfoBox("Error", "Failed to open cracked.json", "Check SD card!", true, false);
-          menuID = 0;
+          menuID = 7;
           return;
         }
         crackedFile.close();
@@ -3782,7 +3954,7 @@ void runApp(uint8_t appID){
         if (entries.empty()) {
           drawInfoBox("Info", "No cracked entries found", "Try syncing", true, false);
           crackedFile.close();
-          menuID = 0;
+          menuID = 7;
           return;
         }
         String displayList[entries.size()];
@@ -3793,7 +3965,7 @@ void runApp(uint8_t appID){
           int8_t selection = drawMultiChoice("Cracked list", displayList, entries.size(), 5, 3);
           if(selection == -1){
             crackedFile.close();
-            menuID = 0;
+            menuID = 7;
             return;
           }
           String detailInfo = "Password: " + entries[selection].password;
@@ -3808,7 +3980,7 @@ void runApp(uint8_t appID){
       else{
         drawInfoBox("Error", "List is empty", "Try sync first!", true, false);
       }
-      menuID = 0;
+      menuID = 7;
     }
     if(appID == 54){
       String menuList[] = {"With keyboard", "With pc/phone", "Back"};
@@ -3819,20 +3991,17 @@ void runApp(uint8_t appID){
           drawInfoBox("Error", "Key can't be empty", "Operation aborted", true, false);
           wpa_sec_api_key = "";
           saveSettings();
-          appID = 0;
-          menuID = 0;
+          menuID = 7;
           return;
         }
         if(saveSettings()){
           drawInfoBox("Success", "API key saved", "", true, false);
-          appID = 0;
-          menuID = 0;
+          menuID = 7;
           return;
         }
         else{
           drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);
-          appID = 0;
-          menuID = 0;
+          menuID = 7;
           return;
         }
       }
@@ -3843,25 +4012,28 @@ void runApp(uint8_t appID){
           drawInfoBox("Error", "Key can't be empty", "Operation aborted", true, false);
           wpa_sec_api_key = "";
           saveSettings();
+          menuID = 7;
           return;
         }
         else{
           if(saveSettings()){
             drawInfoBox("Success", "API key saved", "", true, false);
+            menuID = 7;
             return;
           }
           else{
             drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);
+            menuID = 7;
             return;
           }
         }
       }
       else {
-        appRunning = false;
-        appID = 0;
-        menuID = 0;
+        menuID = 7;
         return;
       }
+      menuID = 7;
+      return;
     }
     if(appID == 55){
       debounceDelay();
@@ -3873,10 +4045,10 @@ void runApp(uint8_t appID){
     if(appID == 57){
       if(initPersonality()){
         debounceDelay();
-        }
+      }
       else{
         drawInfoBox("Error", "Can't load personality", "Check SD card!", true, false);
-        menuID = 0;
+        menuID = 5;
         return;
       }
       while (true) {
@@ -3907,7 +4079,7 @@ void runApp(uint8_t appID){
         int8_t choice = drawMultiChoiceLonger("Personality settings", personality_options, 21, 6, 4);
         if(choice == 20 || choice == -1){
           savePersonality();
-          menuID = 0;
+          menuID = 5;
           return;
         }
         else if(choice >= 15){
@@ -3990,8 +4162,11 @@ void runApp(uint8_t appID){
               break;
           }
           savePersonality();
+          menuID = 5;
         }
       }
+      menuID = 5;
+      return;
       }
     if(appID == 58){
       String menuu[] = {"Yes", "No", "Back"};
@@ -4000,7 +4175,7 @@ void runApp(uint8_t appID){
         sd_logging = true;
         if(saveSettings()){
           drawInfoBox("Success", "Logging to SD card enabled", "", true, false);
-          menuID = 0;
+          menuID = 6;
           return;
         }
         else{drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);}
@@ -4009,15 +4184,17 @@ void runApp(uint8_t appID){
         sd_logging = false;
         if(saveSettings()){
           drawInfoBox("Success", "Logging to SD card disabled", "", true, false);
-          menuID = 0;
+          menuID = 6;
           return;
         }
         else{drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);}
       }
       else{
-        menuID = 0;
+        menuID = 6;
         return;
       }
+      menuID = 6;
+      return;
     }
     if(appID == 59){
       String menuu[] = {"Dim screen", "Toggle auto mode", "Back"};
@@ -4031,10 +4208,10 @@ void runApp(uint8_t appID){
         saveSettings();
       }
       else{
-        menuID = 0;
+        menuID = 6;
         return;
       }
-      menuID = 0;
+      menuID = 6;
       return;
     }
     if(appID == 60){
@@ -4044,7 +4221,7 @@ void runApp(uint8_t appID){
         advertisePwngrid = true;
         if (saveSettings()) {
           drawInfoBox("Success", "Pwngrid advertising enabled", "", true, false);
-          menuID = 0;
+          menuID = 6;
           return;
         } else {
           drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);
@@ -4053,16 +4230,16 @@ void runApp(uint8_t appID){
         advertisePwngrid = false;
         if (saveSettings()) {
           drawInfoBox("Success", "Pwngrid advertising disabled", "", true, false);
-          menuID = 0;
+          menuID = 6;
           return;
         } else {
           drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);
         }
       } else {
-        menuID = 0;
+        menuID = 6;
         return;
       }
-      menuID = 0;
+      menuID = 6;
       return;
     }
     return;
@@ -4959,6 +5136,7 @@ void drawMenuList(menu toDraw[], uint8_t menuIDPriv, uint8_t menu_size) {
   if (keys.isKeyPressed(KEY_ENTER)) {
     debounceDelay();
     runApp(toDraw[menu_current_opt].command);
+    debounceDelay();
     return;
   }
   if (keys.isKeyPressed('.')) {
