@@ -304,6 +304,40 @@ bool sleep_mode = false;
 SemaphoreHandle_t buttonSemaphore;
 QueueHandle_t unitQueue;
 uint8_t prevMID;
+volatile bool inboxDirty = false;
+volatile bool refresherRunning = false;
+TaskHandle_t pwngridInboxTaskHandle = nullptr;
+volatile bool killInboxTask = false;
+
+void pwngridInboxTask(void *param) {
+  while (!killInboxTask) {
+    if (WiFi.status() == WL_CONNECTED) {
+      api_client::pollInbox();
+      inboxDirty = true;
+    }
+    vTaskDelay(pdMS_TO_TICKS(5000));
+  }
+
+  // clean exit
+  pwngridInboxTaskHandle = nullptr;
+  vTaskDelete(nullptr);
+}
+
+
+void stopPwngridInboxTask() {
+  if (pwngridInboxTaskHandle != nullptr) {
+    killInboxTask = true;
+
+    // give it a moment to exit cleanly
+    vTaskDelay(pdMS_TO_TICKS(50));
+
+    // if it’s still alive, execute it
+    if (pwngridInboxTaskHandle != nullptr) {
+      vTaskDelete(pwngridInboxTaskHandle);
+      pwngridInboxTaskHandle = nullptr;
+    }
+  }
+}
 
 void unitWriterTask(void *pv) {
   unit_msg_t msg;
@@ -1178,260 +1212,273 @@ String findIncomingFingerprint(const std::vector<message> &messages) {
     return String(); // nothing found, enjoy your empty string
 }
 
+String resolveChatFingerprint(const String &chatName, const std::vector<message> &history){
+  // 1. Try history (fast path)
+  String fp = findIncomingFingerprint(history);
+  if (fp.length() > 10) return fp;
+
+  // 2. Fall back to contacts.json (slow path, but only once)
+  File contacts = SD.open(ADDRES_BOOK_FILE, FILE_READ, false);
+  if (!contacts) return String();
+
+  JsonDocument doc;
+  if (deserializeJson(doc, contacts)) return String();
+
+  for (JsonObject obj : doc.as<JsonArray>()) {
+    String name = obj["name"] | "";
+    if (name == chatName || name == chatName + "\n") {
+      return String(obj["fingerprint"] | "");
+    }
+  }
+
+  return String();
+}
+
 void pwngridMessenger() {
+  killInboxTask = false;
   debounceDelay();
-  if(!(WiFi.status() == WL_CONNECTED)){
+
+  if (WiFi.status() != WL_CONNECTED) {
     drawInfoBox("Info", "Network connection needed", "To open inbox!", false, false);
     delay(3000);
     runApp(43);
-    if(WiFi.status() != WL_CONNECTED){
+    if (WiFi.status() != WL_CONNECTED) {
       drawInfoBox("ERROR!", "No network connection", "Operation abort!", true, false);
       menuID = 8;
       return;
     }
   }
-  if(!SD.exists("/pwngrid/chats")){
-    SD.mkdir("/pwngrid/chats");
-  }
+
+  if (!SD.exists("/pwngrid/chats")) SD.mkdir("/pwngrid/chats");
+
   File dir = SD.open("/pwngrid/chats");
   drawInfoBox("Please wait", "Syncing inbox", "with pwngrid...", false, false);
-  if(api_client::init(KEYS_FILE) == false){
+
+  if (!api_client::init(KEYS_FILE)) {
     drawInfoBox("ERROR!", "Pwngrid init failed!", "Try restarting!", true, false);
     menuID = 8;
     return;
   }
+  // if (!refresherRunning) {
+  //   xTaskCreatePinnedToCore(
+  //     pwngridInboxTask,
+  //     "pwngrid_refresher",
+  //     65536,      // stack size, don’t cheap out
+  //     nullptr,
+  //     1,         // low priority
+  //     &pwngridInboxTaskHandle,
+  //     0          // core 0 (WiFi lives here)
+  //   );
+  // }
+
   api_client::pollInbox();
+
   std::vector<String> chats;
-  while(true){
-    String nextFileName = dir.getNextFileName();
-    if(nextFileName.length()>8){
-      String cutName = nextFileName.substring(15);
-      chats.push_back(cutName);
-    }
-    else{
-      break;
-    }
+  dir.rewindDirectory();
+  while (true) {
+    String name = dir.getNextFileName();
+    if (!name.length()) break;
+    if (name.length() > 8) chats.push_back(name.substring(15));
   }
   chats.push_back("New chat");
-  String menuItems[chats.size() + 1];
-  for(uint8_t i = 0; i<(chats.size()); i++){
-    if(!chats[i]){
-      break;
-    }
+
+  String menuItems[chats.size()];
+  for (uint8_t i = 0; i < chats.size(); i++) {
     menuItems[i] = chats[i];
   }
+
   int8_t result = drawMultiChoice("Open or create chat:", menuItems, chats.size(), 0, 0);
-  if(result == chats.size()-1){
-    api_client::init(KEYS_FILE);
-    debounceDelay();
-    File contacts = SD.open(ADDRES_BOOK_FILE, FILE_READ, false);
-    if(contacts.size()<5){
-      drawInfoBox("Info", "No frends found.", "Go outside and meet some!", true, false);
-      menuID = 8;
-      return;
-    }
-    JsonDocument contacts_json;
-    DeserializationError err = deserializeJson(contacts_json, contacts);
-
-    if (err) {
-        logMessage("Failed to parse contacts: " + String(err.c_str()));
-        drawInfoBox("ERROR", "Contacts load failed!", "Check SD card.", true, false);
-        menuID = 8;
-        return;
-    }
-
-    JsonArray contacts_arr = contacts_json.as<JsonArray>();
-    logMessage("Array size: " + String(contacts_arr.size()));
-    std::vector<unit> contacts_vector;
-    for (JsonObject obj : contacts_arr) {
-        String name = obj["name"] | "unknown";
-        String fingerprint = obj["fingerprint"] | "none";
-        logMessage("Name: " + name + ", Fingerprint: " + fingerprint);
-        contacts_vector.push_back({name, fingerprint});
-    }
-    String names[contacts_vector.size()+1];
-    
-    uint16_t i = 0;
-    uint8_t namesSize = 0;
-    for(; i < contacts_vector.size(); i++) {
-        bool stringTheSame = false;
-        for(uint8_t y = 0; y < chats.size(); y++) {
-            if(strcmp(chats[y].c_str(), contacts_vector[i].name.c_str()) == 0) {
-                stringTheSame = true;
-                break;
-            }
-        }
-        if(!stringTheSame) {
-            names[namesSize++] = contacts_vector[i].name;
-        }
-    }
-    result = drawMultiChoice("Select chat recepient:", names, namesSize, 0, 0);
-    if(result == -1){
-      menuID = 8;
-      return;
-    }
-    File newChat = SD.open("/pwngrid/chats/" + names[result], FILE_WRITE, true);
-    newChat.close();
-  }
-  else if(result == -1){
+  if (result < 0) {
+    stopPwngridInboxTask();
     menuID = 8;
     return;
   }
-  else{
-    debounceDelay();
-    String textTyped = "";
-    uint8_t temp = 0;
-    bool typingMessage = false;
-    int16_t scroll = 0;
-    uint64_t time = millis();
-    while(true){
-      M5.update();
-      M5Cardputer.update();
-      canvas_main.clear();
-      canvas_main.setColor(bg_color_rgb565);
-      canvas_main.drawRect(5, 75, 230, 20, tx_color_rgb565);
-      canvas_main.drawLine(0, 20, 250, 20, tx_color_rgb565);
-      canvas_main.setTextDatum(middle_left);
-      canvas_main.setTextSize(2);
-      canvas_main.drawString(chats[result] + ">", 5, 10);
-      canvas_main.setTextSize(1.5);
-      canvas_main.drawString(">" + textTyped, 8, 86);
-      uint64_t timeNow = millis();
-      auto chatHistory = loadMessageHistory(chats[result]);
-      renderMessages(canvas_main, chatHistory, scroll);
-      canvas_main.setTextSize(1);
-      if(((timeNow - 10000) > time) && !typingMessage){
-        time = timeNow;
-        canvas_main.drawString(" Syncing inbox... Keyboard is disabled!", 2, 102);
-        printHeapInfo();
-        pushAll();
-        api_client::pollInbox();
-      }
-      else{
-        canvas_main.drawString((!typingMessage)? "[d]elete [`]exit [i]nput [;]up [.]down":" Input mode - ENTER or DEL all to exit", 2, 102);
-      }
-      int maxScroll = (chatHistory.size() > 4) ? (chatHistory.size() - 4) : 0;
-      keyboard_changed = M5Cardputer.Keyboard.isChange();
-      if(keyboard_changed){Sound(10000, 100, sound);}    
-      Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
-      for(auto i : status.word){
-        if (i == ';' && !typingMessage) scroll++; time = millis();
-        if (i == '.' && !typingMessage) scroll--; time = millis();
-        if (scroll < 0) scroll = 0;
-        if (scroll > maxScroll) scroll = maxScroll;
-        if(i=='`' && !typingMessage){
-          menuID = 8;
-          return;
-        }
-        if(!typingMessage && i == 'd'){
-          if(drawQuestionBox("Delete chat?", "Are you sure?", "This can't be undone")){
-            dir.close();
-            SD.remove("/pwngrid/chats/" + chats[result]);
-            drawInfoBox("Sucess", "Chat removed", "", true, false);
-            menuID = 8;
-            return;
-          }
-        }
-        if(typingMessage && temp<24){
-          textTyped = textTyped + i;
-          temp ++;
-        }
-        if(i=='i'){
-          typingMessage = true;
-        }
-        debounceDelay();
-      }
-      if (status.del && temp >=1) {
-        textTyped.remove(textTyped.length() - 1);
-        temp --;
-        debounceDelay();
-      }
-      else if (status.del && temp ==0){
-        typingMessage = false;
-      }
-      if (status.enter) {
-        time = millis();
-        message test = {
-          chats[result], pwngrid_indentity, 0, textTyped, 0, true
-        };
-        canvas_main.setTextDatum(middle_center);
-        canvas_main.setTextSize(2);
-        canvas_main.fillRect(0, (canvas_h/2)-10, 250, 20, bg_color_rgb565);
-        canvas_main.drawString("Sending message...", canvas_center_x , canvas_h/2);
-        pushAll();
-        api_client::init(KEYS_FILE);
-        File contacts = SD.open(ADDRES_BOOK_FILE, FILE_READ, false);
-        if(contacts.size()<5){
-          drawInfoBox("ERROR!", "SD card error!.", "Required files not found!", true, false);
-          menuID = 8;
-          return;
-        }
-        JsonDocument contacts_json;
-        DeserializationError err = deserializeJson(contacts_json, contacts);
 
-        if (err) {
-            logMessage("Failed to parse contacts: " + String(err.c_str()));
-            drawInfoBox("ERROR", "Contacts load failed!", "Check SD card.", true, false);
-            menuID = 8;
-            return;
-        }
+  if (result == chats.size() - 1) {
+    File contacts = SD.open(ADDRES_BOOK_FILE, FILE_READ, false);
+    if (!contacts || contacts.size() < 5) {
+      drawInfoBox("Info", "No friends found.", "Touch grass.", true, false);
+      stopPwngridInboxTask();
+      menuID = 8;
+      return;
+    }
 
-        JsonArray contacts_arr = contacts_json.as<JsonArray>();
-        
-        String senderFingerprint = "";
-        for (JsonObject obj : contacts_arr) {
-            String name = obj["name"] | "unknown";
-            String fingerprint = obj["fingerprint"] | "none";
-            logMessage("Name: " + name + ", Fingerprint: " + fingerprint);
-            logMessage("Comparing " + name + " with " + chats[result]);
-            if(name == (chats[result] + "\n") || name == chats[result]){
-              logMessage("Found sender fingerprint, continuing to send...");
-              senderFingerprint = fingerprint;
-              break;
-            }
-        }
+    JsonDocument contacts_json;
+    if (deserializeJson(contacts_json, contacts)) {
+      drawInfoBox("ERROR", "Contacts load failed!", "SD is mad.", true, false);
+      stopPwngridInboxTask();
+      menuID = 8;
+      return;
+    }
 
-        if(senderFingerprint.length()<10)
-        {
-          senderFingerprint = findIncomingFingerprint(chatHistory);
-        }
-        
+    std::vector<String> names;
+    for (JsonObject obj : contacts_json.as<JsonArray>()) {
+      String name = obj["name"] | "unknown";
+      bool exists = false;
+      for (auto &c : chats) if (c == name) exists = true;
+      if (!exists) names.push_back(name);
+    }
 
-        logMessage("Found fingerprint from chat: " + senderFingerprint);
+    if (!names.size()) {
+      drawInfoBox("Info", "No new chats.", "", true, false);
+      stopPwngridInboxTask();
+      menuID = 8;
+      return;
+    }
 
-        if(senderFingerprint.length()<10){
-          drawInfoBox("ERROR!", "Sender fingerprint not", "found, send abort!", true, false);
-        }
-        else{
-          if(api_client::sendMessageTo(senderFingerprint, textTyped)){
-            registerNewMessage(test);
-          }
-          else{
-            for(uint8_t retries = 0; retries < 3; retries++){
-              logMessage("Retrying to send message, attempt " + String(retries+1));
-              if(api_client::sendMessageTo(senderFingerprint, textTyped)){
-                registerNewMessage(test);
-                break;
-              }
-              delay(1000);
-            }
-            canvas_main.setTextDatum(middle_center);
-            canvas_main.setTextSize(2);
-            canvas_main.fillRect(0, (canvas_h/2)-10, 250, 20, bg_color_rgb565);
-            canvas_main.drawString("Send failed!", canvas_center_x , canvas_h/2);
-            pushAll();
-            delay(3000);
-          }
-        }
-        typingMessage = false;
-        textTyped = "";
-        temp = 0;
-      }
-      pushAll();
-    };
+    String nameItems[names.size()];
+    for (uint8_t i = 0; i < names.size(); i++) nameItems[i] = names[i];
+
+    result = drawMultiChoice("Select chat recipient:", nameItems, names.size(), 0, 0);
+    if (result < 0) {
+      stopPwngridInboxTask();
+      menuID = 8;
+      return;
+    }
+
+    File newChat = SD.open("/pwngrid/chats/" + names[result], FILE_WRITE, true);
+    newChat.close();
+    chats.push_back(names[result]);
   }
 
-} 
+  // ---------------- CHAT UI ----------------
+
+  std::vector<message> chatHistory = loadMessageHistory(chats[result]);
+  bool inboxDirty = false;
+
+  String textTyped;
+  textTyped.reserve(32);
+
+  bool typingMessage = false;
+  int16_t scroll = 0;
+
+  uint64_t lastInboxSync = millis();
+  String chatFingerprint = resolveChatFingerprint(chats[result], chatHistory);
+
+  if (chatFingerprint.length() < 10) {
+    drawInfoBox(
+      "ERROR!",
+      "Recipient fingerprint not found!",
+      "",
+      true,
+      false
+    );
+    stopPwngridInboxTask();
+    menuID = 8;
+    return;
+  }
+
+  while (true) {
+    M5.update();
+    M5Cardputer.update();
+
+    uint64_t now = millis();
+
+    if (!typingMessage && now - lastInboxSync > 10000) {
+      canvas_main.setTextDatum(middle_center); canvas_main.setTextSize(2); 
+      canvas_main.fillRect(0, (canvas_h/2)-10, 250, 20, bg_color_rgb565); 
+      canvas_main.drawString("Refreshing...", canvas_center_x , canvas_h/2); 
+      pushAll();
+      api_client::pollInbox();
+      lastInboxSync = now;
+      inboxDirty = true;
+    }
+
+    if (inboxDirty) {
+      chatHistory = loadMessageHistory(chats[result]);
+      inboxDirty = false;
+    }
+
+    int maxScroll = chatHistory.size() > 4 ? chatHistory.size() - 4 : 0;
+    if (scroll < 0) scroll = 0;
+    if (scroll > maxScroll) scroll = maxScroll;
+
+    canvas_main.clear();
+    canvas_main.setColor(bg_color_rgb565);
+    canvas_main.drawRect(5, 75, 230, 20, tx_color_rgb565);
+    canvas_main.drawLine(0, 20, 250, 20, tx_color_rgb565);
+
+    canvas_main.setTextDatum(middle_left);
+    canvas_main.setTextSize(2);
+    canvas_main.drawString(chats[result] + ">", 5, 10);
+
+    renderMessages(canvas_main, chatHistory, scroll);
+
+    canvas_main.setTextSize(1.5);
+    canvas_main.drawString(">" + textTyped, 8, 86);
+
+    canvas_main.setTextSize(1);
+    canvas_main.drawString(
+      typingMessage ? "Input mode - ENTER send / DEL exit" :
+      "[d] delete  [`] exit  [i] input  [;][.] scroll",
+      2, 102
+    );
+
+    Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
+
+    for (auto c : status.word) {
+      if (!typingMessage && c == ';') {scroll++; delay(50);lastInboxSync = now;}
+      if (!typingMessage && c == '.') {scroll--; delay(50);lastInboxSync = now;}
+      if (!typingMessage && c == '`') { stopPwngridInboxTask(); menuID = 8; return; }
+
+      
+      if (!typingMessage && c == 'd') {
+        // delete chat
+        if(drawQuestionBox("Delete chat?", "Are you sure to delete chat? This can't be undone!", "")){
+          SD.remove("/pwngrid/chats/" + chats[result]);
+          drawInfoBox("Info", "Chat deleted.", "", true, false);
+          menuID = 8;
+          debounceDelay();
+          stopPwngridInboxTask();
+          return;
+        }
+        debounceDelay();
+      }
+
+      if (typingMessage && textTyped.length() < 24) {textTyped += c; debounceDelay();lastInboxSync = now;}
+      if (!typingMessage && c == 'i') {typingMessage = true; debounceDelay();lastInboxSync = now;}
+    }
+
+    if (status.del) {
+      if (textTyped.length()) {textTyped.remove(textTyped.length() - 1); debounceDelay();}
+      else typingMessage = false;
+    }
+
+    if (status.enter && typingMessage && textTyped.length()) {
+      message msg = { chats[result], pwngrid_indentity, 0, textTyped, 0, true };
+      canvas_main.setTextDatum(middle_center); canvas_main.setTextSize(2); 
+      canvas_main.fillRect(0, (canvas_h/2)-10, 250, 20, bg_color_rgb565); 
+      canvas_main.drawString("Sending...", canvas_center_x , canvas_h/2); 
+      pushAll();
+      if (api_client::sendMessageTo(chatFingerprint, textTyped)) {
+        registerNewMessage(msg);
+        inboxDirty = true;
+      }
+      else{
+        //try up to 2 times
+        bool msgS = false;
+        for(uint8_t i = 0; i<2;i++){
+          if(api_client::sendMessageTo(chatFingerprint, textTyped)){
+            msgS = true;
+            registerNewMessage(msg);
+            inboxDirty = true;
+            break;
+          }
+        }
+        if(!msgS)
+        {canvas_main.setTextDatum(middle_center); canvas_main.setTextSize(2); 
+        canvas_main.fillRect(0, (canvas_h/2)-10, 250, 20, bg_color_rgb565); 
+        canvas_main.drawString("Send failed!", canvas_center_x , canvas_h/2); 
+        pushAll();}
+        delay(3000);
+      }
+      textTyped = "";
+      typingMessage = false;
+    }
+
+    pushAll();
+  }
+}
 
 inline void trigger(uint8_t trigID){logMessage("Trigger" + String(trigID));}
 

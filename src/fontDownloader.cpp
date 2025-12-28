@@ -5,6 +5,7 @@
 #include "fontDownloader.h"
 #include "M5GFX.h"
 #include "M5Cardputer.h"
+#include "ui.h"
 
 const char* GITHUB_URL1 = "https://devsur11.github.io/M5Gotchi/fonts/big.vlw";
 const char* GITHUB_URL2 = "https://devsur11.github.io/M5Gotchi/fonts/small.vlw";
@@ -57,11 +58,11 @@ bool downloadFile(const char* url, const char* localPath) {
             // Display progress overlay
             if (contentLength > 0) {
                 int progress = (total * 100) / contentLength;
-                M5.Display.fillRect(0, 0, M5.Display.width(), 40, TFT_BLACK);
-                M5.Display.setTextColor(TFT_WHITE);
+                M5.Display.fillRect(0, 0, M5.Display.width(), 40, bg_color_rgb565);
+                M5.Display.setTextColor(tx_color_rgb565);
                 M5.Display.drawString("Downloading...", 10, 10);
                 M5.Display.drawString(String(progress) + "%", M5.Display.width() - 50, 10);
-                M5.Display.fillRect(10, 25, (M5.Display.width() - 20) * progress / 100, 10, TFT_GREEN);
+                M5.Display.fillRect(10, 25, (M5.Display.width() - 20) * progress / 100, 10, tx_color_rgb565);
             }
         }
         delay(1);

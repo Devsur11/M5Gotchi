@@ -439,6 +439,8 @@ bool api_client::pollInbox() {
         uint32_t unix_timestamp = isoToUnix(timestamp);
         String seen_at = m["seen_at"].as<String>();
         if(seen_at != "null"){
+            httpGet(String(Endpoint) + "/unit/inbox/" + msg_id + "/deleted", true);
+            logMessage("Removed message from server. Msg: " + String(msg_id));
             continue;
         }
 
@@ -495,15 +497,13 @@ bool api_client::pollInbox() {
             unix_timestamp,
             false
         };
-        if(true){
-            r = httpGet(String(Endpoint) + "/unit/inbox/" + msg_id + "/seen", true);
-            logMessage("Set message id as read, response: " + r);
-            if (r == "{\"success\":true}") {
-                logMessage("Message marked as read on server.");
-                registerNewMessage(newMessage);
-            } else {
-                logMessage("Failed to mark message as read on server.");
-            }
+        r = httpGet(String(Endpoint) + "/unit/inbox/" + msg_id + "/seen", true);
+        logMessage("Set message id as read, response: " + r);
+        if (r == "{\"success\":true}") {
+            logMessage("Message marked as read on server.");
+            registerNewMessage(newMessage);
+        } else {
+            logMessage("Failed to mark message as read on server.");
         }
     }
     return true;

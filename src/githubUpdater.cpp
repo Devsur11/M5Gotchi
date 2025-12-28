@@ -8,6 +8,7 @@
 #include <SD.h>
 #include <M5GFX.h>
 #include "M5Cardputer.h"
+#include "ui.h"
 
 static int ota_progress = 0;
 static int ota_total = 0;
@@ -22,13 +23,13 @@ void draw_progress_bar(int percent) {
   const int w = M5.Display.width();
   const int h = 16;
 
-  M5.Display.fillRect(x, y, w, M5.Display.height(), TFT_BLACK);
-  M5.Display.drawRect(x, y, w, h, TFT_WHITE);
+  M5.Display.fillRect(x, y, w, M5.Display.height(), bg_color_rgb565);
+  M5.Display.drawRect(x, y, w, h, tx_color_rgb565);
   int fill = (w - 2) * percent / 100;
-  M5.Display.fillRect(x + 1, y + 1, fill, h - 2, TFT_WHITE);
+  M5.Display.fillRect(x + 1, y + 1, fill, h - 2, tx_color_rgb565);
 
   M5.Display.setCursor(x, y + 20);
-  M5.Display.setTextColor(TFT_WHITE, TFT_BLACK);
+  M5.Display.setTextColor(tx_color_rgb565, bg_color_rgb565);
   M5.Display.printf("Updating... %d%%   \n", percent);
   M5.Display.println("M5Gotchi Updater v2.0");
   M5.Display.println("\nDON'T TURN OFF THE DEVICE!, otherwise it may brick!");
@@ -100,11 +101,11 @@ static bool download_file(const char* url, const char* dest_path) {
     total += read_len;
     if (read_len > 0) {
         int progress = (total * 100) / contentLength;
-        M5.Display.fillRect(0, 0, M5.Display.width(), 40, TFT_BLACK);
-        M5.Display.setTextColor(TFT_WHITE);
+        M5.Display.fillRect(0, 0, M5.Display.width(), 40, bg_color_rgb565);
+        M5.Display.setTextColor(tx_color_rgb565);
         M5.Display.drawString("Downloading...", 10, 10);
         M5.Display.drawString(String(progress) + "%", M5.Display.width() - 50, 10);
-        M5.Display.fillRect(10, 25, (M5.Display.width() - 20) * progress / 100, 10, TFT_GREEN);
+        M5.Display.fillRect(10, 25, (M5.Display.width() - 20) * progress / 100, 10, tx_color_rgb565);
     }
   }
   f.flush();

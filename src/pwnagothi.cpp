@@ -11,6 +11,7 @@
 #include "pwngrid.h"
 #include "api_client.h"
 #include "wardrive.h"
+#include "src.h"
 
 bool pwnagothiModeEnabled;
 bool pwnagothiScan = true;

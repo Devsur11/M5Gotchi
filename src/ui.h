@@ -1,13 +1,6 @@
-#include "M5Cardputer.h"
-#include <Update.h>
-#include <FS.h>
-#include <SD.h>
-#include "evilPortal.h"
-#include "networkKit.h"
-#include "src.h"
-#include "logger.h"
-#include "ArduinoJson.h"
 #pragma once
+#include "logger.h"
+#include "M5GFX.h"
 
 struct menu {
   const char *name;
@@ -33,6 +26,10 @@ struct message {
   bool outgoing;             // true if sent by us
 };
 
+void stopPwngridInboxTask();
+void unitWriterTask(void *pv);
+void pwngridInboxTask(void *param);
+String resolveChatFingerprint(const String &chatName, const std::vector<message> &history);
 String multiplyChar(char toMultiply, uint8_t literations);
 void trigger(uint8_t trigID);
 void drawInfoBox(String tittle, String info, String info2, bool canBeQuit, bool isCritical);

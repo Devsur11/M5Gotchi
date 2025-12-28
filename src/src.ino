@@ -9,6 +9,7 @@
 #include "pwngrid.h"
 #include "api_client.h"
 #include "esp_task_wdt.h"
+#include "src.h"
 #ifdef ENABLE_COREDUMP_LOGGING
 #include "esp_core_dump.h"
 #include <PubSubClient.h>
@@ -373,6 +374,7 @@ void setup() {
     drawHintBox("Welcome to M5Gotchi!\nSet your device name in setting and explore!\nEnjoy your stay! (Regardless of your choice this will only be shown once)", 13);
     //now lets disable entirely hint 13 regardless of user choice
     hintsDisplayed |= (1 << 13);
+    saveSettings();
     drawHintBox("Hi there!\nPress esc to open menu.\nUse arrows to navigate.\nSometimes keyboard.\nLook around, and enjoy!", 2);
     return;
   }
