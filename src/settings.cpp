@@ -57,6 +57,17 @@ bool add_new_units_to_friends = false;
 // 0b1 - not M5Burner version hint
 // 0b10 - welcome hint
 // 0b100 - new version available hint
+// (1>>4) - manual mode hint
+// (1>>5) - pwnagothi whitelist hint
+// (1>>6) - stats legend hint
+// (1>>7) - pwngrid enrol hint
+// (1>>8) - wardriving mode hint
+// (1>>9) - pwngrid messenger hint
+// (1>>10) - pwngrid enrol time hint
+// (1>>11) - pwngrid enrol restart hint
+// (1>>12) - wpa sec api key hint
+// (1>>13) - oobe
+// (1>>14) - log tool hint
 uint64_t hintsDisplayed = 0b0;
 
 // Developer flags

@@ -598,11 +598,12 @@ bool api_client::uploadCachedAPs() {
     String url = String(Endpoint) + "/unit/report/aps";
     logMessage("uploadCachedAPs: uploading " + String(arr.size()) + " APs");
     String resp = httpPostJson(url, body, true);
-    if (!strcmp(resp.c_str(), "{\"success\":true}")) {
+    logMessage("uploadCachedAPs: server response: " + resp);
+    if (!(resp == "{\"success\":true}")) {
         logMessage("uploadCachedAPs: upload failed or empty response");
         return false;
     }
-    logMessage("uploadCachedAPs: server response: " + resp);
+    
 
     // On success, clear cache file
     File wf = SD.open(path, FILE_WRITE);

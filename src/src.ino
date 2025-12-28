@@ -370,6 +370,9 @@ void setup() {
       drawHintBox("A new firmware version is available!\nPlease update via the menu\nPlease note tha bugs from older version will not be reviewed!", 3);
     }
     logMessage("No feature limitations applied.");
+    drawHintBox("Welcome to M5Gotchi!\nSet your device name in setting and explore!\nEnjoy your stay! (Regardless of your choice this will only be shown once)", 13);
+    //now lets disable entirely hint 13 regardless of user choice
+    hintsDisplayed |= (1 << 13);
     drawHintBox("Hi there!\nPress esc to open menu.\nUse arrows to navigate.\nSometimes keyboard.\nLook around, and enjoy!", 2);
     return;
   }

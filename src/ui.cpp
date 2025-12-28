@@ -143,7 +143,7 @@ menu main_menu[] = {
 
 // menuID 2
 menu wifi_menu[] = {
-    {"Networks", 20},             // Select Networks
+    {"Networks selector", 20},    // Select Networks
     {"Clone / Details", 21},      // Clone & Details
     {"PMKID Capture", 61},        // PMKID Grabber
     {"Access Point", 22},         // Acces point
@@ -155,7 +155,7 @@ menu wifi_menu[] = {
 menu wpasec_menu[] = {
   {"Sync Server", 52},           // Sync with server
   {"Cracked Results", 53},      // Check cracked results
-  {"API Key", 54}                // Change API key
+  {"API Key change", 54}                // Change API key
 };
 
 menu wpasec_setup_menu[] = {
@@ -225,6 +225,16 @@ menu pwngrid_menu[] = {
   {"Quick Message", 11},                  // Quick message
   {"Friends", 17},                        // Frends list
   {"Nothing to Send", 0},                 // No new captured networks to send
+  {"Identity", 13},                       // View identity/fingerprint
+  {"Reset Identity", 15}                  // Reset pwngrid/fingerprint
+};
+
+menu pwngrid_menu_to_send[] = {
+  {"Units Met", 16},                      // Units met
+  {"Inbox", 10},                          // Messages inbox
+  {"Quick Message", 11},                  // Quick message
+  {"Friends", 17},                        // Frends list
+  {"Send pwn data", 26},                  // No new captured networks to send
   {"Identity", 13},                       // View identity/fingerprint
   {"Reset Identity", 15}                  // Reset pwngrid/fingerprint
 };
@@ -585,9 +595,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
         // Optional / Advanced
         { val_12, 49 }         // Skip EAPOL Check
     };
-
-
-
+    
     drawMenuList( new_settings_menu , 6, 24);
     prevMID = 6;
   }  
@@ -597,17 +605,8 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
   }
   else if (menuID == 8){
     File toUpload = SD.open("/pwngrid/cracks.conf");
-    if(toUpload && toUpload.size() > 3){ 
-      menu temp[7] =  { 
-        {"Units met", 16},
-        {"Messages inbox", 10},
-        {"Quick message", 11},
-        {"Frends list", 17},
-        {"Send captured networks to pwngrid", 26},
-        {"View identity/fingerprint", 13},
-        {"Reset pwngrid/fingerprint", 15}
-      };
-      drawMenuList(temp, 8, 7);
+    if((toUpload && toUpload.size() > 3) && (pwngrid_indentity.length()>10)){ 
+      drawMenuList(pwngrid_menu_to_send, 8, 7);
     }
     else (pwngrid_indentity.length()>10)? drawMenuList(pwngrid_menu, 8, 7): drawMenuList(pwngrid_menu, 8, 1);
     prevMID = 8;
@@ -729,27 +728,27 @@ void drawBottomCanvas() {
   canvas_bot.setTextDatum(top_left);
   uint16_t captures = sessionCaptures;
   uint16_t allTimeCaptures = pwned_ap;
-  String shortWifiName = lastPwnedAP.length() > 6 ? lastPwnedAP.substring(0, 6) + "..." : lastPwnedAP;
+  String shortWifiName = lastPwnedAP.length() > 12 ? lastPwnedAP.substring(0, 12) + "..." : lastPwnedAP;
   canvas_bot.drawString("PWND: " + String(captures) + "/" + String(allTimeCaptures) + (shortWifiName.length() > 0 ? " (" + shortWifiName + ")" : ""), 3, 5);
   String wifiStatus;
   if(WiFi.status() == WL_NO_SHIELD){
-    wifiStatus = "off";
+    wifiStatus = "O";
     if(apMode){canvas_bot.drawString("Wifi: AP  " + wifiChoice, 0, 5);}
   }
   else if(WiFi.status() == WL_CONNECTED){
-    wifiStatus = "connected";
+    wifiStatus = "C";
   }
   else if(WiFi.status() ==  WL_IDLE_STATUS){
-    wifiStatus = "IDLE";
+    wifiStatus = "I";
   }
   else if(WiFi.status() == WL_CONNECT_FAILED){
-    wifiStatus = "error";
+    wifiStatus = "E";
   }
   else if(WiFi.status() ==  WL_CONNECTION_LOST){
-    wifiStatus = "lost";
+    wifiStatus = "L";
   }
   else if(WiFi.status() ==  WL_DISCONNECTED){
-    wifiStatus = "disconnected";
+    wifiStatus = "D";
   }
   canvas_bot.setTextDatum(top_right);
   canvas_bot.drawString(String((pwnagothiMode) ? "AUTO" : "MANU") + " " + wifiStatus, display_w, 5);
@@ -1320,7 +1319,7 @@ void pwngridMessenger() {
         if (i == '.' && !typingMessage) scroll--; time = millis();
         if (scroll < 0) scroll = 0;
         if (scroll > maxScroll) scroll = maxScroll;
-        if(i=='`'){
+        if(i=='`' && !typingMessage){
           menuID = 8;
           return;
         }
@@ -1498,6 +1497,11 @@ void runApp(uint8_t appID){
   //menuID = 0; 
   if(appID){
     if(appID == 1){
+      drawHintBox("For all features of manual mode to work, wifi will always disconnect before entering menu.", 4);
+      if(WiFi.status() == WL_CONNECTED){
+        drawInfoBox("Info", "Disconnecting from WiFi", "Please wait...", false, false);
+        WiFi.disconnect();
+      }
       debounceDelay();
       drawMenuList( wifi_menu , 2, 6);
     }
@@ -1507,6 +1511,7 @@ void runApp(uint8_t appID){
       menuID = 6;
     }
     if(appID == 4){
+      drawHintBox("Make sure to add all your networks to whitelist, before enabling auto mode!", 5);
       debounceDelay();
       drawMenuList(pwngotchi_menu, 5 , 6);
     }
@@ -1516,6 +1521,7 @@ void runApp(uint8_t appID){
       menuID = 6;
     }
     if(appID == 5){
+      drawHintBox("HS - handshakes\n P - peers (other pwnagotchis) met \n D - deauth amount\n T - time\n E - epochs (pwn loops)", 6);
       drawStats(); 
       menuID = 1;
     }
@@ -1524,15 +1530,23 @@ void runApp(uint8_t appID){
       drawMenuList(settings_menu,6,23);
     }
     if(appID == 7){
+      if(hostname == "M5Gotchi"){
+        drawInfoBox("Info", "Please set a unique name", "In settings -> Device name", true, false);
+        menuID = 6;
+        return;
+      }
+      (pwngrid_indentity.length()<10)?drawHintBox("To see all the features of pwngrid, please enrol first!", 7):void();
       debounceDelay();
       drawMenuList(pwngrid_menu, 8, 7);
     }
     if(appID == 8){
+      drawHintBox("Wardriving mode allows you to collect WiFi networks location for later use, or to share it with WIGLE.net", 8);
       debounceDelay();
       drawMenuList(wardrivingMenuWithWiggle, 9, 6);
     }
     if(appID == 9){}
     if(appID == 10){
+      drawHintBox("Due to compexity of pwngrid messenger, in some scenarios you may encounter stuttering or slowdowns.", 9);
       pwngridMessenger();
       menuID = 8;
     }
@@ -1604,6 +1618,7 @@ void runApp(uint8_t appID){
           return;
         }
       }
+      drawHintBox("Depending on network and device speed, enrollment may take several minutes or even fail.", 10);
       drawInfoBox("Init", "Initializing keys...", "This may take a while.", false, false);
       SD.mkdir("/pwngrid");
       SD.mkdir("/pwngrid/keys");
@@ -1631,11 +1646,13 @@ void runApp(uint8_t appID){
       }
       else{
         drawInfoBox("Error", "Keygen failed", "Try restarting!", true, false);
+        drawHintBox("Please restart your device before trying to enroll again. It may take up to 3 tries to successfully enroll.", 11);
       }
       menuID = 8;
       return;
     }
     if(appID == 13){
+      M5.Display.setBrightness(100);
       M5Canvas identity_canvas(&M5.Display);
       identity_canvas.createSprite(100, canvas_h -22);
       canvas_main.clear(bg_color_rgb565);
@@ -1657,12 +1674,14 @@ void runApp(uint8_t appID){
         M5Cardputer.update();
         auto keysState = M5Cardputer.Keyboard.keysState();
         if(keysState.enter){
+          M5.Display.setBrightness(brightness);
           menuID = 8;
           return;
         }
         for(auto i : keysState.word){
           if(i=='`'){
             menuID = 8;
+            M5.Display.setBrightness(brightness);
             return;
           }
         }
@@ -2221,14 +2240,22 @@ void runApp(uint8_t appID){
       return;
     }
     if(appID == 19){
+      drawHintBox("This app is VERY slow due to complexity of whole csv parsing. Please be patient or use only for searching", 14);
       File csvFile;
       // Wardriving CSV viewer with search function
       String selectedPath = "/wardriving/first_seen.csv";
-      if(drawQuestionBox("Open custom?", "Open from SD, If not", " \"first seen list\" will be used")){
+      String menu[] = {"Select file", "Use default"};
+      int8_t fileChoice = drawMultiChoice("CSV File Option:", menu, 2, 2, 0);
+      debounceDelay();
+      if(fileChoice = -1){
+        menuID = 9;
+        return;
+      }
+      if(fileChoice == 0){
         selectedPath = sdmanager::selectFile(".csv");
         csvFile = SD.open(selectedPath, FILE_READ);
       }
-      else{
+      else {
         csvFile = SD.open("/wardriving/first_seen.csv", FILE_READ);
       }
       if (!csvFile) {
@@ -2948,9 +2975,12 @@ void runApp(uint8_t appID){
             line = 0;
             Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
             for(auto i : status.word){
-              if(i=='`' && status.fn){
+              if(i=='`'){
               esp_wifi_set_promiscuous(false);
               WiFi.mode(WIFI_MODE_NULL);
+              clearClients();
+              logMessage("User stopped mac sniffing");
+              wifion();
               menuID = 2;
               return;
               }
@@ -2984,12 +3014,13 @@ void runApp(uint8_t appID){
             keyboard_changed = M5Cardputer.Keyboard.isChange();
             Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
             for(auto i : status.word){
-              if(i=='`' && status.fn){
+              if(i=='`'){
                 menuID = 2;
+                wifion();
+                SnifferEnd();
                 return;
               }
             }
-            ;
             drawTopCanvas();
             drawBottomCanvas();
             canvas_main.clear(bg_color_rgb565);
@@ -4036,6 +4067,7 @@ void runApp(uint8_t appID){
       return;
     }
     if(appID == 55){
+      (wpa_sec_api_key.length()<10)?drawHintBox("To see all the available WPAsec commands, you'll need to input your API key.\n Get it from https://wpa-sec.stanev.org/?get-key", 12):void();
       debounceDelay();
       drawMenuList(wpasec_menu, 7, 3);
     }
