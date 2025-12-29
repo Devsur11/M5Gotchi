@@ -3560,7 +3560,7 @@ void runApp(uint8_t appID){
         bool answear = drawQuestionBox("CONFIRMATION", "Operate only if you ", "have premision!");
         if(answear){
           menuID = 5;
-          drawHintBox("Stealth mode mimics wifi router, kicking only 1 client at once.\n In the other hand, normal mode kicks all connected clients and that grately impoves capture.", 15);
+          drawHintBox("Stealth mode mimics wifi router, kicking only 1 client at once.\nIn the other hand, normal mode kicks all connected clients and that grately impoves capture.", 15);
           String sub_menu[] = {"Stealth (legacy)", "Normal"};
           int8_t modeChoice = drawMultiChoice("Select mode:", sub_menu, 2, 2, 2);
           debounceDelay();
