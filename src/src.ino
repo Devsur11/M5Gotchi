@@ -325,6 +325,17 @@ void setup() {
   esp_task_wdt_init(60, false); 
 
 
+  //inbox check
+  if(check_inbox_at_startup && WiFi.isConnected()){
+    int8_t messages = api_client::checkNewMessagesAmount();
+    if(messages > 0){}
+    else{
+      setNewMessageMood(messages);
+      updateUi(false, false, true);
+      delay(5000);
+    }
+  }
+
   //For everyone that sees this code and thinks why am I limiting features based on partition address:
   //The generic install provides a otadata partition that I can use for updates.
   //Custom installs may not have that partition, so to prevent bricking the device

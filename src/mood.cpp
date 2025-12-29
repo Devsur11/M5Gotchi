@@ -7,6 +7,8 @@
 #include <vector>
 #include <cstdarg>
 
+// --- FACES ---
+
 const char* sleeping[] = {
   "(⇀‿‿↼)",
   "(≖‿‿≖)"
@@ -43,6 +45,8 @@ const char* excited[] = {
   "(♥‿‿♥)",
   "(ᵔ◡◡ᵔ)"
 };
+
+// --- TEXTS ---
 
 const char* time_def[] = {
   "minutes",
@@ -126,12 +130,54 @@ const char* text_happy[] = {
 };
 
 const char* startup[] = {
-  "Hi, I'm M5Gotchi! \nStarting ...",
-  "New day, new hunt, new pwns! \nStarting ...",
-  "I pwn therefore I am. \nStarting ...",
-  "My crime is that of curiosity ... \nStarting ...",
-  "Hack the Planet! \nStarting ..."
+  "Hi, I'm M5Gotchi! Starting ...",
+  "New day, new hunt, new pwns! Starting ...",
+  "I pwn therefore I am. Starting ...",
+  "My crime is that of curiosity ... Starting ...",
+  "Hack the Planet! Starting ..."
 };
+
+const char* status_report_fmt[] = {
+  "I've been pwning for %d minutes and kicked %d clients! I've also met %d new peers and ate %d handshakes"
+};
+
+const char* status_idle_neutral[] = {
+  "Scanning the ether...",
+  "Monitoring 2.4GHz spectrum...",
+  "Waiting for beacon frames...",
+  "Sniffing for data...",
+  "Observing traffic patterns...",
+  "Listening to the noise..."
+};
+
+const char* status_idle_happy[] = {
+  "The air tastes like WiFi.",
+  "So many juicy packets!",
+  "High density traffic detected.",
+  "I love the smell of EAPOL.",
+  "Algorithm reward is high.",
+  "Digesting new data..."
+};
+
+const char* status_idle_sad[] = {
+  "The spectrum is too quiet...",
+  "Low signal integrity.",
+  "I need more training data...",
+  "Where did all the packets go?",
+  "Blind scanning...",
+  "No targets in range."
+};
+
+const char* status_idle_excited[] = {
+  "Hack the Planet!",
+  "Injecting frames...",
+  "Neural network activated!",
+  "Target acquisition mode.",
+  "Power level rising!",
+  "Maximum bandwidth!"
+};
+
+// --- GLOBALS ---
 
 uint8_t current_mood = 0;
 String current_phrase = "";
@@ -202,6 +248,14 @@ bool createDefaultMoodFiles() {
   addSectionTxt("sad", text_sad, sizeof(text_sad)/sizeof(text_sad[0]));
   addSectionTxt("happy", text_happy, sizeof(text_happy)/sizeof(text_happy[0]));
   addSectionTxt("startup", startup, sizeof(startup)/sizeof(startup[0]));
+  
+  // NEW SECTIONS
+  addSectionTxt("status_report_fmt", status_report_fmt, sizeof(status_report_fmt)/sizeof(status_report_fmt[0]));
+  addSectionTxt("status_idle_neutral", status_idle_neutral, sizeof(status_idle_neutral)/sizeof(status_idle_neutral[0]));
+  addSectionTxt("status_idle_happy", status_idle_happy, sizeof(status_idle_happy)/sizeof(status_idle_happy[0]));
+  addSectionTxt("status_idle_sad", status_idle_sad, sizeof(status_idle_sad)/sizeof(status_idle_sad[0]));
+  addSectionTxt("status_idle_excited", status_idle_excited, sizeof(status_idle_excited)/sizeof(status_idle_excited[0]));
+
 
   textsContent += "\n";
 
@@ -335,7 +389,10 @@ void setMood(uint8_t mood, String face, String phrase, bool broken) {
 
 void setMoodToStatus(){
   uint16_t sessionTimeMinutes = (lastSessionTime) / 60000;
-  String out = vformat("I've been pwning for %d minutes and kicked %d clients! I've also met %d new peers and ate %d handshakes", sessionTimeMinutes, lastSessionDeauths, lastSessionPeers, lastSessionCaptures);
+  // Get customizable format string
+  String fmt = pickText("status_report_fmt", status_report_fmt, sizeof(status_report_fmt)/sizeof(status_report_fmt[0]));
+  
+  String out = vformat(fmt.c_str(), sessionTimeMinutes, lastSessionDeauths, lastSessionPeers, lastSessionCaptures);
   setMood(0, pickFace("happy", happy, sizeof(happy)/sizeof(happy[0])), out, false);
 } 
 
@@ -451,20 +508,25 @@ void setChannelFreeMood(uint8_t channel){
 
 void setIDLEMood(){
   int16_t balance = tot_happy_epochs - tot_sad_epochs;
+  
   if(balance >= 5 && balance < 15){
+    // Happy IDLE
     setMood(0, pickFace("happy", happy, sizeof(happy)/sizeof(happy[0])),
-            "...", false);
+            pickText("status_idle_happy", status_idle_happy, sizeof(status_idle_happy)/sizeof(status_idle_happy[0])), false);
   }
   else if(balance <= -5){
+    // Sad IDLE
     setMood(0, pickFace("sad", sad, sizeof(sad)/sizeof(sad[0])),
-            "...", false);
+            pickText("status_idle_sad", status_idle_sad, sizeof(status_idle_sad)/sizeof(status_idle_sad[0])), false);
   }
   else if(balance >= 15){
+    // Excited IDLE
     setMood(0, pickFace("excited", excited, sizeof(excited)/sizeof(excited[0])),
-            "...", false);
+            pickText("status_idle_excited", status_idle_excited, sizeof(status_idle_excited)/sizeof(status_idle_excited[0])), false);
   }
   else{
+    // Neutral/Looking IDLE
     setMood(0, pickFace("looking", looking, sizeof(looking)/sizeof(looking[0])),
-            "...", false);
+            pickText("status_idle_neutral", status_idle_neutral, sizeof(status_idle_neutral)/sizeof(status_idle_neutral[0])), false);
   }
 }

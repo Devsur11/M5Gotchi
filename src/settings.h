@@ -156,3 +156,4 @@ extern long long allSessionTime;
 extern uint16_t prev_level;
 extern bool randomise_mac_at_boot;
 extern bool add_new_units_to_friends;
+extern bool check_inbox_at_startup;

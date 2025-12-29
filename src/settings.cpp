@@ -52,6 +52,7 @@ long long allSessionTime = 0;
 uint16_t prev_level = 0;
 bool randomise_mac_at_boot = true;
 bool add_new_units_to_friends = false;
+bool check_inbox_at_startup = false;
 
 // Keep track of which hints have been displayed using bitmask
 // Each bit represents a different hint
@@ -69,6 +70,11 @@ bool add_new_units_to_friends = false;
 // (1>>12) - wpa sec api key hint
 // (1>>13) - oobe
 // (1>>14) - log tool hint
+// (1>>15) - auto mode variations hint
+// (1>>16) - gps pinout hint
+// (1>>17) - PMKID grabber hint
+// (1>>18) - donate hint
+// (1>>19) - inbox at boot hint
 uint64_t hintsDisplayed = 0b0;
 
 // Developer flags
@@ -443,6 +449,9 @@ bool initVars() {
         if(config["lastSessionCaptures"].is<uint>()) lastSessionCaptures = config["lastSessionCaptures"].as<uint>();
         else configChanged = true;
 
+        if(config["check_inbox_at_startup"].is<bool>()) check_inbox_at_startup = config["check_inbox_at_startup"].as<bool>();
+        else configChanged = true;
+
         if(configChanged) {
             logMessage("Config file missing values, will be updated");
         }
@@ -502,6 +511,7 @@ bool initVars() {
     config["prev_level"] = prev_level;
     config["randomise_mac_at_boot"] = randomise_mac_at_boot;
     config["add_new_units_to_friends"] = add_new_units_to_friends;
+    config["check_inbox_at_startup"] = check_inbox_at_startup;
 
     if (configChanged) {
         logMessage("Config updated with missing/default values, saving...");
@@ -569,6 +579,7 @@ bool saveSettings(){
     config["prev_level"] = prev_level;
     config["randomise_mac_at_boot"] = randomise_mac_at_boot;
     config["add_new_units_to_friends"] = add_new_units_to_friends;
+    config["check_inbox_at_startup"] = check_inbox_at_startup;
 
     logMessage("JSON data creation successful, proceeding to save");
     FConf = SD.open(NEW_CONFIG_FILE, FILE_WRITE, false);

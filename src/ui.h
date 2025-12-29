@@ -77,6 +77,7 @@ void drawHintBox(const String &text, uint8_t hintID);
 void drawStats();
 void drawSysInfo();
 bool addUnitToAddressBook(const unit u);
+void themeMenu();
 
 #ifdef ENABLE_COREDUMP_LOGGING
 void sendCrashReport();

@@ -412,6 +412,28 @@ time_t api_client::timegm(struct tm* t) {
     return seconds;
 }
 
+int8_t api_client::checkNewMessagesAmount(){
+    logMessage("Polling inbox...");
+    enrollWithGrid();
+    String r = httpGet(String(Endpoint) + "/unit/inbox/?p=1", true);
+    if (r.length() == 0) {
+        logMessage("poll: empty response");
+        return -1;
+    }
+    JsonDocument rd;
+    if (deserializeJson(rd, r)) {
+        logMessage("poll: parse failed");
+        return -1;
+    }
+    // Expect "messages" array in response like server. Format may vary.
+    if (!rd["messages"].is<JsonArray>()) {
+        logMessage("poll: no messages array");
+        return -1;
+    }
+    JsonArray msgs = rd["messages"].as<JsonArray>();
+    return msgs.size();
+}
+
 bool api_client::pollInbox() {
     logMessage("Polling inbox...");
     enrollWithGrid();

@@ -178,6 +178,7 @@ menu settings_menu[] = {
   {"Auto-Connect WiFi", 29},             // On startup, connect to wifi
   {"Check Updates on Boot", 33},         // At boot, check for updates
   {"Random MAC on Boot", 34},            // Randomise mac at startup
+  {"Check inbox at boot", 9},
 
   // Network / WiFi
   {"WiFi Connect", 43},                   // Connect to WiFi
@@ -525,6 +526,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
     char val_2[55];   // Auto-Connect WiFi
     char val_3[55];   // Check Updates on Boot
     char val_4[55];   // Random MAC on Boot
+    char val_4_5[55]; // check_inbox_at_startup
     char val_5[45];   // WiFi Connect
     char val_6[70];   // GPS Pins
     char val_7[70];   // GPS Logging
@@ -549,6 +551,10 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
     snprintf(val_4, sizeof(val_4),
             "Random MAC on Boot: %s",
             randomise_mac_at_boot ? "ON" : "OFF");
+
+    snprintf(val_4_5, sizeof(val_4_5),
+             "Check inbox at boot %s",
+             check_inbox_at_startup? "ON" : "OFF");
 
     snprintf(val_5, sizeof(val_5),
             "WiFi Connect: %s",
@@ -588,6 +594,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
         { val_2, 29 },   // Auto-Connect WiFi
         { val_3, 33 },   // Check Updates on Boot
         { val_4, 34 },   // Random MAC on Boot
+        { val_4_5, 9 },  //check_inbox_at_startup
 
         // Network / WiFi
         { val_5, 43 },   // WiFi Connect
@@ -622,7 +629,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
         { val_12, 49 }         // Skip EAPOL Check
     };
     
-    drawMenuList( new_settings_menu , 6, 24);
+    drawMenuList( new_settings_menu , 6, 25);
     prevMID = 6;
   }  
   else if (menuID == 7){
@@ -1588,7 +1595,23 @@ void runApp(uint8_t appID){
       debounceDelay();
       drawMenuList(wardrivingMenuWithWiggle, 9, 6);
     }
-    if(appID == 9){}
+    if(appID == 9){
+      drawHintBox("This function needs wifi on boot to be enabled and have a stable wifi connection to work!", 19);
+      String menu[] = {"On", "Off", "Back"};
+      uint8_t answer = drawMultiChoice("Check inbox at boot", menu, 3, 6, 0);
+      if(answer == 0){
+        check_inbox_at_startup = true;
+        saveSettings();
+        drawInfoBox("Info", "Check inbox at boot", "Enabled", true, false);
+      }
+      else if(answer == 1){
+        check_inbox_at_startup = false;
+        saveSettings();
+        drawInfoBox("Info", "Check inbox at boot", "Disabled", true, false);
+      }
+      menuID = 6;
+      return;
+    }
     if(appID == 10){
       drawHintBox("Due to compexity of pwngrid messenger, in some scenarios you may encounter stuttering or slowdowns.", 9);
       pwngridMessenger();
@@ -1742,6 +1765,7 @@ void runApp(uint8_t appID){
         bool answear = drawQuestionBox("CONFIRMATION", "Operate only if you ", "have premision!");
         if(answear){
           menuID = 5;
+          drawHintBox("Stealth mode mimics wifi router, kicking only 1 client at once.\n In the other hand, normal mode kicks all connected clients and that grately impoves capture.", 15);
           String sub_menu[] = {"Stealth (legacy)", "Normal"};
           int8_t modeChoice = drawMultiChoice("Select mode:", sub_menu, 2, 2, 2);
           debounceDelay();
@@ -2906,6 +2930,7 @@ void runApp(uint8_t appID){
     }
     if(appID == 61){
       // PMKID Grabber app - uses wifiChoice if available
+      drawHintBox("This is VERY experimental and may not work at all so expect no value from this function. This is only intended for devs for testing", 17);
       if(wifiChoice.equals("")){
         drawInfoBox("Error", "No wifi selected", "Use 'Select Networks' first", true, false);
         menuID = 2;
@@ -3254,6 +3279,7 @@ void runApp(uint8_t appID){
     }
     if(appID == 30){
       // GPS GPIO pins
+      drawHintBox("Deafult pinout only works with LORA cap on cardputer adv. For grove connector you'll need to configure custom ones", 16);
       String options[] = {"Use default pins", "Set custom pins"};
       int initial = useCustomGPSPins ? 1 : 0;
       int res = drawMultiChoice("GPS pins", options, 2, 6, initial);
@@ -3534,6 +3560,7 @@ void runApp(uint8_t appID){
         bool answear = drawQuestionBox("CONFIRMATION", "Operate only if you ", "have premision!");
         if(answear){
           menuID = 5;
+          drawHintBox("Stealth mode mimics wifi router, kicking only 1 client at once.\n In the other hand, normal mode kicks all connected clients and that grately impoves capture.", 15);
           String sub_menu[] = {"Stealth (legacy)", "Normal"};
           int8_t modeChoice = drawMultiChoice("Select mode:", sub_menu, 2, 2, 2);
           debounceDelay();
@@ -3751,6 +3778,7 @@ void runApp(uint8_t appID){
       return;
     }
     if(appID == 45){
+      drawHintBox("Enjoy the project? Consider donating at https://ko-fi.com/Devsur", 18);
       drawInfoBox("M5Gotchi", "v" + String(CURRENT_VERSION) + " by Devsur11  ", "www.github.com/Devsur11/M5Gotchi ", true, false);
       menuID = 6;
       return;
@@ -3819,130 +3847,7 @@ void runApp(uint8_t appID){
       return;
     }
     if(appID == 50){
-      String themeOptions[] = {"White", "Dark", "Blue", "Green", "Red", "Purple", "Orange", "Custom", "Back"};
-      int themeChoice = drawMultiChoice("Theme", themeOptions, 9, 6, 0);
-
-      switch(themeChoice) {
-        case 0: // White
-          bg_color = "#FFFFFFFF";
-          tx_color = "#000000";
-          if (saveSettings()) {
-            drawInfoBox("Theme", "White applied", "Restarting...", false, false);
-            delay(1000);
-            ESP.restart();
-          } else {
-            drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);
-          }
-          break;
-
-        case 1: // Dark
-          bg_color = "#000000FF";
-          tx_color = "#FFFFFFFF";
-          if (saveSettings()) {
-            drawInfoBox("Theme", "Dark applied", "Restarting...", false, false);
-            delay(1000);
-            ESP.restart();
-          } else {
-            drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);
-          }
-          break;
-
-        case 2: // Blue
-          bg_color = "#001F3FFF"; // navy
-          tx_color = "#FFFFFFFF";
-          if (saveSettings()) {
-            drawInfoBox("Theme", "Blue applied", "Restarting...", false, false);
-            delay(1000);
-            ESP.restart();
-          } else {
-            drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);
-          }
-          break;
-
-        case 3: // Green
-          bg_color = "#2ECC40FF"; // bright green
-          tx_color = "#000000FF";
-          if (saveSettings()) {
-            drawInfoBox("Theme", "Green applied", "Restarting...", false, false);
-            delay(1000);
-            ESP.restart();
-          } else {
-            drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);
-          }
-          break;
-
-        case 4: // Red
-          bg_color = "#FF4136FF"; // red
-          tx_color = "#FFFFFFFF";
-          if (saveSettings()) {
-            drawInfoBox("Theme", "Red applied", "Restarting...", false, false);
-            delay(1000);
-            ESP.restart();
-          } else {
-            drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);
-          }
-          break;
-
-        case 5: // Purple
-          bg_color = "#B10DC9FF"; // purple
-          tx_color = "#FFFFFFFF";
-          if (saveSettings()) {
-            drawInfoBox("Theme", "Purple applied", "Restarting...", false, false);
-            delay(1000);
-            ESP.restart();
-          } else {
-            drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);
-          }
-          break;
-
-        case 6: // Orange
-          bg_color = "#FF851BFF"; // orange
-          tx_color = "#000000FF";
-          if (saveSettings()) {
-            drawInfoBox("Theme", "Orange applied", "Restarting...", false, false);
-            delay(1000);
-            ESP.restart();
-          } else {
-            drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);
-          }
-          break;
-
-        case 7: { // Custom
-          drawInfoBox("Custom Theme", "Pick background color", "Ensure text is visible!", false, false);
-          delay(1000);
-          String customBg = colorPickerUI(false, "#000000FF");
-          if (customBg == "exited") break;
-
-          drawInfoBox("Custom Theme", "Pick text color", "Ensure text is visible!", false, false);
-          delay(1000);
-          String customTx = colorPickerUI(true, customBg);
-          if (customTx == "exited") break;
-
-          if(customBg == customTx) {
-            drawInfoBox("Error", "Text and background colors", "cannot be the same!", true, false);
-            break;
-          }
-
-          bg_color = customBg;
-          tx_color = customTx;
-          if (saveSettings()) {
-            drawInfoBox("Theme", "Custom applied", "Restarting...", false, false);
-            delay(1000);
-            ESP.restart();
-          } else {
-            drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);
-          }
-          break;
-        }
-
-        default: // Back
-          menuID = 6;
-          return;
-      }
-
-      // always return to settings menu if not restarting
-      menuID = 6;
-      return;
+      themeMenu();
     }
     if(appID == 51){
       bool confirm = drawQuestionBox("Factory Reset", "Delete all config data?", "", "Press 'y' to confirm, 'n' to cancel");
@@ -5712,3 +5617,78 @@ void sendCrashReport(){
 }
 
 #endif
+
+void themeMenu() {
+  String themeOptions[] = {
+    "White", "Dark", "Blue", "Green", "Red", "Purple", "Orange", // Original 7
+    "Midnight", "Nord", "Forest", "Matrix", "Sepia",            // Pro 5
+    "Sky", "Rose", "Lavender", "Coffee", "Gold",                // Soft 5
+    "Gameboy", "C64", "Cyberpunk", "Dracula", "Ocean",          // Retro/Special 5
+    "High Viz", "Custom", "Back"                                // Misc 3
+  };
+
+  // Total items: 25
+  int themeChoice = drawMultiChoice("Theme", themeOptions, 25, 6, 0);
+  
+  bool shouldSave = true;
+
+  switch(themeChoice) {
+    // --- ORIGINAL COLORS ---
+    case 0: bg_color = "#FFFFFFFF"; tx_color = "#000000FF"; break;
+    case 1: bg_color = "#000000FF"; tx_color = "#FFFFFFFF"; break;
+    case 2: bg_color = "#001F3FFF"; tx_color = "#FFFFFFFF"; break;
+    case 3: bg_color = "#2ECC40FF"; tx_color = "#000000FF"; break;
+    case 4: bg_color = "#FF4136FF"; tx_color = "#FFFFFFFF"; break;
+    case 5: bg_color = "#B10DC9FF"; tx_color = "#FFFFFFFF"; break;
+    case 6: bg_color = "#FF851BFF"; tx_color = "#000000FF"; break;
+
+    // --- PROFESSIONAL ---
+    case 7: bg_color = "#1A1B26FF"; tx_color = "#A9B1D6FF"; break; // Midnight
+    case 8: bg_color = "#2E3440FF"; tx_color = "#ECEFF4FF"; break; // Nord
+    case 9: bg_color = "#0B120BFF"; tx_color = "#95AD95FF"; break; // Forest
+    case 10: bg_color = "#000000FF"; tx_color = "#00FF41FF"; break; // Matrix
+    case 11: bg_color = "#F4ECD8FF"; tx_color = "#5B4636FF"; break; // Sepia
+
+    // --- SOFT / MODERN ---
+    case 12: bg_color = "#E0F2F1FF"; tx_color = "#004D40FF"; break; // Sky
+    case 13: bg_color = "#FCE4ECFF"; tx_color = "#880E4FFF"; break; // Rose
+    case 14: bg_color = "#F3E5F5FF"; tx_color = "#4A148CFF"; break; // Lavender
+    case 15: bg_color = "#3E2723FF"; tx_color = "#D7CCC8FF"; break; // Coffee
+    case 16: bg_color = "#FFF9C4FF"; tx_color = "#F57F17FF"; break; // Gold
+
+    // --- RETRO & SPECIAL ---
+    case 17: bg_color = "#9BBC0FFF"; tx_color = "#0F380FFF"; break; // Gameboy Green
+    case 18: bg_color = "#352879FF"; tx_color = "#6C5EB5FF"; break; // Commodore 64 Blue
+    case 19: bg_color = "#000000FF"; tx_color = "#F0E68CFF"; break; // Cyberpunk
+    case 20: bg_color = "#282A36FF"; tx_color = "#FF79C6FF"; break; // Dracula Pink
+    case 21: bg_color = "#0077BEFF"; tx_color = "#FFFFFFFF"; break; // Deep Ocean
+    case 22: bg_color = "#FFFF00FF"; tx_color = "#000000FF"; break; // High Viz (Yellow/Black)
+
+    case 23: { // Custom
+      drawInfoBox("Custom Theme", "Pick background", "Selection UI", false, false);
+      String customBg = colorPickerUI(false, "#000000FF");
+      if (customBg == "exited") { shouldSave = false; break; }
+      String customTx = colorPickerUI(true, customBg);
+      if (customTx == "exited" || customBg == customTx) { shouldSave = false; break; }
+      bg_color = customBg; tx_color = customTx;
+      break;
+    }
+
+    default: // Back
+      menuID = 6;
+      return;
+  }
+
+  if (shouldSave) {
+    if (saveSettings()) {
+      drawInfoBox("Theme", "Saving Theme...", "Restarting...", false, false);
+      delay(800);
+      ESP.restart();
+    } else {
+      drawInfoBox("ERROR", "Save failed!", "Check SD Card", true, false);
+      delay(2000);
+    }
+  }
+
+  menuID = 6;
+}
