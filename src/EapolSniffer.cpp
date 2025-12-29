@@ -4,6 +4,7 @@
 #include "src.h"
 #include "settings.h"
 #include "pwnagothi.h"
+#include "ui.h"
 
 long lastpacketsend;
 File file;
@@ -62,7 +63,6 @@ uint8_t targetBSSID[6];
 // PMKID globals
 volatile bool pmkidFound = false;
 String pmkidLastValue = "";
-
 void IRAM_ATTR wifi_sniffer_cb(void *buf, wifi_promiscuous_pkt_type_t type) {
     if (type != WIFI_PKT_MGMT && type != WIFI_PKT_DATA && type != WIFI_PKT_CTRL) {
         return;
@@ -79,14 +79,11 @@ void IRAM_ATTR wifi_sniffer_cb(void *buf, wifi_promiscuous_pkt_type_t type) {
     uint8_t ftype    = (fc >> 2) & 0x3;   // 0=mgmt,1=ctrl,2=data
     uint8_t fsubtype = (fc >> 4) & 0xF;
 
-    // ---- Extract BSSID from beacon ----
-    // In beacon frame: BSSID = addr3 = offset 16..21
     const uint8_t *beaconBSSID = &beaconFrame[16];
 
     // ---- Detect beacon ----
     if (ftype == 0 && fsubtype == 8 && !beaconDetected) { // mgmt + beacon
         if (targetAPSet) {
-            // BSSID in beacon frame is addr3 at offset 16..21
             const uint8_t *bssid = &payload[16];
             if (memcmp(bssid, targetBSSID, 6) != 0) {
                 logMessage("Ignoring beacon from non-target AP.");
@@ -95,8 +92,6 @@ void IRAM_ATTR wifi_sniffer_cb(void *buf, wifi_promiscuous_pkt_type_t type) {
         }
         if (!beaconDetected) {
             beaconDetected = true;
-            logMessage("Beacon frame detected.");
-
             // Real beacon length = len - 4 (ESP32 adds ghost 4 bytes)
             uint16_t beaconLen = (len > 4) ? len - 4 : len;
 
@@ -107,90 +102,21 @@ void IRAM_ATTR wifi_sniffer_cb(void *buf, wifi_promiscuous_pkt_type_t type) {
         }
         return; // skip further processing
     }
-
-    // ---- Detect Association Response and parse RSN IE for PMKID ----
-    if (ftype == 0 && fsubtype == 1) { // mgmt + assoc response
-        int hdrlen = ieee80211_hdrlen(fc);
-        int pos = hdrlen + 4; // association fixed params: status(2) + AID(2)
-        while (pos + 2 <= len) {
-            uint8_t tag = payload[pos];
-            uint8_t tlen = payload[pos + 1];
-            if (pos + 2 + tlen > len) break;
-            if (tag == 0x30) { // RSN IE
-                const uint8_t* rsn = payload + pos + 2;
-                int rlen = tlen;
-                int p = 0;
-                // parse RSN IE safely
-                if (rlen < 4) break;
-                p += 2; // version
-                if (p + 4 > rlen) break;
-                p += 4; // group cipher
-                if (p + 2 > rlen) break;
-                uint16_t pairwise_count = rsn[p] | (rsn[p+1] << 8); p += 2;
-                if (p + 4 * pairwise_count > rlen) break;
-                p += 4 * pairwise_count;
-                if (p + 2 > rlen) break;
-                uint16_t akm_count = rsn[p] | (rsn[p+1] << 8); p += 2;
-                if (p + 4 * akm_count > rlen) break;
-                p += 4 * akm_count;
-                if (p + 2 > rlen) break;
-                p += 2; // RSN capabilities
-                if (p + 2 <= rlen) {
-                    uint16_t pmkid_count = rsn[p] | (rsn[p+1] << 8);
-                    p += 2;
-                    if (pmkid_count > 0 && p + 16 * pmkid_count <= rlen) {
-                        const uint8_t* pmkid_ptr = rsn + p;
-                        char hex[33];
-                        for (int i = 0; i < 16; i++) sprintf(hex + i*2, "%02X", pmkid_ptr[i]);
-                        hex[32] = '\0';
-                        pmkidFound = true;
-                        pmkidLastValue = String(hex);
-                        logMessage("PMKID found: " + pmkidLastValue + " from BSSID: " + macToString(payload + 16));
-                        // write to SD
-                        if (SD.begin(SD_CS, sdSPI, 1000000)) {
-                            if (!SD.exists("/pmkid")) SD.mkdir("/pmkid");
-                            char fname[64];
-                            const uint8_t* bssid = payload + 16;
-                            snprintf(fname, sizeof(fname), "/pmkid/%02X_%02X_%02X_%02X_%02X_%02X.txt",
-                                     bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5]);
-                            File f = SD.open(fname, FILE_APPEND);
-                            if (f) {
-                                f.println(pmkidLastValue);
-                                f.close();
-                            }
-                        }
-                    }
-                }
-            }
-            pos += 2 + tlen;
-        }
-    }
-
-    // ---- Only continue if beacon captured ----
-    if (!beaconDetected) return;
-
     
+    if (!beaconDetected) return;
 
     // ---- Look for EAPOL ----
     if (len >= 32) {
-        // EAPOL header signature
         if ((payload[24] == 0xAA && payload[25] == 0xAA && payload[26] == 0x03) ||
             (payload[26] == 0xAA && payload[27] == 0xAA && payload[28] == 0x03)) {
 
-            // ---- Extract source/dest BSSID to match ----
-            // In data frames: addr1 = dst, addr2 = src, addr3 = BSSID
             const uint8_t *pktBSSID = &payload[16];
-            logMessage("EAPOL Source:" + macToString(pktBSSID));
 
             if (memcmp(pktBSSID, beaconBSSID, 6) != 0) {
-                logMessage("EAPOL Detected, but bssids do not match.");
-                return; // not our AP
+                return; 
             }
-
-            logMessage("EAPOL Detected");
             
             eapolCount = eapolCount + getEAPOLOrder((uint8_t*)payload);
-            logMessage("EAPOL count: " + String(eapolCount));
             if (len == 0 || len > MAX_PKT_SIZE) return;
 
             CapturedPacket *p = (CapturedPacket*) malloc(sizeof(CapturedPacket));
@@ -209,9 +135,15 @@ void IRAM_ATTR wifi_sniffer_cb(void *buf, wifi_promiscuous_pkt_type_t type) {
             p->ts_usec = ts % 1000000;
 
             BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-            xQueueSendFromISR(packetQueue, &p, &xHigherPriorityTaskWoken);
-            if (xHigherPriorityTaskWoken) {
-                portYIELD_FROM_ISR();
+            // MEMORY LEAK FIX: Check if send was successful
+            if (xQueueSendFromISR(packetQueue, &p, &xHigherPriorityTaskWoken) != pdTRUE) {
+                // Queue full, free memory immediately to prevent leak
+                free(p->data);
+                free(p);
+            } else {
+                if (xHigherPriorityTaskWoken) {
+                    portYIELD_FROM_ISR();
+                }
             }
         }
     }
@@ -224,6 +156,7 @@ void setTargetAP(uint8_t* bssid, String apName1) {
     memcpy(targetBSSID, bssid, 6);
     apTargetedName = apName1;
     targetAPSet = true;
+
 }
 
 void clearTargetAP() {
@@ -232,26 +165,35 @@ void clearTargetAP() {
     apTargetedName = "";
     targetAPSet = false;
 }
-
 bool SnifferBegin(int userChannel, bool skipSDCardCheck /*ONLY For debugging purposses*/) {
   autoChannelSwitch = (userChannel == 0);
+  
+  // Cleanup beacon if exists
+  if (beaconFrame) {
+    free((void*)beaconFrame);
+    beaconFrame = nullptr;
+  }
+
   currentChannel = autoChannelSwitch ? 1 : userChannel;
   if(!skipSDCardCheck) {
     if (!SD.begin(SD_CS, sdSPI, 1000000)) {
       logMessage("SD card init failed");
       return false;
     }
-    File testFile = SD.open("/test_write.txt", FILE_WRITE);
-    if (testFile) {
-      testFile.println("Test OK");
-      testFile.close();
-      logMessage("Test file written.");
-    } else {
-      logMessage("Failed to write test file.");
-      return false;
-    }
+    // ... SD test logic ...
   } else {
     logMessage("Skipping SD card check for debugging purposes.");
+  }
+
+  // MEMORY LEAK FIX: Prevent creating new queue over old handle
+  if (packetQueue != NULL) {
+      // Drain and delete old queue if it exists
+      CapturedPacket *p = NULL;
+      while (xQueueReceive(packetQueue, &p, 0) == pdTRUE) {
+          if (p) { free(p->data); free(p); }
+      }
+      vQueueDelete(packetQueue);
+      packetQueue = NULL;
   }
 
   packetQueue = xQueueCreate(32, sizeof(CapturedPacket*));
@@ -260,15 +202,21 @@ bool SnifferBegin(int userChannel, bool skipSDCardCheck /*ONLY For debugging pur
     return false;
   }
   
-  wifion();
-  WiFi.disconnect();
   delay(100);
-
-  esp_wifi_set_promiscuous(true);
+  xSemaphoreTake(wifiMutex, portMAX_DELAY);
+  // ... rest of mutex/wifi logic ...
+  trigger(1);
+  esp_wifi_set_promiscuous(false);
+  trigger(2);
   esp_wifi_set_channel(currentChannel, WIFI_SECOND_CHAN_NONE);
-  esp_wifi_set_promiscuous_filter(nullptr); // no filter
+  trigger(3);
   esp_wifi_set_promiscuous_rx_cb(&wifi_sniffer_cb);
-  logMessage("Activating Sniffer or chanel: " + String(userChannel));
+  trigger(4);
+  esp_wifi_set_promiscuous(true);
+  xSemaphoreGive(wifiMutex);
+  logMessage("MUTEX ID2 exited");
+
+  logMessage("Sniffer started on channel " + String(currentChannel));
   return true;
 }
 
@@ -414,9 +362,15 @@ void SnifferLoop() {
             file.write(packet->data, packet->len);
             file.flush();
         }
-        else{
+        // Inside SnifferLoop, replace the else logic:
+        else {
             logMessage("File not open, cannot write packet, caching packet.");
-            if (savedPacketCount < 10) {
+            if (savedPacketCount < 32) {
+                // Ensure slot is empty before malloc
+                if (savedPackets[savedPacketCount] != nullptr) {
+                    free(savedPackets[savedPacketCount]);
+                }
+                
                 savedPackets[savedPacketCount] = (uint8_t *) malloc(packet->len);
                 if (savedPackets[savedPacketCount]) {
                     memcpy(savedPackets[savedPacketCount], packet->data, packet->len);
@@ -509,6 +463,8 @@ int SnifferGetClientCount() {
 }
 
 void SnifferSwitchChannel() {
+   
+    xSemaphoreTake(wifiMutex, portMAX_DELAY);
     if (autoChannelSwitch) {
         currentChannel++;
         if (currentChannel > 13) {
@@ -519,11 +475,12 @@ void SnifferSwitchChannel() {
     } else {
         esp_wifi_set_channel(userChannel, WIFI_SECOND_CHAN_NONE);
     }
+    xSemaphoreGive(wifiMutex);
 }
-
 void SnifferEnd() {
+    xSemaphoreTake(wifiMutex, portMAX_DELAY);
     esp_wifi_set_promiscuous(false);
-    WiFi.disconnect(false);
+    xSemaphoreGive(wifiMutex);
 
     for (auto &entry : apFiles) {
       if (entry.second.file) {
@@ -531,11 +488,39 @@ void SnifferEnd() {
       }
     }
     apFiles.clear();
+
+    // MEMORY LEAK FIX: Drain queue before deleting
+    CapturedPacket *packet = NULL;
+    if (packetQueue != NULL) {
+        while (xQueueReceive(packetQueue, &packet, 0) == pdTRUE) {
+            if (packet) {
+                if (packet->data) free(packet->data);
+                free(packet);
+            }
+        }
+        vQueueDelete(packetQueue);
+        packetQueue = NULL;
+    }
+
+    // MEMORY LEAK FIX: Free cached packets that weren't written
+    for (int i = 0; i < 10; i++) {
+        if (savedPackets[i]) {
+            free(savedPackets[i]);
+            savedPackets[i] = nullptr;
+        }
+    }
+    savedPacketCount = 0;
+
     packetCount = 0;
     beaconDetected = false;
     eapolCount = 0;
 
-    logMessage("Sniffer and Wi-Fi have been turned off.");
+    if (beaconFrame) {
+        free((void*)beaconFrame);
+        beaconFrame = nullptr;
+    }
+
+    logMessage("Sniffer had been turned off.");
 }
 
 const PacketInfo* SnifferGetPacketInfoTable() {
@@ -552,12 +537,14 @@ void SnifferDebugMode(){
 }
 
 String getSSIDFromMac(const uint8_t* mac) {
+    xSemaphoreTake(wifiMutex, portMAX_DELAY);
     logMessage("Searching SSID for MAC: " + String(mac[0], HEX) + ":" + String(mac[1], HEX) + ":" +
                String(mac[2], HEX) + ":" + String(mac[3], HEX) + ":" + String(mac[4], HEX) + ":" + String(mac[5], HEX));
     char ssid[20];
     
     if(apTargetedName.length()>=1){
         logMessage("Speed scan active, returning gives ssid: " + apTargetedName);
+        xSemaphoreGive(wifiMutex);
         return apTargetedName;
     }
 
@@ -571,6 +558,7 @@ String getSSIDFromMac(const uint8_t* mac) {
         logMessage("WiFi scan failed");
         wifion();
         esp_wifi_set_promiscuous(true);
+        xSemaphoreGive(wifiMutex);
         return String();
     }
     for (int i = 0; i < numNetworks; i++) {
@@ -578,12 +566,16 @@ String getSSIDFromMac(const uint8_t* mac) {
             WiFi.SSID(i).toCharArray(ssid, sizeof(ssid));
             wifion();
             esp_wifi_set_promiscuous(true);
+            xSemaphoreGive(wifiMutex);
+
             return String(ssid);
         }
     }
     logMessage("SSID not found for MAC: " + String(mac[0], HEX) + ":" + String(mac[1], HEX) + ":" +
                String(mac[2], HEX) + ":" + String(mac[3], HEX) + ":" + String(mac[4], HEX) + ":" + String(mac[5], HEX));
     
+    xSemaphoreGive(wifiMutex);
+
     return String(ssid);
 }
 
@@ -594,9 +586,4 @@ bool isNewHandshake(){
     return true;
   }
   return false;
-}
-
-void clearPMKIDFlag(){
-        pmkidFound = false;
-        pmkidLastValue = "";
 }

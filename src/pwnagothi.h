@@ -21,4 +21,4 @@ void speedScanCallback(void* buf, wifi_promiscuous_pkt_type_t type);
 void speedScan();
 void speedScanTestAndPrintResults();
 void pwnagothiStealthLoop();
-std::vector<wifiSpeedScan> getSpeedScanResults();
+const std::vector<wifiSpeedScan>& getSpeedScanResults();

@@ -480,14 +480,6 @@ bool needsUiRedraw = true;
 static unsigned long lastRedrawTime = 0;
 
 void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
-  if(pwnagothiMode && triggerPwnagothi){
-    if(!stealth_mode){
-      pwnagothiLoop();
-    }
-    else{
-      pwnagothiStealthLoop();
-    }
-  }
   keyboard_changed = M5Cardputer.Keyboard.isChange();
   if(keyboard_changed){Sound(10000, 100, sound);}       
   if (toggleMenuBtnPressed()) {
@@ -662,7 +654,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
   {
     //redraw only in 5 seconds intervals
     unsigned long currentTime = millis();
-    if (currentTime - lastRedrawTime >= 10000 || needsUiRedraw) {
+    if ((currentTime - lastRedrawTime >= 10000 )|| needsUiRedraw || pwnagothiMode) {
       if(prevMID){
         drawInfoBox("", "Refreshing data...", "", false, false);
         prevMID=0;
@@ -681,6 +673,14 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
   }
   canvas_main.pushSprite(0, canvas_top_h);
   M5.Display.endWrite();
+  if(pwnagothiMode && triggerPwnagothi){
+    if(!stealth_mode){
+      pwnagothiLoop();
+    }
+    else{
+      pwnagothiStealthLoop();
+    }
+  }
 }
 
 void redrawUi(bool show_toolbars) {
@@ -852,19 +852,18 @@ void drawMood(String face, String phrase) {
             }
         }
     } else {
-        // fallback: display face as text
-        if (canvas_main.loadFont(SD, "/fonts/big.vlw")) {}
-        else {
-          logMessage("Failed to load font for mood face");
-        }
+        canvas_main.loadFont(SD, "/fonts/big.vlw");
+        delay(50);
         canvas_main.setTextColor(fg, bg);
         canvas_main.setTextSize(0.35);
         canvas_main.drawString(face, 5, 23);
+        canvas_main.unloadFont();
+        delay(50);
     }
 
     // Draw phrase
     //now lets return to default font
-    canvas_main.unloadFont();
+    
     canvas_main.setTextSize(1.2);
     canvas_main.setTextColor(fg, bg);
     canvas_main.setCursor(3, canvas_h - 47);
@@ -1480,8 +1479,6 @@ void pwngridMessenger() {
   }
 }
 
-inline void trigger(uint8_t trigID){logMessage("Trigger" + String(trigID));}
-
 String isoTimestampToDateTimeString(String isoTimestamp) {
     if (isoTimestamp.length() < 19) {
         return "Invalid Timestamp";
@@ -1763,7 +1760,7 @@ void runApp(uint8_t appID){
           if(pwnagothiBegin()){
             auto_mode_and_wardrive = true;
             pwnagothiMode = true;
-            menuID = 5;
+            menuID = 0;
             return;
           }
           else{
@@ -2294,7 +2291,7 @@ void runApp(uint8_t appID){
       String menu[] = {"Select file", "Use default"};
       int8_t fileChoice = drawMultiChoice("CSV File Option:", menu, 2, 2, 0);
       debounceDelay();
-      if(fileChoice = -1){
+      if(fileChoice == -1){
         menuID = 9;
         return;
       }
@@ -2844,7 +2841,9 @@ void runApp(uint8_t appID){
             Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
             if(status.enter){
               debounceDelay();
+              xSemaphoreTake(wifiMutex, portMAX_DELAY);
               esp_wifi_set_promiscuous(false);
+              xSemaphoreGive(wifiMutex);
               break;
             }
           }
@@ -2954,10 +2953,9 @@ void runApp(uint8_t appID){
 
       if (drawQuestionBox("Proceed?", "Grab PMKID from:", wifiChoice)) {
         drawInfoBox("PMKID", "Starting grabber...", "Please wait", false, false);
-        clearPMKIDFlag();
         bool ok = GrabPMKIDForAP(bssidPtr, ch, 30000); // 30s timeout
         if (ok) {
-          drawInfoBox("Success", "PMKID captured", pmkidLastValue, true, false);
+          drawInfoBox("Success", "PMKID captured", "", true, false);
         } else {
           drawInfoBox("Info", "No PMKID captured", "Try again later", true, false);
         }
@@ -2977,10 +2975,12 @@ void runApp(uint8_t appID){
           uint8_t chanelSwitch = 1;
           static unsigned long lastSwitchTime = millis();
           const unsigned long channelSwitchInterval = 500;  
+          xSemaphoreTake(wifiMutex, portMAX_DELAY);
           esp_wifi_set_channel(answerrr, WIFI_SECOND_CHAN_NONE);
           wifion();  // Ustawienie trybu WiFi na stację
           esp_wifi_set_promiscuous(true);  // Włączenie trybu promiskuitywnego
           esp_wifi_set_promiscuous_rx_cb(client_sniff_promiscuous_rx_cb);
+          xSemaphoreGive(wifiMutex);
           logMessage("Started mac sniffing!");
           canvas_main.clear();
           uint8_t line;
@@ -3023,11 +3023,12 @@ void runApp(uint8_t appID){
             Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
             for(auto i : status.word){
               if(i=='`'){
+              xSemaphoreTake(wifiMutex, portMAX_DELAY);
               esp_wifi_set_promiscuous(false);
-              WiFi.mode(WIFI_MODE_NULL);
               clearClients();
               logMessage("User stopped mac sniffing");
               wifion();
+              xSemaphoreGive(wifiMutex);
               menuID = 2;
               return;
               }
@@ -3039,7 +3040,9 @@ void runApp(uint8_t appID){
                 chanelSwitch = 1;  // Loop back to channel 1
               }
               lastSwitchTime = millis();
+              xSemaphoreTake(wifiMutex, portMAX_DELAY);
               esp_wifi_set_channel(chanelSwitch , WIFI_SECOND_CHAN_NONE);
+              xSemaphoreGive(wifiMutex);
             }
 
           }
@@ -3548,7 +3551,7 @@ void runApp(uint8_t appID){
           menuID = 5;
           if(pwnagothiBegin()){
             pwnagothiMode = true;
-            menuID = 5;
+            menuID = 0;
             return;
           }
           else{

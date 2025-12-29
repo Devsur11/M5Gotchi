@@ -63,9 +63,6 @@ const uint8_t pwngrid_beacon_raw[] = {
 
 const int raw_beacon_len = sizeof(pwngrid_beacon_raw);
 
-esp_err_t esp_wifi_80211_tx(wifi_interface_t ifx, const void *buffer, int len,
-                            bool en_sys_seq);
-
 esp_err_t pwngridAdvertise(uint8_t channel, String face) {
   if(!(pwngrid_indentity.length() > 10)){
     return ESP_ERR_NOT_SUPPORTED;
@@ -134,8 +131,10 @@ esp_err_t pwngridAdvertise(uint8_t channel, String face) {
   delay(102);
   // https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/network/esp_wifi.html#_CPPv417esp_wifi_80211_tx16wifi_interface_tPKvib
   // Send only the used portion of the buffer (frame_byte)
+  xSemaphoreTake(wifiMutex, portMAX_DELAY);
   esp_err_t result = esp_wifi_80211_tx(WIFI_IF_AP, pwngrid_beacon_frame,
                                        frame_byte, false);
+  xSemaphoreGive(wifiMutex);
   free(pwngrid_beacon_frame);
   return result;
 }
@@ -315,6 +314,7 @@ void pwnSnifferCallback(void *buf, wifi_promiscuous_pkt_type_t type) {
 #include "WiFi.h"
 
 void initPwngrid() {  
+  xSemaphoreTake(wifiMutex, portMAX_DELAY);
   wifi_init_config_t WIFI_INIT_CONFIG = WIFI_INIT_CONFIG_DEFAULT();
   esp_wifi_init(&WIFI_INIT_CONFIG);
   esp_wifi_set_storage(WIFI_STORAGE_RAM);
@@ -324,6 +324,7 @@ void initPwngrid() {
   esp_wifi_set_promiscuous_rx_cb(&pwnSnifferCallback);
   esp_wifi_set_promiscuous(true);
   delay(1);
+  xSemaphoreGive(wifiMutex);
   //check if task is already created
   if (xTaskGetHandle("pwngridTx") == NULL) {
     logMessage("Starting pwngrid advertise task");

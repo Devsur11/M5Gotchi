@@ -19,9 +19,10 @@ bool nextWiFiCheck = false;
 
 std::vector<wifiSpeedScan> g_speedScanResults;
 
-std::vector<wifiSpeedScan> getSpeedScanResults(){
+const std::vector<wifiSpeedScan>& getSpeedScanResults() {
     return g_speedScanResults;
 }
+
 
 void speedScanCallback(void* buf, wifi_promiscuous_pkt_type_t type){
     if(type != WIFI_PKT_MGMT){
@@ -86,15 +87,19 @@ void speedScanCallback(void* buf, wifi_promiscuous_pkt_type_t type){
 void speedScan(){
     logMessage("Starting speed scan...");
     g_speedScanResults.clear();
+    g_speedScanResults.shrink_to_fit();
     //go quickly through channels 1-13
-    esp_wifi_set_promiscuous(true);
+    xSemaphoreTake(wifiMutex, portMAX_DELAY);
     esp_wifi_set_promiscuous_rx_cb(speedScanCallback);
+    esp_wifi_set_promiscuous(true);
     for(int ch = 1; ch <= 13; ch++){
         esp_wifi_set_channel(ch, WIFI_SECOND_CHAN_NONE);
         delay(120); // dwell time on each channel - adjust as needed
     }
-    logMessage("Speed scan completed, found " + String(g_speedScanResults.size()) + " unique SSIDs.");
     esp_wifi_set_promiscuous(false);
+    xSemaphoreGive(wifiMutex);
+    logMessage("Speed scan completed, found " + String(g_speedScanResults.size()) + " unique SSIDs.");
+    
     for(auto &entry : g_speedScanResults){
         logMessage("SSID: " + entry.ssid + " | RSSI: " + String(entry.rssi) + " | Channel: " + String(entry.channel) + " | Secure: " + String(entry.secure));
     }
@@ -248,9 +253,11 @@ void pwnagothiLoop(){
     }
     else{
         // ensure we have results and index is in range
+        printHeapInfo();
         if(g_speedScanResults.empty()){
             tot_sad_epochs++;
             logMessage("No speed-scan results available, scheduling new scan.");
+            wifion();
             pwnagothiScan = true;
             return;
         }
@@ -328,6 +335,7 @@ void pwnagothiLoop(){
                 logMessage("Deauth disabled in settings, proceeding to sniff...");
             }
             else{
+                pwnagothiScan = true;
                 return;
             }
         }
@@ -358,8 +366,11 @@ void pwnagothiLoop(){
                 }
                 lastPwnedAP = attackVector;
                 updateUi(true, false);
+                trigger(1);
                 SnifferEnd();
-                initPwngrid();
+                trigger(2);
+                //initPwngrid();
+                trigger(3);
                 pwned_ap++;
                 sessionCaptures++;
                 wifiCheckInt++;
@@ -420,7 +431,10 @@ void pwnagothiLoop(){
     setIDLEMood();
     updateUi(true, false);
     delay(pwnagotchi.nap_time);
+    lastSessionPeers = getPwngridTotalPeers();
+    lastSessionTime = millis();
     allTimeEpochs++;
+    saveSettings();
 }
 
 

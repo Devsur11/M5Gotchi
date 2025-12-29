@@ -4,16 +4,17 @@
 #include "SD.h"
 #include "logger.h"
 #include "pwnagothi.h"
+#include "ui.h"
 
 String hostname = "M5Gotchi";
-bool sound = true;
+bool sound = false;
 int brightness = 150;
 uint16_t pwned_ap;
 SPIClass sdSPI;
 String savedApSSID;
 String savedAPPass;
 std::vector<SavedNetwork> savedNetworks;
-bool connectWiFiOnStartup = false;
+bool connectWiFiOnStartup = true;
 String whitelist;
 File FConf;
 bool pwnagothiMode = false;
@@ -34,7 +35,7 @@ uint64_t lastTokenRefresh;
 String wiggle_api_key = "";
 bool cardputer_adv = false;
 bool limitFeatures = false;
-bool checkUpdatesAtNetworkStart = false;
+bool checkUpdatesAtNetworkStart = true;
 uint8_t gpsTx;
 uint8_t gpsRx;
 bool useCustomGPSPins = false;
@@ -297,7 +298,12 @@ bool initVars() {
         if (error) {
             logMessage("deserializeJson() failed: ");
             logMessage(error.c_str());
+            initColorSettings();
+            initUi();
+            drawInfoBox("CRITICALL ERROR!", "Config file is corrupted and will be recreated. All settings will be lost!","",  false, false);
+            delay(5000);
             return false;
+            //SD.remove(NEW_CONFIG_FILE);
         }
 
         // Load each option, fallback to default if missing

@@ -223,7 +223,15 @@ void setup() {
   }
 
   // now start WiFi
+  if (wifiMutex == NULL) {
+    wifiMutex = xSemaphoreCreateMutex();
+    if (wifiMutex == NULL) {
+      logMessage("Failed to create WiFi mutex");
+      abort(); // seriously, no point continuing
+    }
+  }
   wifion();
+
   logMessage("Generated and set random MAC address: " + String(WiFi.macAddress()));
 
   #ifdef ENABLE_COREDUMP_LOGGING

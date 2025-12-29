@@ -3,6 +3,7 @@
 #include <Arduino.h>
 #include <SD.h>
 #include "logger.h"
+#include "settings.h"
 
 static uint8_t targetBSSID[6];
 static bool targetSet = false;
@@ -55,9 +56,10 @@ bool GrabPMKIDForAP(const uint8_t *apBSSID, int channel, int timeoutMs) {
     beaconRSNLen = 0;
     setTarget(apBSSID);
     genClientMAC();
-
+    xSemaphoreTake(wifiMutex, portMAX_DELAY);
     esp_wifi_set_promiscuous(true);
     esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
+    xSemaphoreGive(wifiMutex);
 
     // ---- AUTH FRAME (Open System, correct 30 bytes) ----
     uint8_t auth[30] = {
@@ -70,8 +72,9 @@ bool GrabPMKIDForAP(const uint8_t *apBSSID, int channel, int timeoutMs) {
         0x01, 0x00, // seq 1
         0x00, 0x00  // status
     };
-
+    xSemaphoreTake(wifiMutex, portMAX_DELAY);
     esp_wifi_80211_tx(WIFI_IF_STA, auth, sizeof(auth), false);
+    xSemaphoreGive(wifiMutex);
     vTaskDelay(20 / portTICK_PERIOD_MS);
 
     // ---- Wait for beacon RSN ----
@@ -111,7 +114,9 @@ bool GrabPMKIDForAP(const uint8_t *apBSSID, int channel, int timeoutMs) {
     memcpy(&assoc[p], beaconRSN, beaconRSNLen);
     p += beaconRSNLen;
 
+    xSemaphoreTake(wifiMutex, portMAX_DELAY);
     esp_wifi_80211_tx(WIFI_IF_STA, assoc, p, false);
+    xSemaphoreGive(wifiMutex);
 
     start = millis();
     while (!pmkidFound && millis() - start < (uint32_t)timeoutMs) {

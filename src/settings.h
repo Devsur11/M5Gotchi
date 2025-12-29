@@ -5,6 +5,10 @@
 #include "WiFi.h"
 #include <vector>
 #include "pwngrid.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
+
+SemaphoreHandle_t wifiMutex = NULL;
 
 extern "C" {
   #include "esp_heap_caps.h"
@@ -18,8 +22,10 @@ void printHeapInfo() {
 }
 
 bool wifion(){
-    WiFi.mode(WIFI_MODE_APSTA);
-    WiFi.softAP("pwngrid", NULL, 1, 1, 1);
+    if(WiFi.getMode() !=WIFI_MODE_APSTA)
+    {
+    initPwngrid();
+    }
     return true;
 }
 

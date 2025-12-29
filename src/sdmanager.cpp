@@ -902,95 +902,102 @@ void sdmanager::runFileManager() {
   }
 }
 
-//simple file selector
-String sdmanager::selectFile(const String allowedExtentions){
-  String selectedFile = "";
-  String currentPath = "/";
+// fixed file selector, behaves like runFileManager
+String sdmanager::selectFile(const String allowedExtensions) {
+  String curPath = "/";
   std::vector<Entry> entries;
-  int curIndex = 0;
-  int scrollIndex = 0;
+  int cur = 0;
+  int scroll = 0;
 
-  while (true) {
-    listDirectory(currentPath, entries);
-    // Filter entries based on allowed extensions
-    std::vector<Entry> filteredEntries;
-    for (size_t i = 0; i < entries.size(); ++i) {
-      if (entries[i].isDir) {
-        filteredEntries.push_back(entries[i]);
+  if (!SD.begin()) return "";
+
+  auto reloadDir = [&]() {
+    std::vector<Entry> all;
+    listDirectory(curPath, all);
+
+    entries.clear();
+    for (auto &e : all) {
+      if (e.isDir) {
+        entries.push_back(e);
       } else {
-        // check extension
-        int dotIdx = entries[i].name.lastIndexOf('.');
-        if (dotIdx >= 0) {
-          String ext = entries[i].name.substring(dotIdx);
-          if (allowedExtentions.indexOf(ext) >= 0) {
-            filteredEntries.push_back(entries[i]);
+        int dot = e.name.lastIndexOf('.');
+        if (dot >= 0) {
+          String ext = e.name.substring(dot);
+          if (allowedExtensions.indexOf(ext) >= 0) {
+            entries.push_back(e);
           }
         }
       }
     }
-    entries = filteredEntries;
 
-    drawEntries(currentPath, entries, curIndex, scrollIndex);
+    cur = 0;
+    scroll = 0;
+  };
+
+  reloadDir();
+
+  while (true) {
+    if (entries.empty()) {
+      cur = 0;
+      scroll = 0;
+    } else {
+      if (cur >= (int)entries.size()) cur = entries.size() - 1;
+      if (cur < 0) cur = 0;
+      if (scroll > cur) scroll = cur;
+      if (cur >= scroll + 5) scroll = cur - 4;
+    }
+
+    drawEntries(curPath, entries, cur, scroll);
 
     M5.update();
     M5Cardputer.update();
 
+    // down
+    if (M5Cardputer.Keyboard.isKeyPressed('.')) {
+      debounceDelay();
+      if (!entries.empty()) {
+        cur = (cur + 1) % entries.size();
+      }
+    }
+
+    // up
     if (M5Cardputer.Keyboard.isKeyPressed(';')) {
       debounceDelay();
-      if (curIndex > 0) curIndex--;
-      if (curIndex < scrollIndex) scrollIndex--;
-    } else if (M5Cardputer.Keyboard.isKeyPressed('.')) {
-      debounceDelay();
-      if (curIndex + 1 < (int)entries.size()) curIndex++;
-      if (curIndex >= scrollIndex + 5) scrollIndex++;
-    } else if (M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER)) {
-      debounceDelay();
-      canvas_main.setTextDatum(middle_center);
-      canvas_main.setTextSize(2);
-      canvas_main.fillRect( canvas_main.textWidth("Opening...") / 2 - 10,
-                            canvas_main.height() / 2 - 16,
-                            canvas_main.textWidth("Opening...") + 20,
-                            32,
-                            bg_color_rgb565);
-      canvas_main.setTextColor(tx_color_rgb565);
-      canvas_main.drawString("Opening...", canvas_main.width() / 2, canvas_main.height() / 2);
-      pushAll();
-      if (curIndex >= 0 && curIndex < (int)entries.size()) {
-        Entry &e = entries[curIndex];
-        if (e.isDir) {
-          // enter directory
-          if (!currentPath.endsWith("/")) currentPath += "/";
-          currentPath += e.name;
-          curIndex = 0;
-          scrollIndex = 0;
-        } else {
-          // select file
-          selectedFile = currentPath;
-          if (!selectedFile.endsWith("/")) selectedFile += "/";
-          selectedFile += e.name;
-          return selectedFile;
-        }
+      if (!entries.empty()) {
+        cur = (cur + entries.size() - 1) % entries.size();
       }
-    } else if (M5Cardputer.Keyboard.isKeyPressed('`')) {
+    }
+
+    // enter
+    if (M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER)) {
       debounceDelay();
-      // go up one directory
-      if (currentPath != "/") {
-        int lastSlash = currentPath.lastIndexOf('/');
-        if (lastSlash > 0) {
-          currentPath = currentPath.substring(0, lastSlash);
-        } else {
-          currentPath = "/";
-        }
-        curIndex = 0;
-        scrollIndex = 0;
+      if (entries.empty()) continue;
+
+      Entry &e = entries[cur];
+      String full = curPath;
+      if (!full.endsWith("/")) full += "/";
+      full += e.name;
+
+      if (e.isDir) {
+        curPath = full;
+        reloadDir();
       } else {
-        // at root, exit
+        return full;
+      }
+    }
+
+    // back / exit
+    if (M5Cardputer.Keyboard.isKeyPressed('`')) {
+      debounceDelay();
+      if (curPath == "/") {
         return "";
       }
-    } else if (M5Cardputer.Keyboard.isKeyPressed('`')) {
-      debounceDelay();
-      // exit
-      return "";
+      int lastSlash = curPath.lastIndexOf('/');
+      if (lastSlash <= 0) curPath = "/";
+      else curPath = curPath.substring(0, lastSlash);
+      reloadDir();
     }
+
+    delay(10);
   }
 }

@@ -43,7 +43,7 @@ void drawBottomCanvas();
 void drawMenu();
 void updateUi(bool show_toolbars = false, bool triggerPwnagothi = true, bool overrideDelay = false);
 void runApp(uint8_t appID = 0);
-inline void resetSprite();
+inline void trigger(uint8_t trigID){logMessage("Trigger" + String(trigID));}
 String userInput(const String &prompt, String desc, int maxLen,  const String &initial = "");
 bool drawQuestionBox(String tittle, String info, String info2, String label = "  ");
 int drawMultiChoice(String tittle, String toDraw[], uint8_t menuSize, uint8_t prevMenuID, uint8_t prevOpt);
