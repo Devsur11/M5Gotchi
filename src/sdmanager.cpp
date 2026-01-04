@@ -376,6 +376,7 @@ static void editFile(const String &fullpath) {
     canvas_main.fillSprite(bg_color_rgb565);
     canvas_main.setTextSize(1);
     canvas_main.setTextColor(tx_color_rgb565);
+    canvas_main.setTextDatum(top_left);
     int y = 5;
     int start = scrollLine;
     

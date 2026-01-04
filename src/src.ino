@@ -245,18 +245,17 @@ void setup() {
     if(WiFi.status() == WL_CONNECTED){
       logMessage("Connected to WiFi on startup");
       delay(1000); //wait a second to ensure connection is stable
+
+      // Sync pwned networks if configured
+      if(sync_pwned_on_boot){
+        logMessage("Syncing cached pwned APs on boot");
+        drawInfoBox("Sync", "Syncing cached PWNs", "This may take a while...", false, false);
+        api_client::init(KEYS_FILE);
+        bool ok = api_client::uploadCachedAPs();
+        logMessage("Sync completed with status: " + String(ok ? "success" : "failure"));
+      }
     } else {
       logMessage("Failed to connect to WiFi on startup");
-    }
-    //lets now check for updates and if it exists, inform the user
-    if(checkUpdatesAtNetworkStart) {
-      logMessage("Checking for updates on network start");
-      if(check_for_new_firmware_version(false)) {
-        logMessage("New firmware version available on startup");
-        newVersionAvailable = true;
-      } else {
-        logMessage("No new firmware version found on startup");
-      }
     }
   }
 

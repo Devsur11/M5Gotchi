@@ -25,6 +25,7 @@ String tx_color = "#00000000";
 bool skip_eapol_check = false;
 String wpa_sec_api_key = "";
 bool lite_mode_wpa_sec_sync_on_startup = false;
+bool sync_pwned_on_boot = false;
 bool sd_logging = false;
 bool toogle_pwnagothi_with_gpio0 = false;
 String lastPwnedAP = "";
@@ -366,6 +367,9 @@ bool initVars() {
         if(config["lite_mode_wpa_sec_sync_on_startup"].is<bool>()) lite_mode_wpa_sec_sync_on_startup = config["lite_mode_wpa_sec_sync_on_startup"].as<bool>();
         else configChanged = true;
 
+        if(config["sync_pwned_on_boot"].is<bool>()) sync_pwned_on_boot = config["sync_pwned_on_boot"].as<bool>();
+        else configChanged = true;
+
         if(config["sd_logging"].is<bool>()) sd_logging = config["sd_logging"].as<bool>();
         else configChanged = true;
 
@@ -512,6 +516,7 @@ bool initVars() {
     config["randomise_mac_at_boot"] = randomise_mac_at_boot;
     config["add_new_units_to_friends"] = add_new_units_to_friends;
     config["check_inbox_at_startup"] = check_inbox_at_startup;
+    config["sync_pwned_on_boot"] = sync_pwned_on_boot;
 
     if (configChanged) {
         logMessage("Config updated with missing/default values, saving...");
@@ -580,6 +585,7 @@ bool saveSettings(){
     config["randomise_mac_at_boot"] = randomise_mac_at_boot;
     config["add_new_units_to_friends"] = add_new_units_to_friends;
     config["check_inbox_at_startup"] = check_inbox_at_startup;
+    config["sync_pwned_on_boot"] = sync_pwned_on_boot;
 
     logMessage("JSON data creation successful, proceeding to save");
     FConf = SD.open(NEW_CONFIG_FILE, FILE_WRITE, false);
@@ -696,4 +702,6 @@ void attemptConnectSavedNetworks(){
         while(millis() - start < 10000 && WiFi.status() != WL_CONNECTED) delay(500);
         if(WiFi.status() == WL_CONNECTED) return;
     }
+    // No networks connected? Disable wifi to avoid problems
+    WiFi.mode(WIFI_MODE_NULL);
 }

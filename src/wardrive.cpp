@@ -7,6 +7,7 @@
 #include "wardrive.h"
 #include "logger.h"
 #include "crypto.h"
+#include "settings.h"
 
 static const int GPS_RX_PIN = 15; // AT6H TX -> ESP RX
 static const int GPS_TX_PIN = 13; // AT6H RX <- ESP TX
@@ -19,7 +20,6 @@ static bool filenameLocked = false; // once set by startWardriveSession, stays u
 
 // First-seen map (persistent on SD)
 static const char* FIRST_SEEN_PATH = "/wardriving/first_seen.csv";
-static std::map<String, WigleEntry> firstSeenMap;
 
 // Internal representation of a parsed fix
 struct GpsFix {
@@ -177,83 +177,6 @@ static void ensureWardrivingDir() {
     }
 }
 
-static void loadFirstSeenMap() {
-    firstSeenMap.clear();
-    ensureWardrivingDir();
-
-    if (!SD.exists(FIRST_SEEN_PATH)) return;
-    File f = SD.open(FIRST_SEEN_PATH, FILE_READ);
-    if (!f) return;
-
-    // skip header
-    String header = f.readStringUntil('\n');
-
-    while (f.available()) {
-        String line = f.readStringUntil('\n');
-        line.trim();
-        if (line.length() == 0) continue;
-
-        std::vector<String> cols;
-        int start = 0;
-        for (;;) {
-            int idx = line.indexOf(',', start);
-            if (idx == -1) {
-                cols.push_back(line.substring(start));
-                break;
-            }
-            cols.push_back(line.substring(start, idx));
-            start = idx + 1;
-        }
-        if (cols.size() < 14) continue;
-
-        WigleEntry e;
-        e.bssid       = cols[0];
-        e.ssid        = cols[1];
-        e.capabilities= cols[2];
-        e.firstSeen   = cols[3];
-        e.channel     = cols[4].toInt();
-        e.frequency   = cols[5].toInt();
-        e.rssi        = cols[6].toInt();
-        e.lat         = cols[7].toFloat();
-        e.lon         = cols[8].toFloat();
-        e.alt         = cols[9].toFloat();
-        e.accuracy    = cols[10].toFloat();
-        e.rcois       = cols[11];
-        e.mfgid       = cols[12];
-        e.type        = cols[13];
-
-        firstSeenMap[e.bssid] = e;
-    }
-    f.close();
-}
-
-
-static void appendFirstSeenToDisk(const WigleEntry& e) {
-    ensureWardrivingDir();
-    File f = SD.open(FIRST_SEEN_PATH, FILE_APPEND);
-    if (!f) return;
-
-    f.printf("%s,%s,%s,%s,%d,%d,%d,%.6f,%.6f,%.2f,%.2f,%s,%s,%s\n",
-        e.bssid.c_str(),
-        e.ssid.c_str(),
-        e.capabilities.c_str(),
-        e.firstSeen.c_str(),
-        e.channel,
-        e.frequency,
-        e.rssi,
-        e.lat,
-        e.lon,
-        e.alt,
-        e.accuracy,
-        e.rcois.c_str(),
-        e.mfgid.c_str(),
-        e.type.c_str()
-    );
-    f.close();
-
-    firstSeenMap[e.bssid] = e;
-}
-
 // Public helper: manually set filename (if user wants to override)
 void setWardriveFilename(const String& path) {
     ensureWardrivingDir();
@@ -265,7 +188,12 @@ void setWardriveFilename(const String& path) {
 // If it fails, fallback to millis() style filename.
 void startWardriveSession(unsigned long gpsTimeoutMs) {
     // attempt quick GPS read to get ISO timestamp
-    Serial2.begin(GPS_BAUD, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
+    if(!useCustomGPSPins){
+        Serial2.begin(GPS_BAUD, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
+    }
+    else{
+        Serial2.begin(GPS_BAUD, SERIAL_8N1, gpsRx, gpsTx);
+    }
     GpsFix bestFix;
     unsigned long start = millis();
     String lineBuf;
@@ -326,9 +254,6 @@ void startWardriveSession(unsigned long gpsTimeoutMs) {
     }
     currentWardrivePath = "/" + fname; // ensure leading slash
     filenameLocked = true;
-
-    // pre-load first seen map
-    loadFirstSeenMap();
 
     fLogMessage("Wardrive session file set to: %s", currentWardrivePath.c_str());
 }
@@ -498,8 +423,8 @@ wardriveStatus wardrive(const std::vector<wifiSpeedScan>& networks, unsigned lon
     // ensure SD dir is there
     ensureWardrivingDir();
 
-    // Ensure firstSeenMap loaded
-    if (firstSeenMap.empty()) loadFirstSeenMap();
+    // Ensure firstSeenMap loaded - TOO HEAVY ON MEMORY
+    // if (firstSeenMap.empty()) loadFirstSeenMap();
 
     // Initialize GPS serial (Serial2)
     Serial2.begin(GPS_BAUD, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
@@ -593,11 +518,12 @@ wardriveStatus wardrive(const std::vector<wifiSpeedScan>& networks, unsigned lon
         entry.mfgid = "";
         entry.type = "WIFI";
 
-        if (firstSeenMap.find(macStr) != firstSeenMap.end()) {
-            entry.firstSeen = firstSeenMap[macStr].firstSeen;
+        //skipped - to heavy on memory
+        if (false){//firstSeenMap.find(macStr) != firstSeenMap.end()) {
+            //entry.firstSeen = firstSeenMap[macStr].firstSeen;
         } else {
             entry.firstSeen = bestFix.timeIso;
-            appendFirstSeenToDisk(entry);
+            // appendFirstSeenToDisk(entry);
         }
 
         String latStr = String(bestFix.lat, 6);

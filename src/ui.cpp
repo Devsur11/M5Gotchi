@@ -257,6 +257,7 @@ menu devtools_menu[] = {
   {"Skip File Checks", 107},               // Skip file checks in dev
   {"Scan Speed Test", 109},                // Speed scan test
   {"Coordinate Picker", 110},              // Coordinate picker
+  {"Mood Font Tester", 112},               // Test all text faces with font
   {"Crash Test", 111}                      // Crash test
 };
 
@@ -359,6 +360,9 @@ void esp_will_beg_for_its_life() {
   *ptr = 42; // hehehe
 }
 
+bool pwnagotchiModeFromButton = false;
+bool buttonDirty = false;
+
 void buttonTask(void *param) {
   bool dimmed = false;
   for (;;) {
@@ -371,14 +375,21 @@ void buttonTask(void *param) {
         M5Cardputer.Display.setBrightness(brightness);
       }}
       else{
-        if(!pwnagothiMode){
-          pwnagothiMode = true;
-          pwnagothiBegin();
-          logMessage("Pwnagothi mode activated");
+        buttonDirty = true;
+        if(!pwnagotchiModeFromButton){
+          pwnagotchiModeFromButton = true;
+          logMessage("Pwnagotchi mode activated");
         }
         else{
-          pwnagothiMode = false;
-          logMessage("Pwnagothi mode deactivated");
+          //lets draw a little message here too
+          M5Cardputer.Display.fillRect(0, (display_h/2) - 20 , 250, 20, bg_color_rgb565);
+          M5Cardputer.Display.setTextDatum(middle_center);
+          M5Cardputer.Display.setTextColor(tx_color_rgb565);
+          M5Cardputer.Display.setTextSize(2);
+          M5Cardputer.Display.drawString("Deactivating...", canvas_center_x , (display_h/2) - 10);
+          M5Cardputer.Display.pushState();
+          pwnagotchiModeFromButton = false;
+          logMessage("Pwnagotchi mode deactivated");
         }
       }
     }
@@ -389,7 +400,7 @@ volatile unsigned long lastInterruptTime = 0;
 
 void IRAM_ATTR handleInterrupt() {
   unsigned long now = millis();
-  if (now - lastInterruptTime > 200) {  // 200ms debounce
+  if (now - lastInterruptTime > 5000) {  // 5s debounce
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     xSemaphoreGiveFromISR(buttonSemaphore, &xHigherPriorityTaskWoken);
     if (xHigherPriorityTaskWoken) {
@@ -481,6 +492,25 @@ bool needsUiRedraw = true;
 static unsigned long lastRedrawTime = 0;
 
 void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
+  //handle button changing pwnagotchi state:
+  if(triggerPwnagothi && buttonDirty){
+    if(pwnagotchiModeFromButton && !pwnagothiMode){
+      runApp(36); //enable auto mode
+      menuID = 0;
+      prevMID = 1;  //just to redraw the prompt
+      needsUiRedraw = true;
+      pwnagotchiModeFromButton = true;
+    }
+    else{
+      pwnagotchiModeFromButton = false;
+      pwnagothiMode = false;
+      needsUiRedraw = true;
+      setMoodToStatus();
+      prevMID = 1;  //just to redraw the prompt
+    }
+    buttonDirty = false;
+  }
+
   keyboard_changed = M5Cardputer.Keyboard.isChange();
   if(keyboard_changed){Sound(10000, 100, sound);}       
   if (toggleMenuBtnPressed()) {
@@ -535,6 +565,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
     char val_10[75];  // Auto-Add Friends
     char val_11[50];  // SD Logging
     char val_12[45];  // Skip EAPOL Check
+    char val_13[50];  // Sync Pwnd on Boot
 
     snprintf(val_1, sizeof(val_1),
             "Auto Mode on Boot: %s",
@@ -588,6 +619,10 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
             "Skip EAPOL Check: %s",
             skip_eapol_check ? "ON" : "OFF");
 
+    snprintf(val_13, sizeof(val_13),
+            "Sync pwned on Boot: %s",
+            sync_pwned_on_boot ? "ON" : "OFF");
+
     menu new_settings_menu[] = {
         // Startup / Boot behavior
         { val_1, 48 },   // Auto Mode on Boot
@@ -602,11 +637,12 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
         { val_6, 30 },   // GPS Pins
         { val_7, 31 },   // GPS Logging
         { val_9, 60 },   // Pwngrid Broadcast
+        { val_13, 122 }, // Sync pwned on boot
 
         // Interface / Display
         { "Theme", 50 },       // UI Theme
         { "Brightness", 41 },  // Display brightness
-        { val_8, 42 },         // Key Sounds
+        { "Sounds" , 42 },         // Key Sounds
         { "Text Faces", 90 },  // Edit text faces
 
         // User / Device
@@ -629,7 +665,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
         { val_12, 49 }         // Skip EAPOL Check
     };
     
-    drawMenuList( new_settings_menu , 6, 25);
+    drawMenuList( new_settings_menu , 6, 26);
     prevMID = 6;
   }  
   else if (menuID == 7){
@@ -1545,7 +1581,6 @@ void runApp(uint8_t appID){
   logMessage("App started running, ID:"+ String(appID));
   menu_current_opt = 0;
   menu_current_page = 1;
-  //menuID = 0; 
   if(appID){
     if(appID == 1){
       drawHintBox("For all features of manual mode to work, wifi will always disconnect before entering menu.", 4);
@@ -2756,8 +2791,11 @@ void runApp(uint8_t appID){
           keyboard_changed = M5Cardputer.Keyboard.isChange();
           if(keyboard_changed){Sound(10000, 100, sound);}    
           if (status.enter) {
+            xSemaphoreTake(wifiMutex, portMAX_DELAY);
             WiFi.eraseAP();
             WiFi.mode(WIFI_MODE_NULL);
+            xSemaphoreGive(wifiMutex);
+            wifion();
             apMode = false;
             wifiChoice = "";
             break;
@@ -3393,9 +3431,9 @@ void runApp(uint8_t appID){
     }
     if(appID == 101){
       // Set global var: pick from list for safety
-      String varList[] = {"hostname","bg_color","tx_color","sound","brightness","pwnagothiMode","sd_logging","skip_eapol_check","advertisePwngrid","pwned_ap","dev_mode","toogle_pwnagothi_with_gpio0","lite_mode_wpa_sec_sync_on_startup","skip_file_manager_checks_in_dev"};
+      String varList[] = {"hostname","bg_color","tx_color","sound","brightness","pwnagothiMode","sd_logging","skip_eapol_check","advertisePwngrid","pwned_ap","dev_mode","toogle_pwnagothi_with_gpio0","lite_mode_wpa_sec_sync_on_startup","sync_pwned_on_boot","skip_file_manager_checks_in_dev"};
       String picked = "";
-      int choice = drawMultiChoice("Set variable", varList, 11, 99, 0);
+      int choice = drawMultiChoice("Set variable", varList, 15, 99, 0);
       if(choice == -1) return;
       if (choice >= 0 && choice < 14) {
         picked = varList[choice];
@@ -3415,6 +3453,7 @@ void runApp(uint8_t appID){
           else if(picked == "dev_mode") dev_mode = (val == "1" || val.equalsIgnoreCase("true"));
           else if(picked == "toogle_pwnagothi_with_gpio0") toogle_pwnagothi_with_gpio0 = (val == "1" || val.equalsIgnoreCase("true"));
           else if(picked == "lite_mode_wpa_sec_sync_on_startup") lite_mode_wpa_sec_sync_on_startup = (val == "1" || val.equalsIgnoreCase("true"));
+          else if(picked == "sync_pwned_on_boot") sync_pwned_on_boot = (val == "1" || val.equalsIgnoreCase("true"));
           else if(picked == "skip_file_manager_checks_in_dev") skip_file_manager_checks_in_dev = (val == "1" || val.equalsIgnoreCase("true"));
           else {
             drawInfoBox("Unknown variable", picked, "Not supported by setter.", true, true);
@@ -3482,6 +3521,60 @@ void runApp(uint8_t appID){
       esp_will_beg_for_its_life();
       return;
     }
+    if(appID == 112){
+      // Mood Font Tester: enumerate faces from /moods/faces.txt and display them using the custom mood font/size
+      File f = SD.open("/moods/faces.txt", FILE_READ);
+      if(!f){
+        drawInfoBox("Error", "faces.txt not found", "Ensure /moods/faces.txt exists", true, false);
+        return;
+      }
+      std::vector<String> faces;
+      while(f.available()){
+        String line = f.readStringUntil('\n');
+        line.trim();
+        if(line.length() == 0) continue;
+        if(line.startsWith("#")) continue;
+        if(line.startsWith("[") && line.endsWith("]")) continue;
+        faces.push_back(line);
+      }
+      f.close();
+      if(faces.empty()){
+        drawInfoBox("Info", "No faces found in /moods/faces.txt", "Add faces and retry", true, false);
+        return;
+      }
+      int idx = 0;
+      debounceDelay();
+      while(true){
+        canvas_main.fillSprite(bg_color_rgb565);
+        canvas_main.setTextColor(tx_color_rgb565);
+        canvas_main.setColor(tx_color_rgb565);
+        canvas_main.setTextDatum(middle_center);
+        // load custom font used in drawMood for faces
+        if(SD.exists("/fonts/big.vlw")){
+          canvas_main.loadFont(SD, "/fonts/big.vlw");
+        }
+        canvas_main.setTextSize(0.35);
+        canvas_main.drawString(faces[idx], canvas_center_x, canvas_h/2);
+        if(SD.exists("/fonts/big.vlw")) canvas_main.unloadFont();
+        // show index
+        canvas_main.setTextDatum(top_left);
+        canvas_main.setTextSize(1);
+        canvas_main.drawString(String(idx+1) + "/" + String(faces.size()), 2, 2);
+        pushAll();
+        M5.update();
+        M5Cardputer.update();
+        Keyboard_Class::KeysState ks = M5Cardputer.Keyboard.keysState();
+        if(ks.fn){
+          for(auto c : ks.word){ if(c == '`'){ debounceDelay(); return; } }
+        }
+        for(auto c : ks.word){
+          if(c == '.') { idx = (idx + 1) % faces.size(); drawInfoBox("", "Loading...", "", false, false); }
+          else if(c == ';') { idx = (idx + faces.size() - 1) % faces.size(); drawInfoBox("", "Loading...", "", false, false);}
+          else if(c == KEY_ENTER) { menuID = 99; debounceDelay(); return; }
+        }
+        delay(80);
+      }
+    }
     if(appID == 108){
       // Freeform setter: type var name and value
       String varName = userInput("Set var (free)", "Var name (case-sensitive):", 64);
@@ -3502,6 +3595,7 @@ void runApp(uint8_t appID){
           else if(varName == "dev_mode") dev_mode = (val == "1" || val.equalsIgnoreCase("true"));
           else if(varName == "toogle_pwnagothi_with_gpio0") toogle_pwnagothi_with_gpio0 = (val == "1" || val.equalsIgnoreCase("true"));
           else if(varName == "lite_mode_wpa_sec_sync_on_startup") lite_mode_wpa_sec_sync_on_startup = (val == "1" || val.equalsIgnoreCase("true"));
+          else if(varName == "sync_pwned_on_boot") sync_pwned_on_boot = (val == "1" || val.equalsIgnoreCase("true"));
           else if(varName == "skip_file_manager_checks_in_dev") skip_file_manager_checks_in_dev = (val == "1" || val.equalsIgnoreCase("true"));
           else {
             drawInfoBox("Unknown variable", varName, "Not supported by fallback.", true, true);
@@ -3607,7 +3701,7 @@ void runApp(uint8_t appID){
       }
       File root = SD.open("/handshake");
       if (!root || !root.isDirectory()) {
-        drawInfoBox("Error", "Cannot open /handshakes", "Check SD card!", true, true);
+        drawInfoBox("Error", "Cannot open \"/handshake\" folder.", "Check SD card!", true, true);
         menuID = 5;
         return;
       }
@@ -3657,16 +3751,35 @@ void runApp(uint8_t appID){
       return;
     }
     if(appID == 42){
-      String selection[] = {"Off", "On"};
-      debounceDelay();
-      sound = drawMultiChoice("Sound", selection, 2, 6, 2);
-      if(saveSettings()){
-        menuID = 6;
-        return;
+      while(true){
+        String opt0 = String("Keyboard sounds: ") + (sound ? "ON" : "OFF");
+        String opt1 = String("Event sounds: ") + (pwnagotchi.sound_on_events ? "ON" : "OFF");
+        String menu[] = { opt0, opt1, "Back" };
+        debounceDelay();
+        int8_t choice = drawMultiChoice("Sound settings", menu, 3, 6, 2);
+        if(choice == -1 || choice == 2) break;
+        if(choice == 0){
+          sound = !sound;
+          if(saveSettings()) drawInfoBox("Saved", "Keyboard sounds updated", "", true, false);
+          else drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);
+        }
+        else if(choice == 1){
+          pwnagotchi.sound_on_events = !pwnagotchi.sound_on_events;
+          if(savePersonality()) drawInfoBox("Saved", "Event sounds updated", "", true, false);
+          else drawInfoBox("ERROR", "Save personality failed!", "Check SD Card", true, false);
+        }
       }
-      else{drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);}
       menuID = 6;
       return;
+    }
+    if(appID == 122){
+      // Toggle sync pwned on boot
+      String menu[] = {"On", "Off", "Back"};
+      debounceDelay();
+      uint8_t choice = drawMultiChoice("Sync pwned on boot?", menu, 3, 6, sync_pwned_on_boot ? 0 : 1);
+      if(choice == 0){ sync_pwned_on_boot = true; if(saveSettings()) drawInfoBox("Saved","Will sync pwned on boot", "", true, false); else drawInfoBox("ERROR","Save failed","", true, false);} 
+      else if(choice == 1){ sync_pwned_on_boot = false; if(saveSettings()) drawInfoBox("Saved","Will not sync pwned on boot", "", true, false); else drawInfoBox("ERROR","Save failed","", true, false);} 
+      menuID = 6; return;
     }
     if(appID == 43){
       if((WiFi.status() == WL_CONNECTED)){
@@ -3694,7 +3807,7 @@ void runApp(uint8_t appID){
           for(size_t si = 0; si < savedNetworks.size(); ++si){
             if(WiFi.SSID(i) == (savedNetworks[si].ssid)){
               WiFi.begin(savedNetworks[si].ssid.c_str(), savedNetworks[si].pass.c_str());
-              uint8_t counter;
+              uint8_t counter = 0;
               while (counter<=10 && !WiFi.isConnected()) {
                 delay(1000);
                 drawInfoBox("Connecting", "Connecting to " + savedNetworks[si].ssid, "You'll soon be redirected ", false, false);
@@ -3713,7 +3826,7 @@ void runApp(uint8_t appID){
         }
       }
       wifinets[numNetworks] = "Rescan";
-      uint8_t wifisel = drawMultiChoice("Select WIFI network:", wifinets, numNetworks + 1, 6, 3);
+      int8_t wifisel = drawMultiChoice("Select WIFI network:", wifinets, numNetworks + 1, 6, 3);
       if(wifisel == -1){
         menuID = 6;
         return;
@@ -3724,6 +3837,10 @@ void runApp(uint8_t appID){
         return;
       }
       String password = userInput("Password", "Enter wifi password" , 30);
+      if(password.length() < 3){
+        menuID = 6;
+        return;
+      }
       WiFi.begin(WiFi.SSID(wifisel), password);
       
       uint8_t counter;
@@ -4578,6 +4695,11 @@ int drawMultiChoice(String tittle, String toDraw[], uint8_t menuSize , uint8_t p
   menu_current_page = 1;
   menu_len = menuSize;
   singlePage = false;
+  
+  static uint32_t marqueeTick = millis();
+  static int marqueeOffset = 0;
+  const uint32_t MARQUEE_DELAY_MS = 500;
+  
   while(true){
     drawTopCanvas();
     drawBottomCanvas();
@@ -4588,7 +4710,7 @@ int drawMultiChoice(String tittle, String toDraw[], uint8_t menuSize , uint8_t p
     Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
 
     canvas_main.clear(bg_color_rgb565);
-    canvas_main.fillSprite(bg_color_rgb565); //Clears main display
+    canvas_main.fillSprite(bg_color_rgb565);
     canvas_main.setTextSize(1.5);
     canvas_main.setTextColor(tx_color_rgb565);
     canvas_main.setColor(tx_color_rgb565);
@@ -4596,26 +4718,90 @@ int drawMultiChoice(String tittle, String toDraw[], uint8_t menuSize , uint8_t p
     canvas_main.setCursor(1, PADDING + 1);
     canvas_main.println(tittle);
     canvas_main.setTextSize(2);
-    static char display_str[256] = ""; // Use static to avoid large stack allocation
+    
     uint8_t startIdx = (menu_current_page - 1) * 4;
-    if (startIdx >= menuSize) startIdx = 0; // Prevent overflow
+    if (startIdx >= menuSize) startIdx = 0;
     
     uint8_t remainingItems = (menuSize > startIdx) ? menuSize - startIdx : 0;
-    uint8_t itemsToShow = min(remainingItems, (uint8_t)4); // Show max 4 items per page
+    uint8_t itemsToShow = min(remainingItems, (uint8_t)4);
+    
+    int maxW = canvas_main.width() - 18; // Leave space for scrollbar
+    int lineH = 18;
     
     for (uint8_t j = 0; j < itemsToShow && (startIdx + j) < menuSize; j++) {
       uint8_t idx = startIdx + j;
       String itemText = toDraw[idx];
-      if (itemText.length() > 40) { // Truncate long strings
-        itemText = itemText.substring(0, 37) + "...";
+      int y = PADDING + (j * lineH) + 20;
+      
+      if (tempOpt == idx) {
+        // Selected item: draw cursor and marquee text
+        canvas_main.drawString(">", 0, y);
+        
+        int textX = canvas_main.textWidth("> ");
+        int spaceW = maxW - textX;
+        int fullW = canvas_main.textWidth(itemText);
+        
+        if (fullW <= spaceW) {
+          // Text fits: no marquee needed
+          canvas_main.drawString(itemText, textX, y);
+          marqueeOffset = 0;
+        } else {
+          // Text too long: implement marquee
+          int maxChars = itemText.length();
+          while (maxChars > 0 && 
+                 canvas_main.textWidth(itemText.substring(0, maxChars)) > spaceW) {
+            maxChars--;
+          }
+          if (maxChars < 1) maxChars = 1;
+          
+          int maxOffset = itemText.length() - maxChars;
+          if (maxOffset < 0) maxOffset = 0;
+          
+          uint32_t now = millis();
+          if (now - marqueeTick >= MARQUEE_DELAY_MS) {
+            marqueeTick = now;
+            if (marqueeOffset < maxOffset) {
+              marqueeOffset++;
+            } else {
+              marqueeOffset = 0;
+            }
+          }
+          
+          int start = constrain(marqueeOffset, 0, maxOffset);
+          int end = start + maxChars;
+          if (end > itemText.length()) end = itemText.length();
+          
+          String slice = itemText.substring(start, end);
+          canvas_main.drawString(slice, textX, y);
+        }
+      } else {
+        // Non-selected item: truncate if needed
+        if (itemText.length() > 40) {
+          itemText = itemText.substring(0, 37) + "...";
+        }
+        canvas_main.drawString("  " + itemText, 0, y);
       }
-      snprintf(display_str, sizeof(display_str), "%s %s", (tempOpt == idx) ? ">" : " ", itemText.c_str());
-      int y = PADDING + (j * ROW_SIZE / 2) + 20;
-      canvas_main.drawString(display_str, 0, y);
     }
+    
+    // Draw scrollbar on right side
+    int sbX = canvas_main.width() - 6;
+    int sbY = PADDING + 20;
+    int sbH = itemsToShow * lineH;
+    int scrollMax = max(menuSize - itemsToShow, 1);
+    
+    float scrollRatio = (float)startIdx / scrollMax;
+    float barRatio = (float)itemsToShow / menuSize;
+    
+    int barH = sbH * barRatio;
+    if (barH < 6) barH = 6;
+    int barY = sbY + (int)((sbH - barH) * scrollRatio);
+    
+    //canvas_main.drawLine(sbX, sbY, sbX, sbY + sbH, tx_color_rgb565);
+    canvas_main.fillRect(sbX -5, sbY, 20, sbH, bg_color_rgb565);
+    canvas_main.fillRect(sbX - 2, barY, 4, barH, tx_color_rgb565);
+    
     pushAll();
 
-    
     for(auto i : status.word){
       if(i=='`'){
         Sound(10000, 100, sound);
@@ -4633,6 +4819,8 @@ int drawMultiChoice(String tittle, String toDraw[], uint8_t menuSize , uint8_t p
         menu_current_opt = 0;
         tempOpt = 0;
       }
+      marqueeOffset = 0;
+      marqueeTick = millis();
     }
     if (isPrevPressed()) {
       if (menu_current_opt > 0) {
@@ -4643,6 +4831,8 @@ int drawMultiChoice(String tittle, String toDraw[], uint8_t menuSize , uint8_t p
         menu_current_opt = (menu_len - 1);
         tempOpt = (menu_len - 1);
       }
+      marqueeOffset = 0;
+      marqueeTick = millis();
     }
     if(!singlePage){
       float temp = 1+(menu_current_opt/4);
@@ -4654,10 +4844,8 @@ int drawMultiChoice(String tittle, String toDraw[], uint8_t menuSize , uint8_t p
       menu_current_opt = prevOpt;
       return tempOpt;
     }
-    
   }
 }
-
 int drawMultiChoiceLonger(String tittle, String toDraw[], uint8_t menuSize , uint8_t prevMenuID, uint8_t prevOpt) {
   debounceDelay();
   uint8_t tempOpt = 0;
