@@ -714,6 +714,10 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
     canvas_top.pushSprite(0, 0);
     canvas_bot.pushSprite(0, canvas_top_h + canvas_h);
   }
+  else{
+    M5.Display.fillRect(0, 0, display_w, canvas_top_h, bg_color_rgb565);
+    M5.Display.fillRect(0, display_h - canvas_bot_h, display_w, canvas_bot_h, bg_color_rgb565);
+  }
   canvas_main.pushSprite(0, canvas_top_h);
   M5.Display.endWrite();
   if(pwnagothiMode && triggerPwnagothi){
@@ -917,7 +921,7 @@ void drawMood(String face, String phrase) {
     
     if(getPwngridTotalPeers() > 0){
       canvas_main.loadFont(SD, "/fonts/small.vlw");
-      canvas_main.println(getLastPeerFace() + " |||| " + getPwngridLastFriendName() + " (" + String(getPwngridLastSessionPwnedAmount()) + "/" + String(getPwngridLastPwnedAmount()) + ")");
+      canvas_main.println(getLastPeerFace() + " " + getPwngridLastFriendName() + " (" + String(getPwngridLastSessionPwnedAmount()) + "/" + String(getPwngridLastPwnedAmount()) + ")");
       canvas_main.unloadFont();
     }
     
@@ -2745,7 +2749,11 @@ void runApp(uint8_t appID){
         logMessage(wifinets[i]);
         }
       }
-      uint8_t wifisel = drawMultiChoice("Select WIFI network:", wifinets, numNetworks, 2, 0);
+      int8_t wifisel = drawMultiChoice("Select WIFI network:", wifinets, numNetworks, 2, 0);
+      if(wifisel == -1){
+        menuID = 2;
+        return;
+      }
       wifiChoice = WiFi.SSID(wifisel);
       intWifiChoice = wifisel;
       logMessage("Selected wifi: "+ wifiChoice);
@@ -5759,22 +5767,7 @@ void sendCrashReport(){
   //inform user of state
   drawInfoBox("Error", "A critical error has", "occurred, sending report...", false, false);
   //first try to find saved wifi
-  uint8_t wifiCount = WiFi.scanNetworks();
-  for(uint8_t i = 0; i < wifiCount; i++){
-    String ssid = WiFi.SSID(i);
-    // try all saved networks and if found connect
-    for(size_t si = 0; si < savedNetworks.size(); ++si){
-      if(ssid == savedNetworks[si].ssid){
-        WiFi.begin(savedNetworks[si].ssid.c_str(), savedNetworks[si].pass.c_str());
-        uint8_t connectTry = 0;
-        while(WiFi.status() != WL_CONNECTED && connectTry < 10){
-          delay(1000);
-          connectTry++;
-        }
-        break;
-      }
-    }
-  }
+  attemptConnectSavedNetworks();
   if(WiFi.status() == WL_CONNECTED){
   }
   else{
@@ -5853,9 +5846,12 @@ void themeMenu() {
     case 22: bg_color = "#FFFF00FF"; tx_color = "#000000FF"; break; // High Viz (Yellow/Black)
 
     case 23: { // Custom
-      drawInfoBox("Custom Theme", "Pick background", "Selection UI", false, false);
+      drawInfoBox("Custom Theme", "Pick background color via color picker...", "", false, false);
+      delay(5000);
       String customBg = colorPickerUI(false, "#000000FF");
       if (customBg == "exited") { shouldSave = false; break; }
+      drawInfoBox("Custom Theme", "Pick text color via color picker...", "", false, false);
+      delay(5000);
       String customTx = colorPickerUI(true, customBg);
       if (customTx == "exited" || customBg == customTx) { shouldSave = false; break; }
       bg_color = customBg; tx_color = customTx;
@@ -5876,6 +5872,10 @@ void themeMenu() {
       drawInfoBox("ERROR", "Save failed!", "Check SD Card", true, false);
       delay(2000);
     }
+  }
+  else{
+    drawInfoBox("Theme","Invalid color selection", "No changes made.",  true, false);
+    delay(1500);
   }
 
   menuID = 6;

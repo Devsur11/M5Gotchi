@@ -426,6 +426,7 @@ int8_t api_client::checkNewMessagesAmount(){
         return -1;
     }
     // Expect "messages" array in response like server. Format may vary.
+    logMessage(r);
     if (!rd["messages"].is<JsonArray>()) {
         logMessage("poll: no messages array");
         return -1;

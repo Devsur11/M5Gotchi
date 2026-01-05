@@ -230,7 +230,6 @@ void setup() {
       abort(); // seriously, no point continuing
     }
   }
-  wifion();
 
   logMessage("Generated and set random MAC address: " + String(WiFi.macAddress()));
 
@@ -245,7 +244,16 @@ void setup() {
     if(WiFi.status() == WL_CONNECTED){
       logMessage("Connected to WiFi on startup");
       delay(1000); //wait a second to ensure connection is stable
-
+      //lets now check for updates and if it exists, inform the user
+      if(checkUpdatesAtNetworkStart) {
+        logMessage("Checking for updates on network start");
+        if(check_for_new_firmware_version(false)) {
+          logMessage("New firmware version available on startup");
+          newVersionAvailable = true;
+        } else {
+          logMessage("No new firmware version found on startup");
+        }
+      }
       // Sync pwned networks if configured
       if(sync_pwned_on_boot){
         logMessage("Syncing cached pwned APs on boot");
@@ -319,15 +327,18 @@ void setup() {
     logMessage("Pwnagothi mode disabled");
   }
 
-  initPwngrid();
   esp_task_wdt_deinit();
   esp_task_wdt_init(60, false); 
 
 
   //inbox check
   if(check_inbox_at_startup && WiFi.isConnected()){
+    setGeneratingKeysMood();
+    updateUi(false, false, true);
+    logMessage("Checking inbox for new messages at startup");
+    api_client::init(KEYS_FILE);
     int8_t messages = api_client::checkNewMessagesAmount();
-    if(messages > 0){}
+    if(messages <= 0){}
     else{
       setNewMessageMood(messages);
       updateUi(false, false, true);
@@ -371,14 +382,14 @@ void setup() {
   }
   
   //Generic:
-  // [4818][I][logger.cpp] Partition layout detection:
-  // [4818][I][logger.cpp] App0 size: 330000
-  // [4819][I][logger.cpp] App0 address: 10000
-  // [4821][I][logger.cpp] App1 address: 10000
-  // [4825][I][logger.cpp] App1 size: 330000
-  // [4828][I][logger.cpp] VFS partition not found
-  // [4832][I][logger.cpp] SPIFFS partition found at address: 670000
-  // [4838][I][logger.cpp] Coredump partition found at address: 7f0000
+  //Partition layout detection:
+  //App0 size: 330000
+  //App0 address: 10000
+  //App1 address: 10000
+  //App1 size: 330000
+  //VFS partition not found
+  //SPIFFS partition found at address: 670000
+  //Coredump partition found at address: 7f0000
   logMessage("Evaluating install type for feature limitations...");
   setMoodToStatus();
   updateUi(true, false, true);
@@ -408,7 +419,6 @@ void setup() {
   if(newVersionAvailable) {
     drawHintBox("A new firmware version is available!\nPlease update via the menu\nPlease note tha bugs from older version will not be reviewed!", 3);
   }
-  
 }
 
 void loop() {

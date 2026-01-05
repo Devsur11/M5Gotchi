@@ -205,7 +205,6 @@ void pwngridAddPeer(JsonDocument &json, signed int rssi) {
   }
 
   if ((pwngrid_peers.size() < PWNGRID_MAX_PEERS) && add_new_units_to_friends) {
-    pwngrid_peers.push_back(newp);
     enqueueUnit(newp.name, newp.identity);
   }
 
@@ -288,7 +287,6 @@ void pwnSnifferCallback(void *buf, wifi_promiscuous_pkt_type_t type) {
             essid.concat((char)b);
           }
         }
-
         JsonDocument sniffed_json;  // ArduinoJson v6s
         auto result = deserializeJson(sniffed_json, essid);
 
