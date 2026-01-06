@@ -211,10 +211,6 @@ This improves reliability by:
 - Using per-chunk and final checksums to detect corruption
 - Waiting for a server ACK before erasing the core dump so uploads can be retried if verification fails
 
-An example Python subscriber script that reassembles chunks and publishes the verification ACK is included at `scripts/reassemble_coredump.py` (requires `paho-mqtt`).
-
-A simple Web dashboard is also available to browse and manage reports: `scripts/dashboard.py` reads report metadata in `coredumps/*.json` (created by the reassembler) and provides a UI and API to list reports, download binaries, block/unblock device MACs, and view statistics. Install the dashboard requirements with `pip install -r scripts/requirements.txt` and run it with `python scripts/dashboard.py --host 0.0.0.0 --port 8080`.
-
 ---
 
 ## License
