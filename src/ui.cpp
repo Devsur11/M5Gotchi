@@ -690,7 +690,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
     prevMID = 9;
   }
   else if (menuID == 99) {
-    drawMenuList(devtools_menu, 99, 12);
+    drawMenuList(devtools_menu, 99, dev_mode?13:1);
     prevMID = 99;
   }
   else if (menuID == 0)
@@ -716,7 +716,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
   }
   else{
     M5.Display.fillRect(0, 0, display_w, canvas_top_h, bg_color_rgb565);
-    M5.Display.fillRect(0, display_h - canvas_bot_h, display_w, canvas_bot_h, bg_color_rgb565);
+    M5.Display.fillRect(0, display_h - canvas_bot_h-4, display_w, canvas_bot_h + 10, bg_color_rgb565);
   }
   canvas_main.pushSprite(0, canvas_top_h);
   M5.Display.endWrite();
@@ -2301,10 +2301,16 @@ void runApp(uint8_t appID){
         M5Cardputer.update();
         auto keysState = M5Cardputer.Keyboard.keysState();
         for(auto i : keysState.word){
-          if(i=='`')
-          {logMessage("Wardriver stopped by user");
-          menuID = 9;
-          return;}
+          if(i=='`'){
+            logMessage("Wardriver stopped by user");
+            canvas_main.clear(bg_color_rgb565);
+            canvas_main.setTextSize(1.5);
+            canvas_main.setTextDatum(middle_center);
+            canvas_main.drawString("Exited!", canvas_center_x, canvas_h/2);
+            pushAll();
+            menuID = 9;
+            return;
+          }
         }
         speedScan();
         canvas_main.drawString("Scan complete, getting GPS fix...", 5, 27);
@@ -2351,7 +2357,7 @@ void runApp(uint8_t appID){
       File csvFile;
       // Wardriving CSV viewer with search function
       String selectedPath = "/wardriving/first_seen.csv";
-      String menu[] = {"Select file", "Use default"};
+      String menu[] = {"Select file", "Use default (GPS data from pwned networks if enabled)"};
       int8_t fileChoice = drawMultiChoice("CSV File Option:", menu, 2, 2, 0);
       debounceDelay();
       if(fileChoice == -1){
@@ -4791,23 +4797,22 @@ int drawMultiChoice(String tittle, String toDraw[], uint8_t menuSize , uint8_t p
       }
     }
     
-    // Draw scrollbar on right side
     int sbX = canvas_main.width() - 6;
     int sbY = PADDING + 20;
-    int sbH = itemsToShow * lineH;
-    int scrollMax = max(menuSize - itemsToShow, 1);
-    
-    float scrollRatio = (float)startIdx / scrollMax;
-    float barRatio = (float)itemsToShow / menuSize;
-    
-    int barH = sbH * barRatio;
-    if (barH < 6) barH = 6;
+    int sbH = 4 * lineH;   // full page height, not itemsToShow
+
+    int totalPages = (menuSize + 3) / 4;
+    int currentPage = menu_current_page - 1;
+
+    float scrollRatio = (float)currentPage / max(1, totalPages - 1);
+    float barRatio = (float)1 / totalPages;
+
+    int barH = max(6, (int)(sbH * barRatio));
     int barY = sbY + (int)((sbH - barH) * scrollRatio);
-    
-    //canvas_main.drawLine(sbX, sbY, sbX, sbY + sbH, tx_color_rgb565);
-    canvas_main.fillRect(sbX -5, sbY, 20, sbH, bg_color_rgb565);
+
+    canvas_main.fillRect(sbX - 5, sbY, 20, sbH, bg_color_rgb565);
     canvas_main.fillRect(sbX - 2, barY, 4, barH, tx_color_rgb565);
-    
+
     pushAll();
 
     for(auto i : status.word){
@@ -4842,9 +4847,8 @@ int drawMultiChoice(String tittle, String toDraw[], uint8_t menuSize , uint8_t p
       marqueeOffset = 0;
       marqueeTick = millis();
     }
-    if(!singlePage){
-      float temp = 1+(menu_current_opt/4);
-      menu_current_page = temp;
+    if (!singlePage) {
+      menu_current_page = (menu_current_opt / 4) + 1;
     }
     if(isOkPressed()){
       Sound(10000, 100, sound);
@@ -5771,7 +5775,7 @@ void sendCrashReport(){
   if(WiFi.status() == WL_CONNECTED){
   }
   else{
-    bool answwer = drawQuestionBox("Error", "Saved wifi not found", "Set up new one?", "Press Y for yes, N for no");
+    bool answwer = drawQuestionBox("Error", "Saved wifi not found to send bug report", "Set up new one?", "Press Y for yes, N for no");
     if(answwer){
       runApp(43); //wifi setup app
       if(WiFi.status() == WL_CONNECTED){
@@ -5793,8 +5797,13 @@ void sendCrashReport(){
     }
   }
   connectMQTT();
-  sendCoredump();
-  drawInfoBox("Report sent", "Thank you for helping", "to improve this software!", true, false);
+  bool ok = sendCoredump();
+  if (ok) {
+    drawInfoBox("Report sent", "Upload verified", "Thank you for helping to improve this software!", true, false);
+  } else {
+    drawInfoBox("Report pending", "Upload not verified", "Coredump kept for retry.", true, false);
+  }
+  menuID = 0;
 }
 
 #endif

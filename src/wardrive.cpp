@@ -15,7 +15,7 @@ static const int GPS_BAUD = 115200;
 int tot_observed_networks = 0;
 
 // Session filename state
-static String currentWardrivePath = "/wardriving/wardrive.csv";
+static String currentWardrivePath = "/wardriving/first_seen.csv";
 static bool filenameLocked = false; // once set by startWardriveSession, stays until explicitly changed
 
 // First-seen map (persistent on SD)

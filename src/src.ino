@@ -12,9 +12,13 @@
 #include "src.h"
 #ifdef ENABLE_COREDUMP_LOGGING
 #include "esp_core_dump.h"
+#define MQTT_MAX_PACKET_SIZE 4096  //IMPORTANT: Increase MQTT max packet size for coredump chunks
 #include <PubSubClient.h>
 #include <WiFiClientSecure.h>
 #include "esp_system.h"
+#if __has_include(<esp_chip_info.h>)
+#include <esp_chip_info.h>
+#endif
 #include "mbedtls/base64.h"
 #endif
 #include "githubUpdater.h"
@@ -36,7 +40,7 @@ PubSubClient client(espClient);
 /* Core dump location retrieved via esp_core_dump_image_get() */
 size_t coredump_addr = 0;
 size_t coredump_size = 0;
-const size_t chunkSize = 3 * 1024; // 3 KiB chunk size
+const size_t chunkSize = 1024; // 1 KiB chunks to reduce memory pressure and improve reliability
 
 #ifndef MQTT_HOST
 #error "MQTT_HOST not defined. Please build using the build_with_mqtt.sh script"
@@ -65,7 +69,7 @@ void connectMQTT() {
   while (!client.connected() && retries < maxRetries) {
     if (client.connect("ESP32S3Client", mqttUser, mqttPassword)) {
       logMessage("MQTT Connected");
-      client.publish(mqttTopic, ("hello from esp32, mac: " + String(WiFi.macAddress())).c_str(), false);
+      client.publish(mqttTopic, ("hello from esp32, mac: " + String(originalMacAddress)).c_str(), false);
       return;
     }
     retries++;
@@ -77,44 +81,192 @@ void connectMQTT() {
   }
 }
 
-void sendCoredump() {
+static uint32_t checksum32(const uint8_t *data, size_t len) {
+  uint32_t sum = 0;
+  for (size_t i = 0; i < len; ++i) {
+    sum += data[i];
+  }
+  return sum;
+}
+
+// Ack tracking for upload confirmation
+static volatile bool ackReceived = false;
+static String ackUploadId = "";
+static String ackStatus = "";
+static unsigned ackReceivedChunks = 0;
+static uint32_t ackChecksum = 0;
+static String currentUploadId = "";
+
+static String resetReasonToString(esp_reset_reason_t r) {
+  switch (r) {
+    case ESP_RST_UNKNOWN: return "UNKNOWN";
+    case ESP_RST_POWERON: return "POWERON";
+    case ESP_RST_EXT: return "EXT";
+    case ESP_RST_SW: return "SW";
+    case ESP_RST_PANIC: return "PANIC";
+    case ESP_RST_INT_WDT: return "INT_WDT";
+    case ESP_RST_TASK_WDT: return "TASK_WDT";
+    case ESP_RST_WDT: return "WDT";
+    case ESP_RST_DEEPSLEEP: return "DEEPSLEEP";
+    case ESP_RST_BROWNOUT: return "BROWNOUT";
+    case ESP_RST_SDIO: return "SDIO";
+    default: return "OTHER";
+  }
+}
+
+void mqttAckCallback(char* topic, byte* payload, unsigned int length) {
+  String t(topic);
+  String msg;
+  for (unsigned int i = 0; i < length; ++i) msg += (char)payload[i];
+
+  String ackPrefix = String(mqttTopic) + "/ack";
+  if (!t.startsWith(ackPrefix)) return;
+
+  // quick JSON-like parse (no dependency on ArduinoJson)
+  int p = msg.indexOf("\"upload_id\"");
+  if (p < 0) return;
+  int c = msg.indexOf(':', p);
+  if (c < 0) return;
+  int s = msg.indexOf('"', c);
+  if (s < 0) return;
+  int e = msg.indexOf('"', s + 1);
+  if (e < 0) return;
+  String uid = msg.substring(s + 1, e);
+  if (uid != currentUploadId) return;
+
+  ackUploadId = uid;
+  ackReceived = true;
+
+  int st = msg.indexOf("\"status\"");
+  if (st >= 0) {
+    int cc = msg.indexOf(':', st);
+    int s2 = msg.indexOf('"', cc);
+    int e2 = msg.indexOf('"', s2 + 1);
+    if (s2 >= 0 && e2 >= 0) ackStatus = msg.substring(s2 + 1, e2);
+  }
+
+  int rc = msg.indexOf("\"received_chunks\"");
+  if (rc >= 0) {
+    int cc = msg.indexOf(':', rc);
+    if (cc >= 0) {
+      int comma = msg.indexOf(',', cc);
+      String num = (comma >= 0) ? msg.substring(cc + 1, comma) : msg.substring(cc + 1);
+      ackReceivedChunks = (unsigned)num.toInt();
+    }
+  }
+
+  int ck = msg.indexOf("\"checksum\"");
+  if (ck >= 0) {
+    int cc = msg.indexOf(':', ck);
+    if (cc >= 0) {
+      int comma = msg.indexOf(',', cc);
+      String num = (comma >= 0) ? msg.substring(cc + 1, comma) : msg.substring(cc + 1);
+      ackChecksum = (uint32_t)num.toInt();
+    }
+  }
+
+  logMessage("Received ACK: upload=" + ackUploadId + " status=" + ackStatus + " chunks=" + String(ackReceivedChunks) + " checksum=" + String(ackChecksum));
+}
+
+bool sendCoredump() {
   size_t addr = 0;
   size_t size = 0;
   esp_err_t res = esp_core_dump_image_get(&addr, &size);
   if (res != ESP_OK || size == 0) {
     logMessage("No core dump image available");
-    return;
+    return true;
   }
 
   logMessage("Core dump image found via esp_core_dump_image_get");
   logMessage("Core dump addr: " + String(addr) + ", size: " + String(size));
 
-  uint8_t *buffer = (uint8_t*)malloc(chunkSize);
+  // Ensure client connected
+  if (!client.connected()) {
+    logMessage("MQTT client not connected, attempting to connect...");
+    connectMQTT();
+    if (!client.connected()) {
+      logMessage("MQTT not connected, aborting coredump send");
+      return false;
+    }
+  }
+
+  // Prepare buffers
+  size_t bufSize = chunkSize;
+  uint8_t *buffer = (uint8_t*)malloc(bufSize);
+  while (!buffer && bufSize > 128) {
+    bufSize /= 2;
+    buffer = (uint8_t*)malloc(bufSize);
+  }
   if (!buffer) {
     logMessage("Failed to allocate coredump buffer");
-    return;
+    return false;
   }
-  // Worst-case Base64 size for chunkSize bytes
-  size_t maxB64 = (chunkSize * 4 / 3) + 8;
+  size_t maxB64 = (bufSize * 4 / 3) + 12;
   char *base64Out = (char*)malloc(maxB64);
   if (!base64Out) {
     logMessage("Failed to allocate base64 buffer");
     free(buffer);
-    return;
+    return false;
   }
 
-  size_t offset = 0;
-  while (offset < size) {
-    size_t readLen = chunkSize;
-    if (offset + readLen > size) {
-      readLen = size - offset;
-    }
+  // Create upload id and set current
+  currentUploadId = String(originalMacAddress) + "-" + String(millis());
+  unsigned totalChunks = (unsigned)((size + bufSize - 1) / bufSize);
 
-    // Read raw bytes from flash at the returned address
+  // Get telemetry
+  String resetStr = resetReasonToString(esp_reset_reason());
+  esp_chip_info_t chip_info;
+  esp_chip_info(&chip_info);
+  const char *idf_ver = esp_get_idf_version();
+  String buildTime = String(__DATE__) + " " + String(__TIME__);
+
+  // Compose metadata JSON with extra telemetry (including user-requested settings)
+  char meta[1536];
+  snprintf(meta, sizeof(meta), "{\"upload_id\":\"%s\",\"mac\":\"%s\",\"board\":%d,\"version\":\"%s\",\"build_time\":\"%s\",\"reset_reason\":\"%s\",\"idf\":\"%s\",\"chip_model\":%d,\"chip_cores\":%d,\"chip_rev\":%d,\"size\":%u,\"chunks\":%u,\"addr\":%u,\"freeHeap\":%u,\"gps_tx\":%u,\"gps_rx\":%u,\"advertise_pwngrid\":%d,\"toggle_pwnagothi_with_gpio0\":%d,\"cardputer_adv\":%d,\"limitFeatures\":%d}",
+           currentUploadId.c_str(), originalMacAddress.c_str(), (int)M5.getBoard(), CURRENT_VERSION, buildTime.c_str(), resetStr.c_str(), idf_ver, (int)chip_info.model, (int)chip_info.cores, (int)chip_info.revision, (unsigned)size, totalChunks, (unsigned)addr, (unsigned)ESP.getFreeHeap(), (unsigned)gpsTx, (unsigned)gpsRx, advertisePwngrid ? 1 : 0, toogle_pwnagothi_with_gpio0 ? 1 : 0, cardputer_adv ? 1 : 0, limitFeatures ? 1 : 0);
+
+  char fullTopic[128];
+  snprintf(fullTopic, sizeof(fullTopic), "%s/meta", mqttTopic);
+
+  // Set callback and subscribe to ACK topic
+  ackReceived = false;
+  ackUploadId = "";
+  ackStatus = "";
+  ackReceivedChunks = 0;
+  ackChecksum = 0;
+  client.setCallback(mqttAckCallback);
+  snprintf(fullTopic, sizeof(fullTopic), "%s/ack/#", mqttTopic);
+  client.subscribe(fullTopic);
+  // restore fullTopic to meta topic
+  snprintf(fullTopic, sizeof(fullTopic), "%s/meta", mqttTopic);
+
+  if (!client.publish(fullTopic, meta)) {
+    logMessage("Failed to publish coredump metadata");
+    free(base64Out);
+    free(buffer);
+    return false;
+  }
+  logMessage("Coredump metadata published: " + String(meta));
+
+  unsigned seq = 0;
+  uint32_t totalChecksum = 0;
+  size_t offset = 0;
+
+  // Use a single reusable send buffer to avoid repeated malloc/free and potential heap corruption
+  static char *sendBuf = nullptr;
+  static size_t sendBufSize = 0;
+
+  while (offset < size) {
+    size_t readLen = bufSize;
+    if (offset + readLen > size) readLen = size - offset;
+
     if (spi_flash_read((uint32_t)(addr + offset), buffer, readLen) != ESP_OK) {
       logMessage("Flash read failed");
       break;
     }
+
+    uint32_t chk = checksum32(buffer, readLen);
+    totalChecksum += chk;
 
     size_t olen = 0;
     if (mbedtls_base64_encode((unsigned char*)base64Out, maxB64, &olen, buffer, readLen) != 0) {
@@ -122,29 +274,132 @@ void sendCoredump() {
       break;
     }
 
-    bool ok = client.publish(mqttTopic, base64Out, (uint16_t)olen);
-    if (!ok) {
-      logMessage("MQTT publish failed");
-      return;
+    char header[256];
+    snprintf(header, sizeof(header), "{\"upload_id\":\"%s\",\"seq\":%u,\"len\":%u,\"checksum\":%u,\"total\":%u}",
+             currentUploadId.c_str(), seq, (unsigned)readLen, (unsigned)chk, totalChunks);
+    size_t headerLen = strlen(header);
+    size_t required = headerLen + 1 + olen;
+    if (sendBufSize < required) {
+      // (re)allocate a buffer large enough for the biggest chunk seen so far
+      char *nb = (char*)realloc(sendBuf, required);
+      if (!nb) {
+        logMessage("Failed to allocate send buffer for chunk");
+        break;
+      }
+      sendBuf = nb;
+      sendBufSize = required;
+    }
+    memcpy(sendBuf, header, headerLen);
+    sendBuf[headerLen] = '\n';
+    memset(sendBuf, 0, sendBufSize);
+    memcpy(sendBuf + headerLen + 1, base64Out, olen);
+
+    memcpy(sendBuf, header, headerLen);
+    sendBuf[headerLen] = '\n';
+    memcpy(sendBuf + headerLen + 1, base64Out, olen);
+
+    // wipe ONLY the unused tail so no old garbage leaks
+    size_t used = headerLen + 1 + olen;
+    if (used < sendBufSize) {
+        memset(sendBuf + used, 0, sendBufSize - used);
     }
 
-    uint8_t state = client.state();
-    logMessage("MQTT publish state: " + String(state));
 
+    snprintf(fullTopic, sizeof(fullTopic), "%s/chunk", mqttTopic);
+    bool ok = client.publish(fullTopic, sendBuf, (uint16_t)required);
+
+    if (!ok) {
+      logMessage("MQTT publish failed for chunk " + String(seq));
+      // attempt reconnect once
+      connectMQTT();
+      if (!client.connected()) {
+        logMessage("Reconnect failed, aborting coredump send");
+        free(base64Out);
+        free(buffer);
+        return false;
+      }
+      ok = client.publish(fullTopic, sendBuf, (uint16_t)required);
+      if (!ok) {
+        logMessage("Retry publish failed for chunk " + String(seq));
+        free(base64Out);
+        free(buffer);
+        return false;
+      }
+    }
+
+    // Give the MQTT client a chance to process/send the packet before we reuse the buffer
+    client.loop();
+    delay(50);
+
+    logMessage("Published chunk " + String(seq) + " (" + String(readLen) + " bytes, crc=" + String(chk) + ")");
+    seq++;
     offset += readLen;
-    delay(10); // Slight delay to avoid flooding
+    delay(20);
+  }
+  // free the reusable sendBuf if it was allocated
+  if (sendBuf) {
+    free(sendBuf);
+    sendBuf = nullptr;
+    sendBufSize = 0;
   }
 
+  // publish end message with final meta including total checksum
+  char endMsg[512];
+  snprintf(endMsg, sizeof(endMsg), "{\"upload_id\":\"%s\",\"status\":\"complete\",\"sent_chunks\":%u,\"checksum\":%u}", currentUploadId.c_str(), (unsigned)seq, (unsigned)totalChecksum);
+  snprintf(fullTopic, sizeof(fullTopic), "%s/end", mqttTopic);
+  client.publish(fullTopic, endMsg);
+  logMessage("Coredump upload finished: " + String(endMsg));
+
+  // Wait for ACK for a short period
+  unsigned long waitStart = millis();
+  const unsigned long ackTimeout = 10000; // 10s
+  bool uploadVerified = false;
+  while (millis() - waitStart < ackTimeout) {
+    client.loop();
+    if (ackReceived && ackUploadId == currentUploadId) {
+      if (ackStatus == "ok" || ackStatus == "complete") {
+        if (ackReceivedChunks == seq && ackChecksum == totalChecksum) {
+          logMessage("Upload verified by server, chunks and checksum match");
+          uploadVerified = true;
+        } else {
+          logMessage("Server ACK received but mismatch: ackChunks=" + String(ackReceivedChunks) + " ackChecksum=" + String(ackChecksum));
+        }
+      } else {
+        logMessage("Server ACK received with status: " + ackStatus);
+      }
+      break;
+    }
+    delay(50);
+  }
+
+  if (uploadVerified) {
+    // Erase core dump image after verified send
+    esp_core_dump_image_erase();
+    logMessage("Core dump erased after verified upload");
+  } else {
+    logMessage("No verification ACK received; keeping core dump for retry");
+  }
+
+  // cleanup
   free(base64Out);
   free(buffer);
-  client.publish(mqttTopic, ("End from esp32, mac: " + String(WiFi.macAddress())).c_str(), true);
-  logMessage("Core dump sent successfully");
-  delay(500); // Ensure all messages are sent before disconnecting
-  client.disconnect();
-  logMessage("MQTT disconnected");
-  // Erase core dump image after sending
-  esp_core_dump_image_erase();
+
+  delay(200); // Ensure messages are flushed
+  client.unsubscribe((String(mqttTopic) + "/ack/#").c_str());
+  // Reset callback to noop
+  client.setCallback(nullptr);
+
+  if (!uploadVerified) {
+    //disconnect and flush everything, just dont erase coredump
+    client.disconnect();
+    logMessage("MQTT disconnected, but core dump not erased");
+  } else {
+    client.disconnect();
+    logMessage("MQTT disconnected");
+  }
+  return uploadVerified;
 }
+
 
 #endif // ENABLE_COREDUMP_LOGGING
 
@@ -281,43 +536,19 @@ void setup() {
   // check if core dump exists
   #ifdef ENABLE_COREDUMP_LOGGING
   if (esp_core_dump_image_check() == ESP_OK) {
-    logMessage("Core dump image found");
-    sendCrashReport();
+    if(true) { 
+      sendCrashReport();
+      drawInfoBox("", "", "", false, false);
+      updateUi(false, false, true);
+    }
+    else{
+      //lets clear coredump as config was changed
+      esp_core_dump_image_erase();
+      logMessage("Config changed, erasing existing core dump");
+    }
   } else {
     logMessage("Core dump image not found");
   }
-  #endif
-  #ifdef LITE_VERSION
-  #ifndef SKIP_AUTO_UPDATE
-  if(checkUpdatesAtNetworkStart) {
-    drawInfoBox("Update", "Checking for updates", "Please wait...", false, false);
-    attemptConnectSavedNetworks();
-    delay(5000);
-      if(check_for_new_firmware_version(true)) {
-      drawInfoBox("Update", "New firmware version available", "Downloading...", false, false);
-      delay(1000);
-      logMessage("New firmware version available, downloading...");
-      if(ota_update_from_url(true)) {
-        drawInfoBox("Update", "Update successful", "Restarting...", false, false);
-        logMessage("Update successful, restarting...");
-        delay(1000);
-        ESP.restart();
-      } else {
-        logMessage("Update failed");
-      }
-    } else {
-      drawInfoBox("Update", "No new firmware version found", "Booting...", false, false);
-      logMessage("No new firmware version found, or wifi not connected");
-      delay(1000);
-    }
-    if(WiFi.status() == WL_CONNECTED) {
-      if(lite_mode_wpa_sec_sync_on_startup){
-        logMessage("Syncing known networks with WPA_SEC");
-        processWpaSec(wpa_sec_api_key.c_str());
-      }
-    }
-  }
-  #endif
   #endif
 
   if(pwnagothiModeEnabled) {

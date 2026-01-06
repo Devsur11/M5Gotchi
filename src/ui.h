@@ -1,6 +1,7 @@
 #pragma once
 #include "logger.h"
 #include "M5GFX.h"
+#include "settings.h"
 
 struct menu {
   const char *name;

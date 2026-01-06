@@ -32,10 +32,6 @@ bool wifion(){
 #ifndef CURRENT_VERSION
 #define CURRENT_VERSION "dev"
 #endif
-#ifdef LITE_VERSION
-#undef ENABLE_COREDUMP_LOGGING
-#undef USE_EXPERIMENTAL_APPS
-#endif
 
 #define ADDRES_BOOK_FILE "/pwngrid/contacts.conf"
 #define KEYS_FILE "/pwngrid/keys"
@@ -158,3 +154,5 @@ extern uint16_t prev_level;
 extern bool randomise_mac_at_boot;
 extern bool add_new_units_to_friends;
 extern bool check_inbox_at_startup;
+extern String originalMacAddress;
+extern bool configChanged;

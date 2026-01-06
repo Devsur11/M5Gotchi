@@ -4,5 +4,5 @@ void loop();
 void fontSetup();
 #ifdef ENABLE_COREDUMP_LOGGING
 void connectMQTT();
-void sendCoredump();
+bool sendCoredump();
 #endif

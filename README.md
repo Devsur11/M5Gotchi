@@ -182,6 +182,41 @@ You can install PlatformIO using either:
 
 ---
 
+## Core dump reporter (MQTT) 🔧
+
+When built with `ENABLE_COREDUMP_LOGGING` the firmware will publish core dump uploads over MQTT to the configured broker. The flow is:
+
+- `device/coredump/meta` — JSON metadata published first. Contains fields:
+  - `upload_id` (string)
+  - `mac` (string)
+  - `board` (numeric board id)
+  - `version` (firmware version / build tag)
+  - `build_time` (compile timestamp)
+  - `reset_reason` (boot reason)
+  - `idf` (ESP-IDF version)
+  - `chip_model`, `chip_cores`, `chip_rev`
+  - `size`, `chunks`, `addr`, `freeHeap`
+  - `gps_tx`, `gps_rx` (GPS TX/RX pins configured)
+  - `advertise_pwngrid`, `toggle_pwnagothi_with_gpio0`, `cardputer_adv`, `limitFeatures` (boolean flags reported as 0/1)
+
+- `device/coredump/chunk` — messages with a small header JSON (upload_id, seq, len, checksum, total) followed by `\n` and base64-encoded chunk payload.
+
+- `device/coredump/end` — final JSON with `upload_id`, `status`, `sent_chunks`, `checksum` (combined checksum of all bytes).
+
+- `device/coredump/ack/<upload_id>` (or `device/coredump/ack/#`) — the collector should send an acknowledgement JSON with `upload_id`, `status` (`ok` or `complete`), `received_chunks`, and `checksum` when the uploaded file is verified; the device will only erase the core dump after receiving a matching verification ack.
+
+This improves reliability by:
+
+- Sending telemetry (build, IDF, reset reason, chip info) to help debugging
+- Using per-chunk and final checksums to detect corruption
+- Waiting for a server ACK before erasing the core dump so uploads can be retried if verification fails
+
+An example Python subscriber script that reassembles chunks and publishes the verification ACK is included at `scripts/reassemble_coredump.py` (requires `paho-mqtt`).
+
+A simple Web dashboard is also available to browse and manage reports: `scripts/dashboard.py` reads report metadata in `coredumps/*.json` (created by the reassembler) and provides a UI and API to list reports, download binaries, block/unblock device MACs, and view statistics. Install the dashboard requirements with `pip install -r scripts/requirements.txt` and run it with `python scripts/dashboard.py --host 0.0.0.0 --port 8080`.
+
+---
+
 ## License
 
 This project is licensed under the **MIT License** — see [LICENSE](LICENSE) for details.

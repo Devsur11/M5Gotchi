@@ -54,6 +54,7 @@ uint16_t prev_level = 0;
 bool randomise_mac_at_boot = true;
 bool add_new_units_to_friends = false;
 bool check_inbox_at_startup = false;
+String originalMacAddress;
 
 // Keep track of which hints have been displayed using bitmask
 // Each bit represents a different hint
@@ -281,6 +282,9 @@ bool savePersonality(){
     }
 }
 
+#include "WiFi.h"
+
+bool configChanged = false;
 
 bool initVars() {
     if (!SD.begin(SD_CS, sdSPI, 1000000)) {
@@ -288,7 +292,11 @@ bool initVars() {
         return false;
     }
 
-    bool configChanged = false;
+    String macAddr = WiFi.macAddress();
+    originalMacAddress = macAddr;
+    logMessage("Original MAC Address: " + macAddr);
+
+    
     JsonDocument config;
 
     if (SD.exists(NEW_CONFIG_FILE)) {
