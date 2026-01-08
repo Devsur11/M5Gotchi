@@ -2817,7 +2817,6 @@ void runApp(uint8_t appID){
           if (status.enter) {
             xSemaphoreTake(wifiMutex, portMAX_DELAY);
             WiFi.eraseAP();
-            WiFi.mode(WIFI_MODE_NULL);
             xSemaphoreGive(wifiMutex);
             wifion();
             apMode = false;
@@ -2860,7 +2859,11 @@ void runApp(uint8_t appID){
         if(apMode){
           bool answear = drawQuestionBox("AP of?", "AP arleady running!", "Power AP off?");
           if (answear){
+            xSemaphoreTake(wifiMutex, portMAX_DELAY);
+            WiFi.eraseAP();
             WiFi.mode(WIFI_MODE_NULL);
+            xSemaphoreGive(wifiMutex);
+            wifion();
             apMode = false;
             wifiChoice = "";
             menuID = 2;

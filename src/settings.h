@@ -22,7 +22,7 @@ void printHeapInfo() {
 }
 
 bool wifion(){
-    if(WiFi.getMode() !=WIFI_MODE_APSTA)
+    if(WiFi.getMode() != WIFI_MODE_APSTA)
     {
     initPwngrid();
     }

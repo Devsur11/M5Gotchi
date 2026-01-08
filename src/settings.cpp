@@ -710,6 +710,6 @@ void attemptConnectSavedNetworks(){
         while(millis() - start < 10000 && WiFi.status() != WL_CONNECTED) delay(500);
         if(WiFi.status() == WL_CONNECTED) return;
     }
-    // No networks connected? Disable wifi to avoid problems
-    WiFi.mode(WIFI_MODE_NULL);
+    
+    WiFi.mode(WIFI_MODE_STA);
 }
