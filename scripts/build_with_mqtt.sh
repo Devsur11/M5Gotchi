@@ -37,7 +37,7 @@ export PLATFORMIO_BUILD_FLAGS="$PLATFORMIO_BUILD_FLAGS -DMQTT_USERNAME='\"$MQTT_
 
 # Determine environments to build: if no argument provided, build all known envs
 if [ -z "$1" ]; then
-    ENVS=("Cardputer-dev" "Cardputer-full" "cardputer-lite" "m5stick-c")
+    ENVS=("Cardputer-dev" "Cardputer-full")
 else
     ENVS=("$1")
 fi

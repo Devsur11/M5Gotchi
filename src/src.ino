@@ -639,6 +639,10 @@ void setup() {
     return;
   }
   else {
+    drawHintBox("Welcome to M5Gotchi!\nSet your device name in setting and explore!\nEnjoy your stay! (Regardless of your choice this will only be shown once)", 13);
+    //now lets disable entirely hint 13 regardless of user choice
+    hintsDisplayed |= (1 << 13);
+    saveSettings();
     logMessage("Custom install detected, removing update functionality to prevent bricking!");
     limitFeatures = true;
   }
@@ -687,6 +691,7 @@ void fontSetup(){
       logMessage("User opted to connect to WiFi for font download");
       drawInfoBox("WiFi Setup", "Please connect to WiFi to download fonts.", "", false, false);
       runApp(43); //WiFi setup app
+      setToMainMenu();
     }
   }
   if(WiFi.status() != WL_CONNECTED){

@@ -55,6 +55,7 @@ bool saveToken(const String &t) {
     token = t;
     return true;
 }
+
 bool loadToken() {
     if (!SD.exists(tokenPath)) return false;
     File f = SD.open(tokenPath, "r");
@@ -88,10 +89,6 @@ bool api_client::sub_init(const String &keysPath) {
     }
     initTime();
     keysPathGlobal = keysPath;
-    if (!SD.begin(true)) {
-        logMessage("SD mount failed");
-        return false;
-    }
     if (!pwngrid::crypto::ensureKeys(keysPath)) {
         logMessage("crypto keys ensure failed");
         return false;

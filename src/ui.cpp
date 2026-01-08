@@ -310,6 +310,7 @@ volatile bool inboxDirty = false;
 volatile bool refresherRunning = false;
 TaskHandle_t pwngridInboxTaskHandle = nullptr;
 volatile bool killInboxTask = false;
+bool crackedList;
 
 void pwngridInboxTask(void *param) {
   while (!killInboxTask) {
@@ -449,6 +450,7 @@ void initUi() {
   attachInterrupt(digitalPinToInterrupt(0), handleInterrupt, FALLING);
   buttonSemaphore = xSemaphoreCreateBinary();
   xTaskCreate(buttonTask, "ButtonTask", 4096, NULL, 1, NULL);
+  crackedList = SD.exists("/pwngrid/cracks.conf");
   M5.Display.setRotation(1);
   M5.Display.setTextSize(1);
   M5.Display.fillScreen(bg_color_rgb565);
@@ -588,8 +590,8 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
              check_inbox_at_startup? "ON" : "OFF");
 
     snprintf(val_5, sizeof(val_5),
-            "WiFi Connect: %s",
-            (WiFi.status() == WL_CONNECTED) ? "Disconnect" : "Connect");
+            "WiFi %s",
+            (WiFi.status() == WL_CONNECTED) ? "disconnect" : "connect");
 
     snprintf(val_6, sizeof(val_6),
             "GPS Pins: %s",
@@ -677,7 +679,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
     if((toUpload && toUpload.size() > 3) && (pwngrid_indentity.length()>10)){ 
       drawMenuList(pwngrid_menu_to_send, 8, 7);
     }
-    else (pwngrid_indentity.length()>10)? drawMenuList(pwngrid_menu, 8, 7): drawMenuList(pwngrid_menu, 8, 1);
+    else (pwngrid_indentity.length()>10)? drawMenuList(pwngrid_menu, 8, 7): drawMenuList(pwngrid_not_enrolled_menu, 8, 1);
     prevMID = 8;
   }
   else if (menuID == 9){
@@ -728,6 +730,12 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
       pwnagothiStealthLoop();
     }
   }
+}
+
+void setToMainMenu(){
+  menuID = 0;
+  menu_current_opt = 0;
+  menu_current_page = 1;
 }
 
 void redrawUi(bool show_toolbars) {
@@ -1865,8 +1873,7 @@ void runApp(uint8_t appID){
         SD.remove(ADDRES_BOOK_FILE);
         SD.rmdir("/pwngrid/keys");
         SD.rmdir("/pwngrid/chats");
-        SD.rmdir("/pwngrid");
-
+        SD.remove("/pwngrid/cracks.conf");
         File chatsDis = SD.open("/pwngrid/chats");
         while(true){
           String nextFileName = chatsDis.getNextFileName();
@@ -1878,6 +1885,9 @@ void runApp(uint8_t appID){
           }
         }
         chatsDis.close();
+        SD.rmdir("/pwngrid");
+
+        
 
         lastTokenRefresh = 0;
 
@@ -3988,22 +3998,19 @@ void runApp(uint8_t appID){
       }
       drawInfoBox("Factory Reset", "Deleting config data...", "", false, false);
       runApp(15);
-      if (SD.exists(NEW_CONFIG_FILE)) {
+      if (true) {
         SD.remove(NEW_CONFIG_FILE);
         SD.remove("/uploaded.json");
         SD.remove("/cracked.json");
         SD.remove(PERSONALITY_FILE);
+        SD.remove("/moods/faces.txt");
+        SD.remove("/moods/texts.txt");
+        SD.rmdir("/moods");
+        SD.rmdir("/temp");
         //recursevely delete "fonts" "wardrive" "handshake" folders
-        File fontsDir = SD.open("/fonts");
-        if (fontsDir && fontsDir.isDirectory()) {
-          File fontFile = fontsDir.openNextFile();
-          while (fontFile) {
-            SD.remove(String(fontFile.name()).c_str());
-            fontFile = fontsDir.openNextFile();
-          }
-          fontsDir.close();
-          SD.rmdir("/fonts");
-        }
+        SD.remove("/fonts/big.vlw");
+        SD.remove("/fonts/small.vlw");
+        SD.rmdir("/fonts");
         File wardriveDir = SD.open("/wardrive");
         if (wardriveDir && wardriveDir.isDirectory()) {
           File wardriveFile = wardriveDir.openNextFile();
@@ -4018,7 +4025,10 @@ void runApp(uint8_t appID){
         if (handshakeDir && handshakeDir.isDirectory()) {
           File handshakeFile = handshakeDir.openNextFile();
           while (handshakeFile) {
-            SD.remove(String(handshakeFile.name()).c_str());
+            logMessage("Deleting handshake file: /handshake/" + String(handshakeFile.name()));
+            if (!handshakeFile.isDirectory()) {
+              SD.remove(String(handshakeFile.path()));
+            }
             handshakeFile = handshakeDir.openNextFile();
           }
           handshakeDir.close();

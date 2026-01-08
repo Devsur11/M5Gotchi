@@ -218,7 +218,6 @@ bool uploadToWpaSec(const char* apiKey, const char* pcapPath, const char* fileNa
     const uint16_t port = 443;
     logMessage("Free heap before TLS connect: " + String(ESP.getFreeHeap()));
     delay(10);
-    delay(10);
     if (!client.connect(host, port)) {
         logMessage("TLS connect failed to " + String(host) + " (attempting insecure fallback)");
         // Try insecure fallback if verification fails (last resort)
@@ -628,19 +627,18 @@ static void uploadToWpaSecTask(void* pvParameters) {
 
 // Start upload task ensuring arguments are heap-allocated and the task stack is large
 static bool startWpaSecUploadAsync(const char* a0, const char* a1, const char* a2, unsigned int a3) {
-    if (s_wpa_upload_in_progress) {
-        logMessage("WPA-Sec upload already in progress");
-        return false;
-    }
-    s_wpa_upload_in_progress = true;
+    // if (s_wpa_upload_in_progress) {
+    //     logMessage("WPA-Sec upload already in progress");
+    //     return false;
+    // }
 
-    // Quick guard: ensure there's enough heap for the TLS stack and crypto buffers
-    const size_t kMinHeapForTls = 60 * 1024; // 60KB
-    if (ESP.getFreeHeap() < kMinHeapForTls) {
-        logMessage("Not enough heap to start WPA-Sec upload (free: " + String(ESP.getFreeHeap()) + ")");
-        s_wpa_upload_in_progress = false;
-        return false;
-    }
+    // // Quick guard: ensure there's enough heap for the TLS stack and crypto buffers
+    // const size_t kMinHeapForTls = 60 * 1024; // 60KB
+    // if (ESP.getFreeHeap() < kMinHeapForTls) {
+    //     logMessage("Not enough heap to start WPA-Sec upload (free: " + String(ESP.getFreeHeap()) + ")");
+    //     s_wpa_upload_in_progress = false;
+    //     return false;
+    // }
 
     WpaSecUploadArgs* args = reinterpret_cast<WpaSecUploadArgs*>(malloc(sizeof(WpaSecUploadArgs)));
     if (!args) {
@@ -666,18 +664,27 @@ static bool startWpaSecUploadAsync(const char* a0, const char* a1, const char* a
 
     // Create a pinned task with a big stack to avoid loopTask stack overflow during TLS handshake
     // Stack size used here: 32768 (32KB) - adjust if necessary for your board.
-    BaseType_t rc = xTaskCreatePinnedToCore(
-        uploadToWpaSecTask,
-        "wpaUploadTask",
-        16384,       // stack size (bytes) - reduce to save memory
-        args,
-        1,           // priority
-        NULL,        // handle
-        tskNO_AFFINITY // let scheduler decide core; change to 0/1 if you prefer
-    );
+    // BaseType_t rc = xTaskCreatePinnedToCore(
+    //     uploadToWpaSecTask,
+    //     "wpaUploadTask",
+    //     32768,       // stack size (bytes) - reduce to save memory
+    //     args,
+    //     1,           // priority
+    //     NULL,        // handle
+    //     0           // core ID
+    // );
+    BaseType_t rc;
+    if(uploadToWpaSec(args->arg0, args->arg1, args->arg2, args->arg3)){
+        logMessage("WPA-Sec upload completed successfully");
+        // Mark as uploaded so it won't be retried
+        appendToUploadedList(args->arg2);
+        rc = pdPASS; // Simulate success for direct call
+    } else {
+        logMessage("WPA-Sec upload failed");
+        rc = pdFAIL; // Simulate failure for direct call
+    } // Call directly for single-threaded environments
 
     if (rc != pdPASS) {
-        logMessage("Failed to create WPA-Sec upload task");
         free(args->arg0);
         free(args->arg1);
         free(args->arg2);

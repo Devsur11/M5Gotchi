@@ -79,6 +79,7 @@ void drawStats();
 void drawSysInfo();
 bool addUnitToAddressBook(const unit u);
 void themeMenu();
+void setToMainMenu();
 
 #ifdef ENABLE_COREDUMP_LOGGING
 void sendCrashReport();

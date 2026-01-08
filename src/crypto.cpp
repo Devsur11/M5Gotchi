@@ -72,7 +72,7 @@ static void init_global_drbg_once() {
         fLogMessage("[crypto] global drbg seed failed: -0x%04x\n", -rc);
         // even on failure we mark initialized to avoid retry storms; functions will still check rc when used
     } else {
-        fLogMessage("[crypto] global drbg seeded\n");
+        logMessage("[crypto] global drbg seeded\n");
     }
     global_drbg_initialized = true;
 }
@@ -265,6 +265,7 @@ bool pwngrid::crypto::ensureKeys(const String &keysPath) {
     // ensure global DRBG is seeded once before any crypto op
     init_global_drbg_once();
     keygenDone = xSemaphoreCreateBinary();
+    logMessage("[crypto] ensuring keys under " + keysPath);
     xTaskCreatePinnedToCore(keygenTask, "keygen", 32768, NULL, 1, NULL, 0);
     while(xSemaphoreTake(keygenDone, 0) == pdFALSE){
         delay(10);
