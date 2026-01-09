@@ -149,6 +149,8 @@ bool pwnagothiBegin(){
         auto status = M5Cardputer.Keyboard.keysState();
         for(auto i : status.word){
             if(i=='`'){
+                debounceDelay();
+                setMID();
                 return false;
             }
         }
@@ -156,6 +158,11 @@ bool pwnagothiBegin(){
     logMessage("Pwnagothi auto mode init!");
     parseWhitelist();
     pwnagothiMode = true;
+    xSemaphoreTake(wifiMutex, portMAX_DELAY);
+    WiFi.disconnect(false, true);
+    WiFi.mode(WIFI_STA);
+    xSemaphoreGive(wifiMutex);
+    wifion();
     return true;
 }
 
@@ -231,6 +238,7 @@ String lastBlocked = "";
 
 void pwnagothiLoop(){
     if(pwnagothiScan){
+        fLogMessage("Scan requested, current epoch state: %d happy epochs, %d sad epochs, total epochs: %d", tot_happy_epochs, tot_sad_epochs, allTimeEpochs);
         setMoodLooking(0);
         updateUi(true, false);
         g_speedScanResults.clear();
@@ -242,12 +250,14 @@ void pwnagothiLoop(){
             if(auto_mode_and_wardrive){
                 wardrive(g_speedScanResults, pwnagotchi.gps_fix_timeout);
             }
+            tot_happy_epochs = g_speedScanResults.size()/2;
             delay(pwnagotchi.delay_after_wifi_scan);
         } else {
             updateUi(true, false);
             WiFi.scanNetworks();
             delay(pwnagotchi.delay_after_no_networks_found);
             pwnagothiScan = true;
+            allTimeEpochs++;
             return;
         }
     }
@@ -259,10 +269,12 @@ void pwnagothiLoop(){
             logMessage("No speed-scan results available, scheduling new scan.");
             wifion();
             pwnagothiScan = true;
+            allTimeEpochs++;
             return;
         }
         if(wifiCheckInt >= g_speedScanResults.size()){
             pwnagothiScan = true;
+            allTimeEpochs++;
             return;
         }
 
@@ -270,7 +282,9 @@ void pwnagothiLoop(){
         String attackVector = entry.ssid;
         if(attackVector == lastBlocked){
             logMessage("Skipping previously blocked SSID: " + attackVector);
+            tot_sad_epochs++;
             pwnagothiScan = true;
+            allTimeEpochs++;
             return;
         }
         // handle empty SSID entry
@@ -296,6 +310,7 @@ void pwnagothiLoop(){
                 wifiCheckInt++;
                 tot_sad_epochs++;
                 logMessage("SSID " + attackVector + " is in whitelist, skipping.");
+                allTimeEpochs++;
                 return;
             }
         }
@@ -309,6 +324,7 @@ void pwnagothiLoop(){
             logMessage("Skipping to next target.");
             tot_sad_epochs++;
             wifiCheckInt++;
+            allTimeEpochs++;
             return;
         }
         if(random(0, 10) >5){
@@ -336,6 +352,7 @@ void pwnagothiLoop(){
             }
             else{
                 pwnagothiScan = true;
+                allTimeEpochs++;
                 return;
             }
         }
@@ -377,7 +394,7 @@ void pwnagothiLoop(){
                 lastSessionPeers = getPwngridTotalPeers();
                 lastSessionCaptures = sessionCaptures;
                 lastSessionTime = millis();
-                tot_happy_epochs += 2;
+                tot_happy_epochs += 3;
                 if(pwnagotchi.sound_on_events){
                     Sound(1500, 100, true);
                     delay(100);
@@ -397,7 +414,6 @@ void pwnagothiLoop(){
                 delay(pwnagotchi.delay_after_successful_attack);
                 break;
             }
-
             if (millis() - startTime1 > pwnagotchi.handshake_wait_time) {
                 logMessage("Timeout waiting for handshake from " + attackVector + ", moving on.");
                 setMoodToAttackFailed(attackVector);
@@ -455,7 +471,7 @@ void convert_normal_scan_to_speedscan(){
 
 void pwnagothiStealthLoop(){
     if(pwnagothiScan){
-        logMessage("Scanning...");
+        fLogMessage("Scan requested, current epoch state: %d happy epochs, %d sad epochs, total epochs: %d", tot_happy_epochs, tot_sad_epochs, allTimeEpochs);
         setMoodLooking(0);
         updateUi(true, false);
         WiFi.scanNetworks();
@@ -492,6 +508,7 @@ void pwnagothiStealthLoop(){
         }
         else{
             pwnagothiScan = true;
+            allTimeEpochs++;
             return;
         }
         attackVector = WiFi.SSID(wifiCheckInt);
@@ -507,6 +524,7 @@ void pwnagothiStealthLoop(){
                 tot_sad_epochs++;
                 updateUi(true, false);
                 wifiCheckInt++;
+                allTimeEpochs++;
                 return;
             }
         }
@@ -521,6 +539,7 @@ void pwnagothiStealthLoop(){
             logMessage("Skipping to next target.");
             tot_sad_epochs++;
             wifiCheckInt++;
+            allTimeEpochs++;
             return;
         }
         uint16_t targetChanel;
@@ -529,6 +548,7 @@ void pwnagothiStealthLoop(){
             targetChanel = result;
         } else {
             pwnagothiScan = false;
+            allTimeEpochs++;
             return;
         }
         initClientSniffing();
@@ -548,6 +568,7 @@ void pwnagothiStealthLoop(){
                 lastSessionPeers = getPwngridTotalPeers();
                 lastSessionTime = millis();
                 wifiCheckInt++;
+                allTimeEpochs++;
                 return;
             }
             if(!clients[i].isEmpty()){
@@ -578,6 +599,8 @@ void pwnagothiStealthLoop(){
                 logMessage("Deauth disabled in settings, proceeding to sniff...");
             }
             else{
+                allTimeEpochs++;
+                pwnagothiScan = true;
                 return;
             }
         }
@@ -613,7 +636,7 @@ void pwnagothiStealthLoop(){
                 lastSessionPeers = getPwngridTotalPeers();
                 lastSessionCaptures = sessionCaptures;
                 lastSessionTime = millis();
-                tot_happy_epochs += 2;
+                tot_happy_epochs += 3;
                 if(pwnagotchi.sound_on_events){
                     Sound(1500, 100, true);
                     delay(100);
@@ -665,7 +688,10 @@ void pwnagothiStealthLoop(){
     setIDLEMood();
     logMessage("Waiting " + String(pwnagotchi.nap_time/1000) + " seconds for next attack...");
     updateUi(true, false);
+    lastSessionPeers = getPwngridTotalPeers();
+    lastSessionTime = millis();
     allTimeEpochs++;
+    saveSettings();
     delay(pwnagotchi.nap_time);
 }
 

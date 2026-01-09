@@ -8,7 +8,6 @@
 #include <cstdarg>
 
 // --- FACES ---
-
 const char* sleeping[] = {
   "(⇀‿‿↼)",
   "(≖‿‿≖)"
@@ -35,7 +34,7 @@ const char* sad[] = {
   "(☓‿‿☓)",
   "(-__-)",
   "(≖__≖)",
-  "(-_-')"
+  "( -_-' )"
 };
 
 const char* excited[] = {
@@ -47,7 +46,6 @@ const char* excited[] = {
 };
 
 // --- TEXTS ---
-
 const char* time_def[] = {
   "minutes",
   "seconds",
@@ -116,7 +114,8 @@ const char* text_sad[] = {
   "I'm bored ...",
   "Nobody wants to play with me ...",
   "I feel so alone ...",
-  "Where's everybody?!"
+  "Where's everybody?!",
+  "Am I a joke to you?"
 };
 
 const char* text_happy[] = {
@@ -143,37 +142,29 @@ const char* status_report_fmt[] = {
 
 const char* status_idle_neutral[] = {
   "Scanning the ether...",
+  "...",
   "Monitoring 2.4GHz spectrum...",
+  "...",
   "Waiting for beacon frames...",
+  "...",
   "Sniffing for data...",
+  "...",
   "Observing traffic patterns...",
+  "...",
   "Listening to the noise..."
-};
-
-const char* status_idle_happy[] = {
-  "The air tastes like WiFi.",
-  "So many juicy packets!",
-  "High density traffic detected.",
-  "I love the smell of EAPOL.",
-  "Algorithm reward is high.",
-  "Digesting new data..."
-};
-
-const char* status_idle_sad[] = {
-  "The spectrum is too quiet...",
-  "Low signal integrity.",
-  "I need more training data...",
-  "Where did all the packets go?",
-  "Blind scanning...",
-  "No targets in range."
 };
 
 const char* status_idle_excited[] = {
   "Hack the Planet!",
+  "...",
   "Injecting frames...",
+  "...",
   "Neural network activated!",
+  "...",
   "Target acquisition mode.",
+  "...",
   "Power level rising!",
+  "...",
   "Maximum bandwidth!"
 };
 
@@ -252,8 +243,8 @@ bool createDefaultMoodFiles() {
   // NEW SECTIONS
   addSectionTxt("status_report_fmt", status_report_fmt, sizeof(status_report_fmt)/sizeof(status_report_fmt[0]));
   addSectionTxt("status_idle_neutral", status_idle_neutral, sizeof(status_idle_neutral)/sizeof(status_idle_neutral[0]));
-  addSectionTxt("status_idle_happy", status_idle_happy, sizeof(status_idle_happy)/sizeof(status_idle_happy[0]));
-  addSectionTxt("status_idle_sad", status_idle_sad, sizeof(status_idle_sad)/sizeof(status_idle_sad[0]));
+  addSectionTxt("text_happy", text_happy, sizeof(text_happy)/sizeof(text_happy[0]));
+  addSectionTxt("text_sad", text_sad, sizeof(text_sad)/sizeof(text_sad[0]));
   addSectionTxt("status_idle_excited", status_idle_excited, sizeof(status_idle_excited)/sizeof(status_idle_excited[0]));
 
 
@@ -512,12 +503,12 @@ void setIDLEMood(){
   if(balance >= 5 && balance < 15){
     // Happy IDLE
     setMood(0, pickFace("happy", happy, sizeof(happy)/sizeof(happy[0])),
-            pickText("status_idle_happy", status_idle_happy, sizeof(status_idle_happy)/sizeof(status_idle_happy[0])), false);
+            pickText("text_happy", text_happy, sizeof(text_happy)/sizeof(text_happy[0])), false);
   }
   else if(balance <= -5){
     // Sad IDLE
     setMood(0, pickFace("sad", sad, sizeof(sad)/sizeof(sad[0])),
-            pickText("status_idle_sad", status_idle_sad, sizeof(status_idle_sad)/sizeof(status_idle_sad[0])), false);
+            pickText("text_sad", text_sad, sizeof(text_sad)/sizeof(text_sad[0])), false);
   }
   else if(balance >= 15){
     // Excited IDLE

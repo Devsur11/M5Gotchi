@@ -439,7 +439,7 @@ void setup() {
   initColorSettings();
   initUi();
   preloadMoods();
-  
+  initPersonality();
   
   // Ensure mood text/face files exist and load them from SD
   if (!initMoodsFromSD()) {
@@ -548,16 +548,8 @@ void setup() {
   }
   #endif
 
-  if(pwnagothiModeEnabled) {
-    logMessage("Pwnagothi mode enabled");
-    pwnagothiBegin();
-  } else {
-    logMessage("Pwnagothi mode disabled");
-  }
-
   esp_task_wdt_deinit();
   esp_task_wdt_init(60, false); 
-
 
   //inbox check
   if(check_inbox_at_startup && WiFi.isConnected()){
@@ -570,6 +562,15 @@ void setup() {
     else{
       setNewMessageMood(messages);
       updateUi(false, false, true);
+      //lets play notification sound
+      if(pwnagotchi.sound_on_events){
+        Sound(1200, 60, true);
+        delay(60);
+        Sound(1600, 60, true);
+        delay(60);
+        Sound(2000, 80, true);
+        delay(80);
+      }
       delay(5000);
     }
   }
@@ -629,11 +630,12 @@ void setup() {
     }
     logMessage("No feature limitations applied.");
     drawHintBox("Welcome to M5Gotchi!\nSet your device name in setting and explore!\nEnjoy your stay! (Regardless of your choice this will only be shown once)", 13);
-    //now lets disable entirely hint 13 regardless of user choice
-    hintsDisplayed |= (1 << 13);
-    saveSettings();
-    drawHintBox("Hi there!\nPress esc to open menu.\nUse arrows to navigate.\nSometimes keyboard.\nLook around, and enjoy!", 2);
-    return;
+    if(!bitRead(hintsDisplayed, 13)){
+      drawInfoBox("", "", "", false, false);
+      //now lets disable entirely hint 13 regardless of user choice
+      hintsDisplayed |= (1 << 13);
+      saveSettings();
+    }
   }
   else {
     drawHintBox("Welcome to M5Gotchi!\nSet your device name in setting and explore!\nEnjoy your stay! (Regardless of your choice this will only be shown once)", 13);
@@ -641,15 +643,19 @@ void setup() {
     hintsDisplayed |= (1 << 13);
     saveSettings();
     logMessage("Custom install detected, removing update functionality to prevent bricking!");
-    limitFeatures = true;
-  }
-
-  if(limitFeatures){
     drawHintBox("For the best experience please use M5Burner to install this firmware.", 1);
+    limitFeatures = true;
   }
   drawHintBox("Hi there!\nPress esc to open menu.\nUse arrows to navigate.\nSometimes keyboard.\nLook around, and enjoy!", 2);
   if(newVersionAvailable) {
     drawHintBox("A new firmware version is available!\nPlease update via the menu\nPlease note tha bugs from older version will not be reviewed!", 3);
+  }
+
+  if(pwnagothiModeEnabled) {
+    logMessage("Pwnagothi mode enabled");
+    pwnagothiBegin();
+  } else {
+    logMessage("Pwnagothi mode disabled");
   }
 }
 
@@ -666,15 +672,8 @@ void loop() {
 }
 
 void Sound(int frequency, int duration, bool sound){
-  if(sound && isSoundPlayed==false){
-    isSoundPlayed = true;
-    M5Cardputer.Speaker.tone(frequency, duration);
-  }
-  else if (isSoundPlayed == true){
-    isSoundPlayed = false;
-  }
-  isSoundPlayed = false;
-}
+  if(sound){M5Cardputer.Speaker.tone(frequency, duration);
+}}
 
 void fontSetup(){
   if(SD.exists("/fonts/big.vlw") && SD.exists("/fonts/small.vlw")){

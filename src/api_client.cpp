@@ -432,6 +432,8 @@ int8_t api_client::checkNewMessagesAmount(){
     return msgs.size();
 }
 
+#include "src.h"
+
 bool api_client::pollInbox() {
     logMessage("Polling inbox...");
     enrollWithGrid();
@@ -522,6 +524,14 @@ bool api_client::pollInbox() {
         if (r == "{\"success\":true}") {
             logMessage("Message marked as read on server.");
             registerNewMessage(newMessage);
+            if(pwnagotchi.sound_on_events){
+                Sound(1200, 60, true);
+                delay(60);
+                Sound(1600, 60, true);
+                delay(60);
+                Sound(2000, 80, true);
+                delay(80);
+            }
         } else {
             logMessage("Failed to mark message as read on server.");
         }

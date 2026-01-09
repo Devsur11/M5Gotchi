@@ -1000,11 +1000,12 @@ void drawInfoBox(String tittle, String info, String info2, bool canBeQuit, bool 
 }
 
 void drawHintBox(const String &text, uint8_t hintID) {
+
   if (hintID >= 64) return; // guard against invalid bit indices
   if (bitRead(hintsDisplayed, hintID)) {
     return;
   }
-
+  prevMID = 99; // force redraw of main menu on exit
   appRunning = true;
   debounceDelay();
 
@@ -1393,6 +1394,7 @@ void pwngridMessenger() {
     File newChat = SD.open("/pwngrid/chats/" + names[result], FILE_WRITE, true);
     newChat.close();
     chats.push_back(names[result]);
+    result = chats.size() - 1;
   }
 
   // ---------------- CHAT UI ----------------
@@ -1849,7 +1851,7 @@ void runApp(uint8_t appID){
       return;
     }
     if(appID == 15){
-      bool confirmation = drawQuestionBox("Reset?", "This will delete all keys,", "messages, frends, identity");
+      bool confirmation = drawQuestionBox("Reset pwngrid?", "This will delete all keys, messages, frends, identity chats!", "");
       if(confirmation){
         canvas_main.fillScreen(bg_color_rgb565);
         canvas_main.setTextColor(tx_color_rgb565);
@@ -1878,7 +1880,7 @@ void runApp(uint8_t appID){
         while(true){
           String nextFileName = chatsDis.getNextFileName();
           if(nextFileName.length()>8){
-            SD.remove("/pwngrid/chats/" + nextFileName);
+            SD.remove(nextFileName);
           }
           else{
             break;
@@ -4578,16 +4580,16 @@ String userInput(const String &prompt, String desc, int maxLen,  const String &i
         pushAll();
         M5.update();
         M5Cardputer.update();
-        
+        Keyboard_Class::KeysState keys = M5Cardputer.Keyboard.keysState();
         if (millis() - lastKeyTime > 50) {
-            if (M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER)) {
+            if (keys.enter) {
                 debounceDelay();
                 editing = false;
             } else if (M5Cardputer.Keyboard.isKeyPressed('`')) {
                 debounceDelay();
                 result = initial;
                 editing = false;
-            } else if (M5Cardputer.Keyboard.isKeyPressed(KEY_BACKSPACE)) {
+            } else if (keys.del) {
                 debounceDelay();
                 if (result.length() > 0) {
                     result = result.substring(0, result.length()-1);
@@ -4620,6 +4622,8 @@ String multiplyChar(char toMultiply, uint8_t literations){
   }
   return toReturn;
 }
+
+void setMID(){prevMID = 99;}
 
 bool drawQuestionBox(String tittle, String info, String info2, String label) {
   appRunning = true;
