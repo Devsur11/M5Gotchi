@@ -1,3 +1,6 @@
 [submodule "lib/M5GFX"]
 	path = lib/M5GFX
 	url = https://github.com/Devsur11/M5GFX
+[submodule "lib/M5Cardputer"]
+	path = lib/M5Cardputer
+	url = https://github.com/Devsur11/M5Cardputer
