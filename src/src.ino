@@ -536,16 +536,13 @@ void setup() {
   // check if core dump exists
   #ifdef ENABLE_COREDUMP_LOGGING
   if (esp_core_dump_image_check() == ESP_OK) {
+    xSemaphoreTake(wifiMutex, portMAX_DELAY);
     if(true) { 
       sendCrashReport();
       drawInfoBox("", "", "", false, false);
       updateUi(false, false, true);
     }
-    else{
-      //lets clear coredump as config was changed
-      esp_core_dump_image_erase();
-      logMessage("Config changed, erasing existing core dump");
-    }
+    xSemaphoreGive(wifiMutex);
   } else {
     logMessage("Core dump image not found");
   }
