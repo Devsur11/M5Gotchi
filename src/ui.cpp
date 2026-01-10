@@ -492,6 +492,8 @@ bool isPrevPressed() {
 
 bool needsUiRedraw = true;
 static unsigned long lastRedrawTime = 0;
+bool crackedFileExist;
+File toUpload;
 
 void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
   //handle button changing pwnagotchi state:
@@ -675,8 +677,8 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
     prevMID = 7;
   }
   else if (menuID == 8){
-    File toUpload = SD.open("/pwngrid/cracks.conf");
-    if((toUpload && toUpload.size() > 3) && (pwngrid_indentity.length()>10)){ 
+    if(!(prevMID == 8)){toUpload = SD.open("/pwngrid/cracks.conf");}
+    if((toUpload && toUpload.size() > 5) && (pwngrid_indentity.length()>10)){ 
       drawMenuList(pwngrid_menu_to_send, 8, 7);
     }
     else (pwngrid_indentity.length()>10)? drawMenuList(pwngrid_menu, 8, 7): drawMenuList(pwngrid_not_enrolled_menu, 8, 1);
@@ -838,6 +840,12 @@ void drawBottomCanvas() {
   }
   else if(WiFi.status() ==  WL_DISCONNECTED){
     wifiStatus = "D";
+  }
+  else{
+    xSemaphoreTake(wifiMutex, portMAX_DELAY);
+    WiFi.mode(WIFI_MODE_NULL);
+    xSemaphoreGive(wifiMutex);
+    wifion();
   }
   canvas_bot.setTextDatum(top_right);
   canvas_bot.drawString(String((pwnagothiMode) ? "AUTO" : "MANU") + " " + wifiStatus, display_w, 5);
@@ -1707,7 +1715,7 @@ void runApp(uint8_t appID){
           contacts_vector.push_back({name, fingerprint});
       }
       String names[contacts_vector.size()+1];
-      for(uint16_t i; i<=contacts_vector.size(); i++){
+      for(uint16_t i = 0; i<=contacts_vector.size(); i++){
         names[i] = contacts_vector[i].name;
       }
       int16_t result = drawMultiChoice("Select recepient:", names, contacts_vector.size(), 0, 0);
@@ -1888,9 +1896,6 @@ void runApp(uint8_t appID){
         }
         chatsDis.close();
         SD.rmdir("/pwngrid");
-
-        
-
         lastTokenRefresh = 0;
 
         delay(5000);
@@ -2061,9 +2066,18 @@ void runApp(uint8_t appID){
     }
     if(appID == 17){
       debounceDelay();
+
       File contacts = SD.open(ADDRES_BOOK_FILE, FILE_READ, true);
-      JsonDocument contacts_json;
+      if (!contacts) {
+          logMessage("Failed to open contacts file");
+          menuID = 8;
+          return;
+      }
+
+      // one single fixed allocation instead of heap soup
+      StaticJsonDocument<16384> contacts_json;
       DeserializationError err = deserializeJson(contacts_json, contacts);
+      contacts.close();
 
       if (err) {
           logMessage("Failed to parse contacts: " + String(err.c_str()));
@@ -2072,32 +2086,50 @@ void runApp(uint8_t appID){
       }
 
       JsonArray contacts_arr = contacts_json.as<JsonArray>();
-      logMessage("Array size: " + String(contacts_arr.size()));
       uint16_t arrSize = contacts_arr.size();
+      logMessage("Array size: " + String(arrSize));
+
+      // build vector once
       std::vector<unit> contacts_vector;
-      if(arrSize!=0)
-      {   for (JsonObject obj : contacts_arr) {
+      contacts_vector.reserve(arrSize);
+
+      for (JsonObject obj : contacts_arr) {
           String name = obj["name"] | "unknown";
           String fingerprint = obj["fingerprint"] | "none";
           logMessage("Name: " + name + ", Fingerprint: " + fingerprint);
           contacts_vector.push_back({name, fingerprint});
-      }}
-      else{
-        drawInfoBox("Info", "No frends found", "Adding one now", false, false);
-        delay(5000);
       }
-      String names[contacts_vector.size()+2];
-      if(arrSize!=0)
-      {for(uint16_t i; i<=contacts_vector.size(); i++){
-        names[i] = contacts_vector[i].name;
-      }}
-      names[contacts_vector.size()] = "Add new";
-      int16_t result = (arrSize!=0)? drawMultiChoice("Select contact to manage:", names, contacts_vector.size() + 1, 0, 0): 0;
-      if(result<0){
-        menuID = 8;
-        return;
+
+      // if (contacts_vector.empty()) {
+      //     drawInfoBox("Info", "No frends found", "Adding one now", false, false);
+      //     delay(5000);
+      // }
+
+      // build names safely on heap
+      std::vector<String> names;
+      names.reserve(contacts_vector.size() + 1);
+
+      for (size_t i = 0; i < contacts_vector.size(); i++) {
+          names.push_back(contacts_vector[i].name);
+      }
+      names.push_back("Add new");
+
+      // draw menu
+      int16_t result = drawMultiChoice(
+          "Select contact to manage:",
+          names.data(),
+          names.size(),
+          0,
+          0
+      );
+
+      if (result < 0) {
+          menuID = 8;
+          return;
       }
       else if(result == contacts_vector.size() ){
+        logMessage("Heap before new frend setup:");
+        printHeapInfo();
         String fingerprint;
         String name;
         String subMenu[3] = {"via keyboard", "via PC/Phone", "back"};
@@ -2117,19 +2149,27 @@ void runApp(uint8_t appID){
               return;
             }
           }
+          logMessage("Heap before unit fp setup:");
+          printHeapInfo();
           fingerprint = userInput("Fingerprint:", "Enter unit fingerprint", 64);
           drawInfoBox("Info", "Parsing unit name", "Please wait", false, false);
-          api_client::init(KEYS_FILE);
+          // api_client::init(KEYS_FILE);
+          logMessage("Heap before new http get:");
+          printHeapInfo();
           name = api_client::getNameFromFingerprint(fingerprint);
-          if(fingerprint.length() < 10){
+          if(name.length() < 1){
             drawInfoBox("ERROR!", "Unit not found", "Check fingerprint!", true, false);
             menuID = 8;
             return;
           }
         }
         else if(result == 1){
-          drawInfoBox("Connect:", "Connect to CardputerSetup", "And go to 192.168.4.1", false, false);
+          drawInfoBox("Connect:", "Connect to CardputerSetup and type fingerprint.", "", false, false);
+          logMessage("Heap before unit fp setup:");
+          printHeapInfo();
           fingerprint = userInputFromWebServer("Unit fingerprint");
+          logMessage("Heap after unit fp setup:");
+          printHeapInfo();
           if(!(WiFi.status() == WL_CONNECTED)){
             drawInfoBox("Info", "Network connection needed", "To add unit!", false, false);
             delay(3000);
@@ -2141,13 +2181,15 @@ void runApp(uint8_t appID){
             }
           }
           drawInfoBox("Info", "Parsing unit name", "Please wait", false, false);
-          if(api_client::init(KEYS_FILE) == false){
-            drawInfoBox("ERROR!", "Key init failed", "Try restarting!", true, false);
-            menuID = 8;
-            return;
-          }
+          // if(api_client::init(KEYS_FILE) == false){
+          //   drawInfoBox("ERROR!", "Key init failed", "Try restarting!", true, false);
+          //   menuID = 8;
+          //   return;
+          // }
+          logMessage("Heap before new http get:");
+          printHeapInfo();
           name = api_client::getNameFromFingerprint(fingerprint);
-          if(fingerprint.length() < 10 ){
+          if(name.length() < 1 ){
             drawInfoBox("ERROR!", "Unit not found", "Check fingerprint!", true, false);
             menuID = 8;
             return;
@@ -5631,7 +5673,6 @@ int brightnessPicker(){
     canvas_main.drawString("Brightness:", canvas_center_x, canvas_h / 4);
     canvas_main.drawRect(rect_x, rect_y, rect_w , rect_h);
     float fillProcent = float(M5.Display.getBrightness()) / float(255);
-    logMessage(String(fillProcent) + "% brightess detected, current brightness: "+ String(M5.Display.getBrightness()));
     canvas_main.setColor(tx_color_rgb565);
     canvas_main.fillRect(rect_x, rect_y, rect_w*fillProcent, rect_h);
     canvas_main.setColor(bg_color_rgb565);
@@ -5650,7 +5691,7 @@ int brightnessPicker(){
         brightness++;
       }
       if (k == ',' || k == '.') { // left
-        if(brightness == 1){
+        if(brightness == 10){
           brightness++;
         }
         brightness--;

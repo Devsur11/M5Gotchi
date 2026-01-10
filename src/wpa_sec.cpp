@@ -7,9 +7,6 @@
 #include "logger.h"
 #include <vector>
 #include <WiFi.h>
-#include <ESPAsyncWebServer.h>
-#include <DNSServer.h>
-#include "esp_sntp.h"
 #include "settings.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -22,74 +19,99 @@ extern const uint8_t _binary_certs_wpa_sec_root_pem_end[]   asm("_binary_certs_w
 static bool startWpaSecUploadAsync(const char* a0, const char* a1, const char* a2, unsigned int a3);
 
 
+#include <WiFi.h>
+#include <WebServer.h>
+#include <DNSServer.h>
 
 String userInputFromWebServer(String titleOfEntryToGet) {
+    xSemaphoreTake(wifiMutex, portMAX_DELAY); // Ensure WiFi is not used elsewhere
     String api_key = "";
     bool api_key_received = false;
-    // Create AP
-    DNSServer dnsServer;
 
+    // 1. Setup AP
     WiFi.mode(WIFI_AP);
-    WiFi.softAP("CardputerSetup"); // open network, no password
-
-    // DNS server for captive portal
+    WiFi.softAP("CardputerSetup"); 
     
-    if(dnsServer.start(53, "*", WiFi.softAPIP())){
-        delay(100);
-    }
-    
-    // AsyncWebServer on port 80
-    AsyncWebServer server(80);
+    // 2. Setup DNS (Captive Portal)
+    DNSServer dnsServer;
+    dnsServer.start(53, "*", WiFi.softAPIP());
 
-    // Root handler with form
-    server.on("/", HTTP_GET, [&](AsyncWebServerRequest *request) {
-        String html = "<!DOCTYPE html><html><head><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
-                      "<title>Setup</title></head><body style='display:flex;justify-content:center;align-items:center;height:100vh;'>"
-                      "<form action='/submit' method='post'>"
-                      "<h2>" + titleOfEntryToGet + "</h2>"
-                      "<input type='text' name='input' style='width:250px;height:30px;font-size:16px;text-align:center;' required><br><br>"
-                      "<input type='submit' value='Submit' style='width:100px;height:30px;'>"
-                      "</form></body></html>";
-        request->send(200, "text/html", html);
+    // 3. Setup Synchronous WebServer (Lighter than Async)
+    WebServer server(80);
+
+    // HTML Content stored in Flash (PROGMEM) to save RAM
+    // We use %s placeholders to insert the title dynamically
+    const char index_html[] PROGMEM = 
+        "<!DOCTYPE html><html><head><meta name='viewport' content='width=device-width,initial-scale=1'>"
+        "<title>Setup</title></head><body style='display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif;'>"
+        "<form action='/submit' method='post' style='text-align:center;'>"
+        "<h2>%s</h2>" 
+        "<input type='text' name='input' style='width:250px;height:30px;font-size:16px;text-align:center;' placeholder='Enter Key' required><br><br>"
+        "<input type='submit' value='Submit' style='padding:10px 20px;'>"
+        "</form></body></html>";
+
+    const char success_html[] PROGMEM = 
+        "<html><body style='display:flex;justify-content:center;align-items:center;height:100vh;font-family:sans-serif;'>"
+        "<h2>Saved! rebooting...</h2></body></html>";
+
+    // Handle Root
+    server.on("/", [&]() {
+        // Use a temporary buffer to format the string without massive fragmentation
+        // 512 bytes is usually enough for simple forms
+        char buffer[1024]; 
+        snprintf_P(buffer, sizeof(buffer), index_html, titleOfEntryToGet.c_str());
+        server.send(200, "text/html", buffer);
     });
 
-    // Form handler
-    server.on("/submit", HTTP_POST, [&](AsyncWebServerRequest *request) {
-        if (request->hasParam("input", true)) {
-            api_key = request->getParam("input", true)->value();
+    // Handle Captive Portal (Android/iOS checks)
+    server.onNotFound([&]() {
+        char buffer[1024]; 
+        snprintf_P(buffer, sizeof(buffer), index_html, titleOfEntryToGet.c_str());
+        server.send(200, "text/html", buffer);
+    });
+
+    // Handle Submit
+    server.on("/submit", HTTP_POST, [&]() {
+        if (server.hasArg("input")) {
+            api_key = server.arg("input");
             api_key_received = true;
-            logMessage("Received API Key: " + api_key);
-            request->send(200, "text/html",
-                          "<html><body><h2>Saved! You can close this page.</h2></body></html>");
+            server.send(200, "text/html", success_html);
+            delay(500); // Give time for the browser to receive the response
         } else {
-            request->send(400, "text/plain", "Bad Request");
+            server.send(400, "text/plain", "Bad Request");
         }
     });
-    server.onNotFound([&](AsyncWebServerRequest *request) {
-        String captivePortalHtml = "<!DOCTYPE html><html><head><meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
-                      "<title>Setup</title></head><body style='display:flex;justify-content:center;align-items:center;height:100vh;'>"
-                      "<form action='/submit' method='post'>"
-                      "<h2>" + titleOfEntryToGet + "</h2>"
-                      "<input type='text' name='input' style='width:250px;height:30px;font-size:16px;text-align:center;' required><br><br>"
-                      "<input type='submit' value='Submit' style='width:100px;height:30px;'>"
-                      "</form></body></html>";
-        request->send(200, "text/html", captivePortalHtml);
-    });
-
 
     server.begin();
-    logMessage("WebServer started. Connect to SSID 'CardputerSetup' and enter your key.");
+    logMessage("WebServer started. Connect to SSID 'CardputerSetup'");
 
-    // Wait for input (blocks until received)
+    // 4. Blocking Loop (The standard WebServer requires this)
     while (!api_key_received) {
         dnsServer.processNextRequest();
-        delay(10);
+        server.handleClient(); // Must be called repeatedly
+        delay(10); // Prevent watchdog trigger
     }
-    sntp_stop();
-    delay(100);
-    server.end();
+    logMessage("API Key received: " + api_key);
+    server.stop();
+    dnsServer.stop();
+
+    // Force total shutdown of the WiFi radio and stack
     WiFi.softAPdisconnect(true);
-    wifion();
+    WiFi.disconnect(true);
+    WiFi.mode(WIFI_OFF);
+
+    // Low-level ESP-IDF calls to ensure memory is released
+    esp_wifi_stop();
+    esp_wifi_deinit();
+
+    // Small delay to allow the RTOS to finish cleaning up tasks
+    delay(200); 
+
+    logMessage("WiFi Stack Deinitialized. Heap: " + String(ESP.getFreeHeap()));
+    xSemaphoreGive(wifiMutex);
+
+    // Proceed to your normal logic
+    wifion(); 
 
     return api_key;
 }

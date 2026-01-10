@@ -317,8 +317,9 @@ bool initVars() {
             initUi();
             drawInfoBox("CRITICALL ERROR!", "Config file is corrupted and will be recreated. All settings will be lost!","",  false, false);
             delay(5000);
+            SD.remove(NEW_CONFIG_FILE);
+            ESP.restart();
             return false;
-            //SD.remove(NEW_CONFIG_FILE);
         }
 
         // Load each option, fallback to default if missing
@@ -711,5 +712,5 @@ void attemptConnectSavedNetworks(){
         if(WiFi.status() == WL_CONNECTED) return;
     }
     
-    WiFi.mode(WIFI_MODE_STA);
+    WiFi.mode(WIFI_MODE_NULL);
 }

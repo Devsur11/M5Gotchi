@@ -143,9 +143,11 @@ bool api_client::init(const String &keysPath) {
 
 // helper: http POST json -> returns body string or empty on error
 static String httpPostJson(const String &url, const String &json, bool auth) {
+    xSemaphoreTake(wifiMutex, portMAX_DELAY);
     size_t free_heap = esp_get_free_heap_size();
     if (free_heap < 40000) {
         fLogMessage("Not enough heap for SSL connect: %u\n", (unsigned)free_heap);
+        xSemaphoreGive(wifiMutex);
         return String();
     }
     WiFiClientSecure *client = new WiFiClientSecure();
@@ -166,17 +168,25 @@ static String httpPostJson(const String &url, const String &json, bool auth) {
         fLogMessage("HTTP POST failed: %d\n", code);
     }
     https.end(); delete client;
+    xSemaphoreGive(wifiMutex);
     return body;
 }
 
 static String httpGet(const String &url, bool auth) {
+    xSemaphoreTake(wifiMutex, portMAX_DELAY);
     size_t free_heap = esp_get_free_heap_size();
     if (free_heap < 40000) {
         fLogMessage("Not enough heap for SSL connect (GET): %u\n", (unsigned)free_heap);
+        xSemaphoreGive(wifiMutex);
         return String();
     }
     WiFiClientSecure *client = new WiFiClientSecure();
-    client->setCACert(pwngid_root_ca_pem_start);
+    if(auth){
+        client->setCACert(pwngid_root_ca_pem_start);
+    }
+    else{
+        client->setInsecure();
+    }
     HTTPClient https;
     https.begin(*client, url);
     if (auth && token.length()) https.addHeader("Authorization", "Bearer " + token);
@@ -185,6 +195,7 @@ static String httpGet(const String &url, bool auth) {
     if (code > 0) body = https.getString();
     else fLogMessage("HTTP GET failed: %d\n", code);
     https.end(); delete client;
+    xSemaphoreGive(wifiMutex);
     return body;
 }
 
