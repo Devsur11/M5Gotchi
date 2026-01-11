@@ -644,12 +644,13 @@ void setup() {
     saveSettings();
     logMessage("Custom install detected, removing update functionality to prevent bricking!");
     drawHintBox("For the best experience please use M5Burner to install this firmware.", 1);
+    if(newVersionAvailable) {
+      drawHintBox("A new firmware version is available!\nPlease update via the menu\nPlease note tha bugs from older version will not be reviewed!", 3);
+    }
     limitFeatures = true;
   }
   drawHintBox("Hi there!\nPress esc to open menu.\nUse arrows to navigate.\nSometimes keyboard.\nLook around, and enjoy!", 2);
-  if(newVersionAvailable) {
-    drawHintBox("A new firmware version is available!\nPlease update via the menu\nPlease note tha bugs from older version will not be reviewed!", 3);
-  }
+  
 
   if(pwnagothiModeEnabled) {
     logMessage("Pwnagothi mode enabled");

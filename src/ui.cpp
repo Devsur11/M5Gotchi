@@ -367,7 +367,7 @@ bool buttonDirty = false;
 void buttonTask(void *param) {
   bool dimmed = false;
   for (;;) {
-    if (xSemaphoreTake(buttonSemaphore, portMAX_DELAY) == pdTRUE) {
+    if (xSemaphoreTake(buttonSemaphore, portMAX_DELAY) == pdTRUE && !buttonDirty) {
       if(!toogle_pwnagothi_with_gpio0)
       {dimmed = !dimmed;
       if (dimmed) {
@@ -401,7 +401,7 @@ volatile unsigned long lastInterruptTime = 0;
 
 void IRAM_ATTR handleInterrupt() {
   unsigned long now = millis();
-  if (now - lastInterruptTime > 5000) {  // 5s debounce
+  if (now - lastInterruptTime > 1000) {  // 1s debounce
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     xSemaphoreGiveFromISR(buttonSemaphore, &xHigherPriorityTaskWoken);
     if (xHigherPriorityTaskWoken) {
@@ -446,9 +446,8 @@ void initUi() {
     NULL,
     0
   );
-
-  attachInterrupt(digitalPinToInterrupt(0), handleInterrupt, FALLING);
   buttonSemaphore = xSemaphoreCreateBinary();
+  attachInterrupt(digitalPinToInterrupt(0), handleInterrupt, FALLING);
   xTaskCreate(buttonTask, "ButtonTask", 4096, NULL, 1, NULL);
   crackedList = SD.exists("/pwngrid/cracks.conf");
   M5.Display.setRotation(1);
@@ -503,7 +502,12 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
       menuID = 0;
       prevMID = 1;  //just to redraw the prompt
       needsUiRedraw = true;
-      pwnagotchiModeFromButton = true;
+      if(pwnagothiMode){
+        pwnagotchiModeFromButton = true;
+      }
+      else{
+        pwnagotchiModeFromButton = false;
+      }
     }
     else{
       pwnagotchiModeFromButton = false;
@@ -3941,7 +3945,7 @@ void runApp(uint8_t appID){
     }
     if(appID == 44){
       if(limitFeatures){
-        drawInfoBox("ERROR", "Update disabled", "Please use M5Burner version", true, false);
+        drawInfoBox("ERROR", "Update disabled. Please use M5Burner version or update via your launcher.", "", true, false);
         menuID = 6;
         return;
       }
@@ -3960,7 +3964,7 @@ void runApp(uint8_t appID){
         }
         drawInfoBox("Updating...", "Updating from github...", "This may take a while...", false,false);
         updateFromGithub();
-        drawInfoBox("ERROR!", "Update failed!", "Try again or contact dev", true, false);
+        drawInfoBox("ERROR!", "Update failed!", "Try again later", true, false);
       }
       menuID = 6;
       return;
