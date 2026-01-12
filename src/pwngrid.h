@@ -5,6 +5,7 @@
 #include "esp_wifi_types.h"
 #include "logger.h"
 #include "settings.h"
+#include <vector>
 
 #ifndef PWNGRID_H
 #define PWNGRID_H
@@ -27,7 +28,8 @@ typedef struct {
 
 void initPwngrid();
 esp_err_t pwngridAdvertise(uint8_t channel, String face);
-pwngrid_peer* getPwngridPeers();
+// Use snapshot to safely iterate peers from other tasks
+std::vector<pwngrid_peer> getPwngridSnapshot();
 uint8_t getPwngridTotalPeers();
 String getPwngridLastFriendName();
 void checkPwngridGoneFriends();

@@ -40,6 +40,9 @@ M5Canvas bar_right2(&M5.Display);
 M5Canvas bar_right3(&M5.Display);
 M5Canvas bar_right4(&M5.Display);
 
+// Mutex that protects all display and canvas operations (loadFont, draw, pushSprite)
+SemaphoreHandle_t displayMutex = NULL;
+
 
 static const char * const funny_ssids[] = {
   "Mom Use This One",
@@ -383,12 +386,14 @@ void buttonTask(void *param) {
         }
         else{
           //lets draw a little message here too
+          if (displayMutex) xSemaphoreTake(displayMutex, portMAX_DELAY);
           M5Cardputer.Display.fillRect(0, (display_h/2) - 20 , 250, 20, bg_color_rgb565);
           M5Cardputer.Display.setTextDatum(middle_center);
           M5Cardputer.Display.setTextColor(tx_color_rgb565);
           M5Cardputer.Display.setTextSize(2);
           M5Cardputer.Display.drawString("Deactivating...", canvas_center_x , (display_h/2) - 10);
           M5Cardputer.Display.pushState();
+          if (displayMutex) xSemaphoreGive(displayMutex);
           pwnagotchiModeFromButton = false;
           logMessage("Pwnagotchi mode deactivated");
         }
@@ -447,6 +452,11 @@ void initUi() {
     0
   );
   buttonSemaphore = xSemaphoreCreateBinary();
+  // Create display mutex
+  displayMutex = xSemaphoreCreateMutex();
+  if (displayMutex == NULL) {
+    logMessage("Failed to create display mutex");
+  }
   attachInterrupt(digitalPinToInterrupt(0), handleInterrupt, FALLING);
   xTaskCreate(buttonTask, "ButtonTask", 4096, NULL, 1, NULL);
   crackedList = SD.exists("/pwngrid/cracks.conf");
@@ -773,6 +783,7 @@ void redrawUi(bool show_toolbars) {
 }
 
 void drawTopCanvas() {
+  if (displayMutex) xSemaphoreTake(displayMutex, portMAX_DELAY);
   canvas_top.fillSprite(bg_color_rgb565);
   canvas_top.setTextSize(1);
   canvas_top.setTextColor(tx_color_rgb565);
@@ -812,10 +823,12 @@ void drawTopCanvas() {
     canvas_top.drawString("XY", 80, 3);
   }
   canvas_top.drawLine(0, canvas_top_h - 1, display_w, canvas_top_h - 1);
+  if (displayMutex) xSemaphoreGive(displayMutex);
 }
 
 
 void drawBottomCanvas() {
+  if (displayMutex) xSemaphoreTake(displayMutex, portMAX_DELAY);
   canvas_bot.fillSprite(bg_color_rgb565);
   canvas_bot.setTextSize(1);
   canvas_bot.setTextColor(tx_color_rgb565);
@@ -828,7 +841,7 @@ void drawBottomCanvas() {
   String wifiStatus;
   if(WiFi.status() == WL_NO_SHIELD){
     wifiStatus = "O";
-    if(apMode){canvas_bot.drawString("Wifi: AP  " + wifiChoice, 0, 5);}
+    if(apMode){canvas_bot.drawString("Wifi: AP  " + wifiChoice, 0, 5);}  
   }
   else if(WiFi.status() == WL_CONNECTED){
     wifiStatus = "C";
@@ -854,61 +867,66 @@ void drawBottomCanvas() {
   canvas_bot.setTextDatum(top_right);
   canvas_bot.drawString(String((pwnagothiMode) ? "AUTO" : "MANU") + " " + wifiStatus, display_w, 5);
   canvas_bot.drawLine(0, 0, display_w, 0);
+  if (displayMutex) xSemaphoreGive(displayMutex);
 }
 
 void drawMood(String face, String phrase) {
+    if (displayMutex) xSemaphoreTake(displayMutex, portMAX_DELAY);
     uint16_t bg = bg_color_rgb565;
     uint16_t fg = tx_color_rgb565;
+    
+    // 1. Setup Canvas Defaults
     canvas_main.fillSprite(bg);
     canvas_main.setTextColor(fg, bg);
     canvas_main.setColor(fg);
-    canvas_main.setTextSize(1.5);
+    canvas_main.setTextSize(1); // Reset size to 1.0 initially
     canvas_main.setTextDatum(top_left);
     canvas_main.setCursor(3, 5);
+
+    // --- XP Calculation Logic (Unchanged) ---
     constexpr float XP_SCALE = 5.0f;
     constexpr float XP_EXPONENT = 0.75f;
-
     uint16_t level = (uint16_t)floor(pow(pwned_ap / XP_SCALE, XP_EXPONENT));
-
     float prev_level_xp = XP_SCALE * pow(level, 1.0f / XP_EXPONENT);
     float next_level_xp = XP_SCALE * pow(level + 1, 1.0f / XP_EXPONENT);
-
     float to_next_level = next_level_xp - pwned_ap;
 
-    // draw text once, reuse width
+    // --- Draw Header ---
+    // Use default font (glcd) for header to ensure stability
+    canvas_main.setFont(&fonts::Font0); // Explicitly set default font
+    canvas_main.setTextSize(1.5);
+    
     String lvlText = hostname + ">  Lvl " + String(level);
     int textW = canvas_main.textWidth(lvlText);
     canvas_main.println(lvlText);
 
-    // progress bar math
+    // --- Progress Bar (Unchanged) ---
     int barWidth = 240 - textW - 10;
     float progress = pwned_ap - prev_level_xp;
     float level_span = next_level_xp - prev_level_xp;
-
     progress = constrain(progress, 0, level_span);
-
     int filledWidth = (int)((progress / level_span) * barWidth);
 
-    // draw bar
     int barX = textW + 10;
     canvas_main.drawRect(barX, 5, barWidth, 10, tx_color_rgb565);
     canvas_main.fillRect(barX, 5, filledWidth, 10, tx_color_rgb565);
 
+    // --- Level Up Sound (Unchanged) ---
     if(prev_level != level){
       prev_level = level;
-      //level up sound
-      Sound(784, 80, pwnagotchi.sound_on_events);   // G5
+      Sound(784, 80, pwnagotchi.sound_on_events);   
       delay(80);
-      Sound(988, 80, pwnagotchi.sound_on_events);   // B5
+      Sound(988, 80, pwnagotchi.sound_on_events);   
       delay(80);
-      Sound(1319, 80, pwnagotchi.sound_on_events);  // E6
+      Sound(1319, 80, pwnagotchi.sound_on_events);  
       delay(80);
-      Sound(1568, 200, pwnagotchi.sound_on_events); // G6
+      Sound(1568, 200, pwnagotchi.sound_on_events); 
       delay(200);
       saveSettings();
       phrase = "Level up! I am now level " + String(level) + "!";
     }
 
+    // --- Draw Face ---
     if (moods.count(face + ".jpg")) {
         MoodImage &m = moods[face + ".jpg"];
         int rowBytes = (m.width+7)/8;
@@ -919,32 +937,48 @@ void drawMood(String face, String phrase) {
             }
         }
     } else {
+        // Safe VLW Loading for Face
+        // 1. Reset TextSize before loading VLW to prevent metric calculation errors
+        canvas_main.setTextSize(1.0); 
         canvas_main.loadFont(SD, "/fonts/big.vlw");
         delay(50);
-        canvas_main.setTextColor(fg, bg);
-        canvas_main.setTextSize(0.35);
+        
+        // 2. Draw
+        // Note: With VLW, scaling via setTextSize usually isn't needed if the font 
+        // file is generated at the correct size. If you MUST scale, do it here.
+        canvas_main.setTextSize(0.35); 
         canvas_main.drawString(face, 5, 23);
-        canvas_main.unloadFont();
+        
+        // 3. Unload and Reset immediately
+        canvas_main.unloadFont(); 
+        canvas_main.setFont(&fonts::Font0); // Force fallback to internal font
+        canvas_main.setTextSize(1.0); // Reset size
         delay(50);
     }
 
-    // Draw phrase
-    //now lets return to default font
-    
+    // --- Draw Phrase ---
+    // We are now guaranteed to be on the default font with Size 1.0
     canvas_main.setTextSize(1.2);
     canvas_main.setTextColor(fg, bg);
     canvas_main.setCursor(3, canvas_h - 47);
     canvas_main.println("> " + phrase);
-    canvas_main.setTextSize(0.35);
-    canvas_main.setCursor(3, canvas_h - 19);
-    canvas_main.unloadFont();
     
+    // --- Draw Peers Info ---
     if(getPwngridTotalPeers() > 0){
-      canvas_main.loadFont(SD, "/fonts/small.vlw");
-      canvas_main.println(getLastPeerFace() + " " + getPwngridLastFriendName() + " (" + String(getPwngridLastSessionPwnedAmount()) + "/" + String(getPwngridLastPwnedAmount()) + ")");
-      canvas_main.unloadFont();
+        // Safe VLW Loading for Peers
+        canvas_main.setTextSize(1.0); // Reset size BEFORE loading
+        canvas_main.loadFont(SD, "/fonts/small.vlw");
+        
+        canvas_main.setTextSize(0.35); 
+        
+        canvas_main.setCursor(3, canvas_h - 19);
+        canvas_main.println(getLastPeerFace() + " " + getPwngridLastFriendName() + " (" + String(getPwngridLastSessionPwnedAmount()) + "/" + String(getPwngridLastPwnedAmount()) + ")");
+        
+        canvas_main.unloadFont();
+        canvas_main.setFont(&fonts::Font0); // Safety reset
+        canvas_main.setTextSize(1.0);
     }
-    
+    if (displayMutex) xSemaphoreGive(displayMutex);
 }
 
 
@@ -958,6 +992,8 @@ void drawInfoBox(String tittle, String info, String info2, bool canBeQuit, bool 
   appRunning = true;
   debounceDelay();
   while(true){
+    // Draw frame (locked)
+    if (displayMutex) xSemaphoreTake(displayMutex, portMAX_DELAY);
     canvas_main.fillScreen(bg_color_rgb565);
     canvas_main.setTextColor(tx_color_rgb565);
     canvas_main.clear(bg_color_rgb565);
@@ -978,25 +1014,14 @@ void drawInfoBox(String tittle, String info, String info2, bool canBeQuit, bool 
     canvas_main.setTextDatum(top_left);
     canvas_main.setCursor(1, (canvas_h / 4) + tittleLenght + 8);
     canvas_main.println(info + "\n" +  info2);
-    // canvas_main.drawString(info, canvas_center_x, canvas_h / 2);
-    // canvas_main.drawString(info2, canvas_center_x, (canvas_h / 2) + 20);
     if(canBeQuit){
       canvas_main.setTextDatum(middle_center);
       canvas_main.setTextSize(2);
-      //canvas_main.drawString("To exit press OK", canvas_center_x, canvas_h * 0.9);
       int buttonWidth = canvas_main.textWidth("OK") + 20;
       int buttonHeight = 10;
       canvas_main.drawRect(canvas_center_x - (buttonWidth / 2), (canvas_h * 0.9) - 5, buttonWidth, buttonHeight, tx_color_rgb565);
       canvas_main.setTextSize(1);
       canvas_main.drawString("OK", canvas_center_x, canvas_h * 0.9);
-      pushAll();
-      M5.update();
-      M5Cardputer.update();
-      if(M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER)){
-        Sound(10000, 100, sound);
-        return ;
-      }
-
     }
     else{
       //lets draw "Please wait..." at the bottom
@@ -1004,7 +1029,20 @@ void drawInfoBox(String tittle, String info, String info2, bool canBeQuit, bool 
       canvas_main.setTextSize(1.5);
       canvas_main.setTextColor(tx_color_rgb565);
       canvas_main.drawString("Please wait...", canvas_center_x, canvas_h * 0.9); 
-      pushAll();
+    }
+    if (displayMutex) xSemaphoreGive(displayMutex);
+
+    // Push (separate lock inside pushAll)
+    pushAll();
+    M5.update();
+    M5Cardputer.update();
+
+    if(canBeQuit){
+      if(M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER)){
+        Sound(10000, 100, sound);
+        return ;
+      }
+    } else {
       return;
     }
   }
@@ -1025,6 +1063,8 @@ void drawHintBox(const String &text, uint8_t hintID) {
   bool selecting = true;
 
   while (selecting) {
+    // Draw frame under mutex
+    if (displayMutex) xSemaphoreTake(displayMutex, portMAX_DELAY);
     canvas_main.fillScreen(bg_color_rgb565);
     canvas_main.setTextColor(tx_color_rgb565);
     canvas_main.clear(bg_color_rgb565);
@@ -1059,6 +1099,7 @@ void drawHintBox(const String &text, uint8_t hintID) {
     }
     canvas_main.drawString("Don't show again", btn2_x, btn_y);
 
+    if (displayMutex) xSemaphoreGive(displayMutex);
     pushAll();
     M5.update();
     M5Cardputer.update();
@@ -1912,16 +1953,15 @@ void runApp(uint8_t appID){
       return;
     }
     if(appID == 16){
-      uint8_t int_peers = getPwngridTotalPeers();
+      auto peers_vec = getPwngridSnapshot();
+      uint8_t int_peers = (uint8_t)peers_vec.size();
       if(int_peers == 0){
         drawInfoBox("Info", "No nearby pwngrid units", "Try again later", true, false);
         menuID = 8;
         return;
       }
-      pwngrid_peer peers_list[int_peers];
-      for(uint8_t i = 0; i<int_peers; i++){
-        peers_list[i] = getPwngridPeers()[i];
-      }
+      // local copy
+      std::vector<pwngrid_peer> peers_list = peers_vec;
       String mmenu[int_peers + 1];
       for(uint8_t i = 0; i<int_peers; i++){
         mmenu[i] = peers_list[i].name;
@@ -5429,15 +5469,13 @@ void pushAll(){
   if(coords_overlay){loggerTask(); delay(100);}
   drawBottomCanvas();
   drawTopCanvas();
+  if (displayMutex) xSemaphoreTake(displayMutex, portMAX_DELAY);
   M5.Display.startWrite();
   canvas_top.pushSprite(0, 0);
   canvas_bot.pushSprite(0, canvas_top_h + canvas_h);
   canvas_main.pushSprite(0, canvas_top_h);
   M5.Display.endWrite();
-}
-
-void updateM5(){
-  M5.update();
+  if (displayMutex) xSemaphoreGive(displayMutex);
   M5Cardputer.update();
   keyboard_changed = M5Cardputer.Keyboard.isChange();
   if(keyboard_changed){Sound(10000, 100, sound);}   

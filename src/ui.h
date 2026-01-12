@@ -54,7 +54,12 @@ void drawList(String toDraw[], uint8_t manu_size);
 void logVictim(String login, String pass);
 inline void drawWifiInfoScreen(String wifiName, String wifiMac, String wifiRRSI, String wifiChanel);
 void pushAll();
-void updateM5();
+
+extern SemaphoreHandle_t displayMutex; // protects all display/canvas operations
+void updateM5(){
+  M5.update();
+  M5Cardputer.update();
+}
 void editWhitelist();
 uint16_t RGBToRGB565(uint8_t r, uint8_t g, uint8_t b);
 uint16_t hexToRGB565(String hex);

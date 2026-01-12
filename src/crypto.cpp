@@ -82,22 +82,17 @@ static bool readFileSD(const String &path, std::vector<uint8_t> &out);
 
 // Ensure pub PEM uses "RSA PUBLIC KEY" header and exactly one trailing newline
 
-
 void keygenTask(void *arg) {
     CryptoGuard guard;
     String privPath = fullPrivatePath();
     String pubPath  = fullPublicPath();
 
-    
-    // show heap before anything heavy
     size_t free_before = esp_get_free_heap_size();
     fLogMessage("[crypto] free heap before keygen: %u\n", (unsigned)free_before);
 
     if (!SD.exists(privPath.c_str()) || !SD.exists(pubPath.c_str())) {
         logMessage("[crypto] keys not found on SD. Generating RSA keypair (this will take a while)...");
 
-        // Declare all locals that could be bypassed by early jumps here to avoid
-        // "transfer of control bypasses initialization" errors.
         mbedtls_pk_context pk;
         mbedtls_entropy_context entropy;
         mbedtls_ctr_drbg_context ctr;
@@ -105,103 +100,99 @@ void keygenTask(void *arg) {
         void *pub_buf = nullptr;
         size_t prv_len = 0;
         size_t pub_len = 0;
-        String dir;
-        // Strings that would otherwise be constructed later must be declared
-        // here to avoid gotos bypassing their constructors.
-        // String pubPemRaw;
-        // String pubPemNorm;
-        bool ok1 = false;
-        bool ok2 = false;
         int rc = 0;
 
         mbedtls_pk_init(&pk);
         mbedtls_entropy_init(&entropy);
         mbedtls_ctr_drbg_init(&ctr);
 
+        // 1. Setup RNG
         const char *pers = "esp32_rsa_gen";
-        rc = mbedtls_ctr_drbg_seed(&ctr, mbedtls_entropy_func, &entropy, (const unsigned char*)pers, strlen(pers));
-        if (rc != 0) {
+        if ((rc = mbedtls_ctr_drbg_seed(&ctr, mbedtls_entropy_func, &entropy, (const unsigned char*)pers, strlen(pers))) != 0) {
             fLogMessage("[crypto] ctr_drbg_seed failed: -0x%04x\n", -rc);
-            mbedtls_ctr_drbg_free(&ctr);
-            mbedtls_entropy_free(&entropy);
+            goto cleanup; // Use goto to ensure proper cleanup on error
         }
 
         if ((rc = mbedtls_pk_setup(&pk, mbedtls_pk_info_from_type(MBEDTLS_PK_RSA))) != 0) {
             fLogMessage("[crypto] pk_setup failed: -0x%04x\n", -rc);
-            mbedtls_ctr_drbg_free(&ctr);
-            mbedtls_entropy_free(&entropy);
+            goto cleanup;
         }
 
-        // Generate RSA key (may take a long time)
+        // 2. Generate RSA key
         fLogMessage("[crypto] starting RSA key generation, be patient (bits=%d)...\n", RSA_BITS);
+        
+        // This is the heavy blocking call
         if ((rc = mbedtls_rsa_gen_key(mbedtls_pk_rsa(pk), mbedtls_ctr_drbg_random, &ctr, RSA_BITS, 65537)) != 0) {
             fLogMessage("[crypto] rsa_gen_key failed: -0x%04x\n", -rc);
-            mbedtls_pk_free(&pk);
+            goto cleanup;
         }
 
-        // allocate PEM buffers in SPIRAM if available, otherwise in regular heap
+        // --- FIX 1: FEED THE DOG ---
+        // The generation likely took 3-10 seconds. We must yield to let the 
+        // IDLE task run and reset the hardware watchdog before we attempt SD writes.
+        vTaskDelay(pdMS_TO_TICKS(10)); 
+        // ---------------------------
+
+        // 3. Allocate Buffers
         prv_buf = heap_caps_malloc(PRIV_PEM_BUF, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+        if (!prv_buf) prv_buf = heap_caps_malloc(PRIV_PEM_BUF, MALLOC_CAP_8BIT);
+        
         if (!prv_buf) {
-            // fallback to normal heap
-            prv_buf = heap_caps_malloc(PRIV_PEM_BUF, MALLOC_CAP_8BIT);
-        }
-        if (!prv_buf) {
-            fLogMessage("[crypto] failed to alloc private pem buffer, free=%u\n", (unsigned)esp_get_free_heap_size());
-            mbedtls_pk_free(&pk);
+            fLogMessage("[crypto] failed to alloc private pem buffer\n");
+            goto cleanup; // FIX: Stop execution if alloc fails
         }
 
         pub_buf = heap_caps_malloc(PUB_PEM_BUF, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
         if (!pub_buf) pub_buf = heap_caps_malloc(PUB_PEM_BUF, MALLOC_CAP_8BIT);
+        
         if (!pub_buf) {
-            fLogMessage("[crypto] failed to alloc public pem buffer, free=%u\n", (unsigned)esp_get_free_heap_size());
-            heap_caps_free(prv_buf);
-            mbedtls_pk_free(&pk);
+            fLogMessage("[crypto] failed to alloc public pem buffer\n");
+            goto cleanup; // FIX: Stop execution if alloc fails
         }
 
-        // export private pem
-        rc = mbedtls_pk_write_key_pem(&pk, (unsigned char*)prv_buf, PRIV_PEM_BUF);
-        if (rc != 0) {
+        // 4. Export Keys
+        if ((rc = mbedtls_pk_write_key_pem(&pk, (unsigned char*)prv_buf, PRIV_PEM_BUF)) != 0) {
             fLogMessage("[crypto] write_key_pem failed: -0x%04x\n", -rc);
-            heap_caps_free(prv_buf);
-            heap_caps_free(pub_buf);
-            mbedtls_pk_free(&pk);
+            goto cleanup;
         }
         prv_len = strlen((const char*)prv_buf);
 
-        // export public pem
-        rc = mbedtls_pk_write_pubkey_pem(&pk, (unsigned char*)pub_buf, PUB_PEM_BUF);
-        if (rc != 0) {
+        if ((rc = mbedtls_pk_write_pubkey_pem(&pk, (unsigned char*)pub_buf, PUB_PEM_BUF)) != 0) {
             fLogMessage("[crypto] write_pubkey_pem failed: -0x%04x\n", -rc);
-            heap_caps_free(prv_buf);
-            heap_caps_free(pub_buf);
-            mbedtls_pk_free(&pk);
+            goto cleanup;
         }
         pub_len = strlen((const char*)pub_buf);
 
-        // ensure keys directory exists on SD
-        dir = g_keysPath;
-        if (!SD.exists(dir.c_str())) {
-            SD.mkdir(dir.c_str());
+        // 5. Write to SD
+        {
+            // Scope String usage to free heap before cleanup
+            String dir = g_keysPath;
+            if (!SD.exists(dir.c_str())) SD.mkdir(dir.c_str());
+
+            bool ok1 = writeFileSD(privPath, (const uint8_t*)prv_buf, prv_len);
+            
+            String pubPemRaw((const char*)pub_buf, pub_len);
+            String pubPemNorm = pwngrid::crypto::normalizePublicPEM(pubPemRaw);
+            bool ok2 = writeFileSD(pubPath, (const uint8_t*)pubPemNorm.c_str(), pubPemNorm.length());
+
+            if (!ok1 || !ok2) {
+                fLogMessage("[crypto] failed to write files: ok1=%d ok2=%d\n", ok1, ok2);
+            } else {
+                fLogMessage("[crypto] keygen saved private %s public %s\n", privPath.c_str(), pubPath.c_str());
+            }
         }
 
-        ok1 = writeFileSD(privPath, (const uint8_t*)prv_buf, prv_len);
-        // convert pub_buf (C string) to String and normalize header before saving
-        String pubPemRaw((const char*)pub_buf, pub_len);
-        String pubPemNorm = pwngrid::crypto::normalizePublicPEM(pubPemRaw);
-        ok2 = writeFileSD(pubPath, (const uint8_t*)pubPemNorm.c_str(), pubPemNorm.length());
-
-        heap_caps_free(prv_buf);
-        heap_caps_free(pub_buf);
-
-        if (!ok1 || !ok2) {
-            fLogMessage("[crypto] failed to write key files to SD: ok1=%d ok2=%d\n", ok1, ok2);
-            mbedtls_pk_free(&pk);
-        }
-
-        fLogMessage("[crypto] keygen saved private %s public %s\n", privPath.c_str(), pubPath.c_str());
+cleanup:
+        // --- FIX 2: MEMORY LEAK & CLEANUP ---
+        // These must be called regardless of success or failure
+        if (prv_buf) heap_caps_free(prv_buf);
+        if (pub_buf) heap_caps_free(pub_buf);
+        
+        mbedtls_pk_free(&pk);
+        mbedtls_ctr_drbg_free(&ctr);  // Clean up RNG
+        mbedtls_entropy_free(&entropy);
     }
 
-    // Done. Delete this task.
     xSemaphoreGive(keygenDone);
     vTaskDelete(NULL);
 }

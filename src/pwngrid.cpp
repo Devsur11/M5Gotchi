@@ -4,18 +4,21 @@
 #include "ui.h"
 
 static const size_t PWNGRID_MAX_PEERS = 64;
+static SemaphoreHandle_t pwngridMutex = NULL; // protects pwngrid_peers and associated globals
 std::vector<pwngrid_peer> pwngrid_peers;
 String pwngrid_last_friend_name = "";
 uint16_t pwngrid_last_pwned_session_amount = 0;
 uint16_t pwngrid_last_pwned_amount = 0;
 String lastPeerFace = "";
 
-uint16_t getPwngridLastSessionPwnedAmount() { return pwngrid_last_pwned_session_amount; }
-uint8_t getPwngridTotalPeers() { return (uint8_t)pwngrid_peers.size(); }
-String getPwngridLastFriendName() { return pwngrid_last_friend_name; }
-uint16_t getPwngridLastPwnedAmount() { return pwngrid_last_pwned_amount; }
+uint16_t getPwngridLastSessionPwnedAmount() { uint16_t v; if(pwngridMutex) { xSemaphoreTake(pwngridMutex, portMAX_DELAY); v = pwngrid_last_pwned_session_amount; xSemaphoreGive(pwngridMutex);} else v = pwngrid_last_pwned_session_amount; return v; }
+uint8_t getPwngridTotalPeers() { uint8_t v; if(pwngridMutex){ xSemaphoreTake(pwngridMutex, portMAX_DELAY); v = (uint8_t)pwngrid_peers.size(); xSemaphoreGive(pwngridMutex);} else v = (uint8_t)pwngrid_peers.size(); return v; }
+String getPwngridLastFriendName() { String v; if(pwngridMutex){ xSemaphoreTake(pwngridMutex, portMAX_DELAY); v = pwngrid_last_friend_name; xSemaphoreGive(pwngridMutex);} else v = pwngrid_last_friend_name; return v; }
+uint16_t getPwngridLastPwnedAmount() { uint16_t v; if(pwngridMutex){ xSemaphoreTake(pwngridMutex, portMAX_DELAY); v = pwngrid_last_pwned_amount; xSemaphoreGive(pwngridMutex);} else v = pwngrid_last_pwned_amount; return v; }
+
+// Do NOT expose internal pointer without protection. Use snapshot APIs instead when iterating peers.
 pwngrid_peer *getPwngridPeers() { return pwngrid_peers.empty() ? nullptr : pwngrid_peers.data(); }
-String getLastPeerFace() { return lastPeerFace; }
+String getLastPeerFace() { String v; if(pwngridMutex){ xSemaphoreTake(pwngridMutex, portMAX_DELAY); v = lastPeerFace; xSemaphoreGive(pwngridMutex);} else v = lastPeerFace; return v; }
 
 void enqueueUnit(const String &name, const String &identity) {
   if (!unitQueue) return;
@@ -140,6 +143,8 @@ esp_err_t pwngridAdvertise(uint8_t channel, String face) {
 }
 
 void pwngridAddPeer(JsonDocument &json, signed int rssi) {
+  if (pwngridMutex) xSemaphoreTake(pwngridMutex, portMAX_DELAY);
+
   String identity = json["identity"].as<String>();
 
   // Update existing peer if present
@@ -164,6 +169,7 @@ void pwngridAddPeer(JsonDocument &json, signed int rssi) {
       lastPeerFace = p.face;
       pwngrid_last_pwned_amount = p.pwnd_tot;
       pwngrid_last_pwned_session_amount = p.pwnd_run;
+      if (pwngridMutex) xSemaphoreGive(pwngridMutex);
       return;
     }
   }
@@ -186,6 +192,7 @@ void pwngridAddPeer(JsonDocument &json, signed int rssi) {
   newp.version = json["version"].as<String>();
 
   if (pwngrid_peers.size() < PWNGRID_MAX_PEERS) {
+    // push_back can reallocate; we reserved capacity at init to avoid reallocs at runtime
     pwngrid_peers.push_back(newp);
   } else {
     // Try to find a gone peer to reuse
@@ -213,19 +220,22 @@ void pwngridAddPeer(JsonDocument &json, signed int rssi) {
   lastPeerFace = newp.face;
   pwngrid_last_pwned_amount = newp.pwnd_tot;
   pwngrid_last_pwned_session_amount = newp.pwnd_run;
+  if (pwngridMutex) xSemaphoreGive(pwngridMutex);
 }
 
 const int away_threshold = 120000;
 
 void checkPwngridGoneFriends() {
+  if (pwngridMutex) xSemaphoreTake(pwngridMutex, portMAX_DELAY);
   for (size_t i = 0; i < pwngrid_peers.size(); i++) {
-    // Check if peer is away for more then
-    int away_secs = pwngrid_peers[i].last_ping - millis();
-    if (away_secs > away_threshold) {
+    // milliseconds since last ping
+    long away_ms = (long)millis() - (long)pwngrid_peers[i].last_ping;
+    if (away_ms > away_threshold) {
       pwngrid_peers[i].gone = true;
-      return;
+      // continue to mark other peers as gone as well
     }
   }
+  if (pwngridMutex) xSemaphoreGive(pwngridMutex);
 }
 
 typedef struct {
@@ -312,6 +322,16 @@ void pwnSnifferCallback(void *buf, wifi_promiscuous_pkt_type_t type) {
 #include "WiFi.h"
 
 void initPwngrid() {  
+  // initialize pwngrid data protections
+  if (pwngridMutex == NULL) {
+    pwngridMutex = xSemaphoreCreateMutex();
+    if (pwngridMutex == NULL) {
+      logMessage("Failed to create pwngrid mutex");
+    }
+  }
+  // reserve the vector to avoid runtime reallocations that can throw
+  pwngrid_peers.reserve(PWNGRID_MAX_PEERS);
+
   xSemaphoreTake(wifiMutex, portMAX_DELAY);
   wifi_init_config_t WIFI_INIT_CONFIG = WIFI_INIT_CONFIG_DEFAULT();
   esp_wifi_init(&WIFI_INIT_CONFIG);
@@ -340,4 +360,13 @@ void initPwngrid() {
         NULL,                      // Task handle
         1                          // Core to run the task on (0 or 1)
     );
+}
+
+// Return a snapshot of peers (thread-safe copy)
+std::vector<pwngrid_peer> getPwngridSnapshot() {
+  std::vector<pwngrid_peer> snap;
+  if (pwngridMutex) xSemaphoreTake(pwngridMutex, portMAX_DELAY);
+  snap = pwngrid_peers; // copy
+  if (pwngridMutex) xSemaphoreGive(pwngridMutex);
+  return snap;
 }
