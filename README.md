@@ -28,9 +28,13 @@ M5Gothi brings the powerful Pwnagotchi functions and interface to the M5Cardpute
 
 - Full Pwnagothi functionality adapted for M5Cardputer
 - Manual Wi-Fi control via integrated keyboard UI making it first fully UI-controlled pwnagotchi
-- Automatic handshake capture using “Pwnagothi Auto Mode”
+- Automatic handshake capture using  Auto Mode
 - **Update firmware directly from GitHub, SD card, or built-in Web UI**
 - Advanced personality, for better control over pwnagotchi functions
+- pwngrid connection for interaction with other pwnagotchis
+- GPS support for wardriving or getting location info from pwned networks
+- integration with wigle for wardriving data upload
+- full file manager with build-in file editor
 
 ---
 > [!IMPORTANT]
@@ -38,7 +42,7 @@ M5Gothi brings the powerful Pwnagotchi functions and interface to the M5Cardpute
 
 ### SD Card File Structure
 
-- Configuration file: m5gotchi.conf will be created at first boot and then used to store informations. **Don't mess with it at your own - use device UI to change these values! (Or if you are using lite mode and need to change stuff - be carefull)**
+- Configuration file: m5gotchi.conf will be created at first boot and then used to store informations. **Don't mess with it at your own - use device UI to change these values!
 - personality will be saved in file called personality.conf.
 - Wpa-sec needed files: uploaded.json, cracked.json. Do not edit those files, and if you're running lite mode and need to view them on pc - use text editor of your choice.
 - Captured handshakes will be stored inside a folder called:
@@ -54,7 +58,6 @@ M5Gothi brings the powerful Pwnagotchi functions and interface to the M5Cardpute
 | Device         | Status         | Notes                          |
 |----------------|----------------|--------------------------------|
 | M5Cardputer    | ✅ Supported   | Main target device             |
-| esp32s3 dev    | ✅ Lite version| See instructions below         |
 | M5Cardputer adv| ✅ Supported   | Tested And Work Fine           |
 | M5Stack Core2  | ⏳ Planned     | Requires GPIO adaptation       |
 | M5StickC       | ⏳ Planned     | Requires GPIO adaptation       |
@@ -75,8 +78,9 @@ M5Gothi brings the powerful Pwnagotchi functions and interface to the M5Cardpute
 | SD Card Update          | ✅ Done    |
 | Web UI Update           | ✅ Done    |
 | Handshake upload to web | ✅ Done    |
+| PWNGrid support         | ✅ Done    |
 | Custom UI plugins       | Planned    |
-| PWNGrid support         | Planned    |
+
 
 >[!NOTE]
 >If you want to see some of your features, submit ideas with an pull request.
@@ -119,9 +123,6 @@ You can install PlatformIO using either:
    pio run --target upload
    ```
 
->[!NOTE]
->For esp32s3 dev board: use ONLY lite version binary, connect sd card with these pins or define your own in settings.h
-
 |Esp pin|Sd pin|
 |-------|------|
 |G12|CS|
@@ -147,20 +148,6 @@ You can install PlatformIO using either:
 - Use ENTER to confirm or `y` or `n` when asked to do so
 - use `c` to clone wifi when in wifi details menu
 - handshakes are stored in `/handshake/` folder with filemanes containing SSID and BSSID of network that was pwned
-
----
-
-## Lite mode setup:
-- Flash lite mode on chosen hardware
-- Connect sd card reader with sd card plugged into it into gpio ports mentioned in this file, or defined by you during pre-compilation time.
-- Boot the esp32 device for the first time, let it run for like 10-20sec to ensure all required files ware created
-- Turn off the device, plug sd card into your pc and open file named m5gotchi.conf with text editor of your liking
-- Type your home wifi credentials into savedApSSID and savedAPPass feilds to allow esp32 to connect to interned for updates and wpa-sec sync
-- Type your wpa-sec api key into wpa_sec_api_key feild, if you have it (api key, not feild)
-- Set lite_mode_wpa_sec_sync_on_startup to true, if you typed your api key and want your handshakes to be synced with wpa-sec servers.
-- If your esp32 has a display, and you can see it normally, you can customize hostname and theme to fit your likings
-- And finally, set pwnagothiMode to true, to enable its functions
-- after first run, a personality file will be created - if you know what you're doing you can customize that file but be warned: **This can inpact ability to work normally!**
 
 ## Update Methods
 
@@ -204,12 +191,6 @@ When built with `ENABLE_COREDUMP_LOGGING` the firmware will publish core dump up
 - `device/coredump/end` — final JSON with `upload_id`, `status`, `sent_chunks`, `checksum` (combined checksum of all bytes).
 
 - `device/coredump/ack/<upload_id>` (or `device/coredump/ack/#`) — the collector should send an acknowledgement JSON with `upload_id`, `status` (`ok` or `complete`), `received_chunks`, and `checksum` when the uploaded file is verified; the device will only erase the core dump after receiving a matching verification ack.
-
-This improves reliability by:
-
-- Sending telemetry (build, IDF, reset reason, chip info) to help debugging
-- Using per-chunk and final checksums to detect corruption
-- Waiting for a server ACK before erasing the core dump so uploads can be retried if verification fails
 
 ---
 
