@@ -68,7 +68,7 @@ if [ ! -f "$FULL_BIN_PATH" ]; then
     echo "❌ Full firmware.bin not found!"
     exit 1
 fi
-cp "$FULL_BIN_PATH" ../firmware/firmware.bin
+cp "$FULL_BIN_PATH" firmware/firmware.bin
 echo "✅ Full firmware copied to firmware/firmware.bin"
 
 # Step 7: Create firmware.json with full URL

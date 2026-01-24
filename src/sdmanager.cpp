@@ -876,11 +876,31 @@ void sdmanager::runFileManager() {
             bool empty = (dd.openNextFile() == 0);
             dd.close();
             if (empty) {
+              canvas_main.setTextDatum(middle_center);
+              canvas_main.setTextSize(2);
+              canvas_main.fillRect( canvas_main.textWidth("Deleting...") / 2 - 10,
+                                    canvas_main.height() / 2 - 16,
+                                    canvas_main.textWidth("Deleting...") + 20,
+                                    32,
+                                    bg_color_rgb565);
+              canvas_main.setTextColor(tx_color_rgb565);
+              canvas_main.drawString("Deleting...", canvas_main.width() / 2, canvas_main.height() / 2);
+              pushAll();
               SD.rmdir(full.c_str());
               listDirectory(curPath, entries);
             } else {
               // ask for recursive delete
               if (drawQuestionBox("Recursive?", "Delete directory and all contents?", name)) {
+                canvas_main.setTextDatum(middle_center);
+                canvas_main.setTextSize(2);
+                canvas_main.fillRect( canvas_main.textWidth("Deleting...") / 2 - 10,
+                                      canvas_main.height() / 2 - 16,
+                                      canvas_main.textWidth("Deleting...") + 20,
+                                      32,
+                                      bg_color_rgb565);
+                canvas_main.setTextColor(tx_color_rgb565);
+                canvas_main.drawString("Deleting...", canvas_main.width() / 2, canvas_main.height() / 2);
+                pushAll();
                 if (recursiveDelete(full)) {
                   drawInfoBox("Deleted", name, "", true, false);
                   listDirectory(curPath, entries);
@@ -893,6 +913,16 @@ void sdmanager::runFileManager() {
             drawInfoBox("ERROR", "Directory cannot be opened", name, true, true);
           }
         } else {
+          canvas_main.setTextDatum(middle_center);
+          canvas_main.setTextSize(2);
+          canvas_main.fillRect( canvas_main.textWidth("Deleting...") / 2 - 10,
+                                canvas_main.height() / 2 - 16,
+                                canvas_main.textWidth("Deleting...") + 20,
+                                32,
+                                bg_color_rgb565);
+          canvas_main.setTextColor(tx_color_rgb565);
+          canvas_main.drawString("Deleting...", canvas_main.width() / 2, canvas_main.height() / 2);
+          pushAll();
           SD.remove(full.c_str());
           listDirectory(curPath, entries);
         }

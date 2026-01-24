@@ -41,7 +41,6 @@ void drawMood(String face, String phrase);
 void drawTopCanvas();
 void drawRightBar();
 void drawBottomCanvas();
-void drawMenu();
 void updateUi(bool show_toolbars = false, bool triggerPwnagothi = true, bool overrideDelay = false);
 void runApp(uint8_t appID = 0);
 inline void trigger(uint8_t trigID){logMessage("Trigger" + String(trigID));}

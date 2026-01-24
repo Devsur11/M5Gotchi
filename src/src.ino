@@ -533,20 +533,7 @@ void setup() {
   }
   // ^ please leave this as it is, dont change its position, otherwise heap will corrupt(HOW!!?)
 
-  // check if core dump exists
-  #ifdef ENABLE_COREDUMP_LOGGING
-  if (esp_core_dump_image_check() == ESP_OK) {
-    xSemaphoreTake(wifiMutex, portMAX_DELAY);
-    if(true) { 
-      sendCrashReport();
-      drawInfoBox("", "", "", false, false);
-      updateUi(false, false, true);
-    }
-    xSemaphoreGive(wifiMutex);
-  } else {
-    logMessage("Core dump image not found");
-  }
-  #endif
+  
 
   esp_task_wdt_deinit();
   esp_task_wdt_init(60, false); 

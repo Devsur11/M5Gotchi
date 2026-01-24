@@ -283,7 +283,7 @@ void pwnagothiLoop(){
         if(attackVector == lastBlocked){
             logMessage("Skipping previously blocked SSID: " + attackVector);
             tot_sad_epochs++;
-            pwnagothiScan = true;
+            wifiCheckInt++;
             allTimeEpochs++;
             return;
         }

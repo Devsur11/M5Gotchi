@@ -213,7 +213,8 @@ menu settings_menu[] = {
   {"Reboot", 56},                         // Reboot system
 
   // Optional / advanced
-  {"Skip EAPOL Check", 49}                // Skip EAPOL integrity check
+  {"Skip EAPOL Check", 49},                // Skip EAPOL integrity check
+  {"Send bug report to dev", 123}
 };
 
 
@@ -485,18 +486,18 @@ uint8_t returnBrightness(){return currentBrightness;}
 
 
 bool toggleMenuBtnPressed() {
-  return (keyboard_changed && (M5Cardputer.Keyboard.isKeyPressed('`')));
+  return (M5Cardputer.Keyboard.isKeyPressed('`'));
 }
 
 bool isOkPressed() {
-  return (keyboard_changed && M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER));
+  return (M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER));
 }
 
 bool isNextPressed() {
-  return keyboard_changed && (M5Cardputer.Keyboard.isKeyPressed('.') );
+  return M5Cardputer.Keyboard.isKeyPressed('.');
 }
 bool isPrevPressed() {
-  return keyboard_changed && (M5Cardputer.Keyboard.isKeyPressed(';'));
+  return M5Cardputer.Keyboard.isKeyPressed(';');
 }
 
 bool needsUiRedraw = true;
@@ -680,10 +681,11 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
         { "Reboot", 56 },
 
         // Optional / Advanced
-        { val_12, 49 }         // Skip EAPOL Check
+        { val_12, 49 },         // Skip EAPOL Check
+        { "Send bug report to devs", 123 } // Send bug report
     };
     
-    drawMenuList( new_settings_menu , 6, 26);
+    drawMenuList( new_settings_menu , 6, 27);
     prevMID = 6;
   }  
   else if (menuID == 7){
@@ -1201,38 +1203,54 @@ bool registerNewMessage(message newMess) {
 }
 
 #include <algorithm>
-
 std::vector<message> loadMessageHistory(const String &unitName) {
     std::vector<message> out;
 
-    String path = String(BASE_DIR) + "/" + unitName;
+    // Use reserve to prevent vector re-allocations
+    out.reserve(20); 
+
+    // Construct path safely
+    String path = "/pwngrid/chats/" + unitName; // Hardcoded path is safer than String(BASE_DIR) + ...
+    
+    if (!SD.exists(path)) return out;
+
     File f = SD.open(path, FILE_READ);
-    if (!f) {
-        return out;
+    if (!f) return out;
+
+    // SAFETY: Don't try to load massive files into RAM
+    if (f.size() > 15000) { 
+       // Optionally: Read only last X bytes or handle error
+       f.close();
+       return out; 
     }
 
+    // Use Filter to save RAM? (Only load fields we need)
+    // JsonDocument filter; filter["fromOrTo"] = true; ...
+    
     JsonDocument doc;
-    if (deserializeJson(doc, f)) {
-        f.close();
+    DeserializationError error = deserializeJson(doc, f);
+    
+    // Always close file immediately after parsing
+    f.close(); 
+
+    if (error) {
         return out;
     }
-    f.close();
 
     JsonArray arr = doc.as<JsonArray>();
-    out.reserve(arr.size());
-
     for (JsonObject obj : arr) {
         message m;
-        m.fromOrTo = (const char*)obj["fromOrTo"];
-        m.fingerprint = (const char*)obj["fingerprint"];
+        // Check for null to prevent String crashes
+        m.fromOrTo = obj["fromOrTo"] | "unknown"; 
+        m.fingerprint = obj["fingerprint"] | "";
         m.id = obj["id"] | 0;
-        m.text = (const char*)obj["text"];
+        m.text = obj["text"] | "";
         m.ts = obj["ts"] | 0;
         m.outgoing = obj["outgoing"] | false;
         out.push_back(m);
     }
 
-    // sort by timestamp, oldest first
+    // Sort
     std::sort(out.begin(), out.end(),
         [](const message &a, const message &b) {
             return a.ts < b.ts;
@@ -1346,10 +1364,12 @@ void pwngridMessenger() {
   killInboxTask = false;
   debounceDelay();
 
+  // 1. Network Check
   if (WiFi.status() != WL_CONNECTED) {
     drawInfoBox("Info", "Network connection needed", "To open inbox!", false, false);
     delay(3000);
-    runApp(43);
+    // Warning: Ensure runApp does not recursively call pwngridMessenger
+    runApp(43); 
     if (WiFi.status() != WL_CONNECTED) {
       drawInfoBox("ERROR!", "No network connection", "Operation abort!", true, false);
       menuID = 8;
@@ -1357,9 +1377,9 @@ void pwngridMessenger() {
     }
   }
 
+  // 2. Setup Directory
   if (!SD.exists("/pwngrid/chats")) SD.mkdir("/pwngrid/chats");
 
-  File dir = SD.open("/pwngrid/chats");
   drawInfoBox("Please wait", "Syncing inbox", "with pwngrid...", false, false);
 
   if (!api_client::init(KEYS_FILE)) {
@@ -1367,44 +1387,49 @@ void pwngridMessenger() {
     menuID = 8;
     return;
   }
-  // if (!refresherRunning) {
-  //   xTaskCreatePinnedToCore(
-  //     pwngridInboxTask,
-  //     "pwngrid_refresher",
-  //     65536,      // stack size, don’t cheap out
-  //     nullptr,
-  //     1,         // low priority
-  //     &pwngridInboxTaskHandle,
-  //     0          // core 0 (WiFi lives here)
-  //   );
-  // }
 
   api_client::pollInbox();
 
+  // 3. Load Chat List (Safe Method)
   std::vector<String> chats;
-  dir.rewindDirectory();
-  while (true) {
-    String name = dir.getNextFileName();
-    if (!name.length()) break;
-    if (name.length() > 8) chats.push_back(name.substring(15));
+  {
+      File dir = SD.open("/pwngrid/chats");
+      if (dir) {
+          dir.rewindDirectory();
+          while (true) {
+            String name = dir.getNextFileName();
+            if (!name.length()) break;
+            
+            // FIX: Prevent crash if getNextFileName returns only the filename
+            if (name.startsWith("/pwngrid/chats/")) {
+                chats.push_back(name.substring(15));
+            } else {
+                // Ignore hidden files like .DS_Store
+                if (!name.startsWith(".")) chats.push_back(name);
+            }
+          }
+          dir.close(); // FIX: Explicit close
+      }
   }
   chats.push_back("New chat");
 
-  String menuItems[chats.size()];
-  for (uint8_t i = 0; i < chats.size(); i++) {
-    menuItems[i] = chats[i];
-  }
-
-  int8_t result = drawMultiChoice("Open or create chat:", menuItems, chats.size(), 0, 0);
+  // FIX: Use Vector data instead of Stack Array (VLA)
+  // Assuming drawMultiChoice accepts String* or String[]
+  int8_t result = drawMultiChoice("Open or create chat:", chats.data(), chats.size(), 0, 0);
+  
   if (result < 0) {
     stopPwngridInboxTask();
     menuID = 8;
     return;
   }
 
-  if (result == chats.size() - 1) {
+  // 4. Handle New Chat Creation
+  if (result == (int)chats.size() - 1) {
     File contacts = SD.open(ADDRES_BOOK_FILE, FILE_READ, false);
+    
+    // FIX: Check validity and size, close if invalid
     if (!contacts || contacts.size() < 5) {
+      if(contacts) contacts.close();
       drawInfoBox("Info", "No friends found.", "Touch grass.", true, false);
       stopPwngridInboxTask();
       menuID = 8;
@@ -1412,7 +1437,10 @@ void pwngridMessenger() {
     }
 
     JsonDocument contacts_json;
-    if (deserializeJson(contacts_json, contacts)) {
+    DeserializationError err = deserializeJson(contacts_json, contacts);
+    contacts.close(); // FIX: Explicit close immediately after use
+
+    if (err) {
       drawInfoBox("ERROR", "Contacts load failed!", "SD is mad.", true, false);
       stopPwngridInboxTask();
       menuID = 8;
@@ -1423,29 +1451,30 @@ void pwngridMessenger() {
     for (JsonObject obj : contacts_json.as<JsonArray>()) {
       String name = obj["name"] | "unknown";
       bool exists = false;
-      for (auto &c : chats) if (c == name) exists = true;
+      for (const auto &c : chats) if (c == name) exists = true;
       if (!exists) names.push_back(name);
     }
 
-    if (!names.size()) {
+    if (names.empty()) {
       drawInfoBox("Info", "No new chats.", "", true, false);
       stopPwngridInboxTask();
       menuID = 8;
       return;
     }
 
-    String nameItems[names.size()];
-    for (uint8_t i = 0; i < names.size(); i++) nameItems[i] = names[i];
-
-    result = drawMultiChoice("Select chat recipient:", nameItems, names.size(), 0, 0);
+    // FIX: Use Vector data
+    result = drawMultiChoice("Select chat recipient:", names.data(), names.size(), 0, 0);
+    
     if (result < 0) {
       stopPwngridInboxTask();
       menuID = 8;
       return;
     }
 
+    // Create file safely
     File newChat = SD.open("/pwngrid/chats/" + names[result], FILE_WRITE, true);
-    newChat.close();
+    if(newChat) newChat.close();
+    
     chats.push_back(names[result]);
     result = chats.size() - 1;
   }
@@ -1465,13 +1494,7 @@ void pwngridMessenger() {
   String chatFingerprint = resolveChatFingerprint(chats[result], chatHistory);
 
   if (chatFingerprint.length() < 10) {
-    drawInfoBox(
-      "ERROR!",
-      "Recipient fingerprint not found!",
-      "",
-      true,
-      false
-    );
+    drawInfoBox("ERROR!", "Recipient fingerprint", "not found!", true, false);
     stopPwngridInboxTask();
     menuID = 8;
     return;
@@ -1483,11 +1506,13 @@ void pwngridMessenger() {
 
     uint64_t now = millis();
 
-    if (!typingMessage && now - lastInboxSync > 10000) {
+    // Auto Refresh Logic
+    if (!typingMessage && (now - lastInboxSync > 10000)) {
       canvas_main.setTextDatum(middle_center); canvas_main.setTextSize(2); 
       canvas_main.fillRect(0, (canvas_h/2)-10, 250, 20, bg_color_rgb565); 
       canvas_main.drawString("Refreshing...", canvas_center_x , canvas_h/2); 
       pushAll();
+      
       api_client::pollInbox();
       lastInboxSync = now;
       inboxDirty = true;
@@ -1498,7 +1523,10 @@ void pwngridMessenger() {
       inboxDirty = false;
     }
 
-    int maxScroll = chatHistory.size() > 4 ? chatHistory.size() - 4 : 0;
+    // FIX: Safer math for scroll limits (unsigned size - 4 can underflow)
+    int maxScroll = (int)chatHistory.size() - 4;
+    if (maxScroll < 0) maxScroll = 0;
+    
     if (scroll < 0) scroll = 0;
     if (scroll > maxScroll) scroll = maxScroll;
 
@@ -1526,61 +1554,65 @@ void pwngridMessenger() {
     Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
 
     for (auto c : status.word) {
-      if (!typingMessage && c == ';') {scroll++; delay(50);lastInboxSync = now;}
-      if (!typingMessage && c == '.') {scroll--; delay(50);lastInboxSync = now;}
-      if (!typingMessage && c == '`') { stopPwngridInboxTask(); menuID = 8; return; }
-
-      
-      if (!typingMessage && c == 'd') {
-        // delete chat
-        if(drawQuestionBox("Delete chat?", "Are you sure to delete chat? This can't be undone!", "")){
-          SD.remove("/pwngrid/chats/" + chats[result]);
-          drawInfoBox("Info", "Chat deleted.", "", true, false);
-          menuID = 8;
-          debounceDelay();
-          stopPwngridInboxTask();
-          return;
-        }
-        debounceDelay();
+      if (!typingMessage) {
+          if (c == ';') { scroll++; delay(50); lastInboxSync = now; }
+          if (c == '.') { scroll--; delay(50); lastInboxSync = now; }
+          if (c == '`') { stopPwngridInboxTask(); menuID = 8; return; }
+          
+          if (c == 'd') {
+            if(drawQuestionBox("Delete chat?", "Are you sure?", "")){
+              SD.remove("/pwngrid/chats/" + chats[result]);
+              drawInfoBox("Info", "Chat deleted.", "", true, false);
+              menuID = 8;
+              debounceDelay();
+              stopPwngridInboxTask();
+              return;
+            }
+            debounceDelay();
+          }
+          
+          if (c == 'i') { typingMessage = true; debounceDelay(); lastInboxSync = now; }
+      } else {
+          // Input Mode
+          if (textTyped.length() < 24) { textTyped += c; debounceDelay(); lastInboxSync = now; }
       }
-
-      if (typingMessage && textTyped.length() < 24) {textTyped += c; debounceDelay();lastInboxSync = now;}
-      if (!typingMessage && c == 'i') {typingMessage = true; debounceDelay();lastInboxSync = now;}
     }
 
     if (status.del) {
-      if (textTyped.length()) {textTyped.remove(textTyped.length() - 1); debounceDelay();}
+      if (textTyped.length()) { textTyped.remove(textTyped.length() - 1); debounceDelay(); }
       else typingMessage = false;
     }
 
     if (status.enter && typingMessage && textTyped.length()) {
       message msg = { chats[result], pwngrid_indentity, 0, textTyped, 0, true };
+      
       canvas_main.setTextDatum(middle_center); canvas_main.setTextSize(2); 
       canvas_main.fillRect(0, (canvas_h/2)-10, 250, 20, bg_color_rgb565); 
       canvas_main.drawString("Sending...", canvas_center_x , canvas_h/2); 
       pushAll();
-      if (api_client::sendMessageTo(chatFingerprint, textTyped)) {
+
+      bool msgSent = false;
+      
+      // Retry logic for sending
+      for(uint8_t i = 0; i < 2; i++){
+        if(api_client::sendMessageTo(chatFingerprint, textTyped)){
+          msgSent = true;
+          break;
+        }
+        delay(200);
+      }
+
+      if (msgSent) {
         registerNewMessage(msg);
         inboxDirty = true;
-      }
-      else{
-        //try up to 2 times
-        bool msgS = false;
-        for(uint8_t i = 0; i<2;i++){
-          if(api_client::sendMessageTo(chatFingerprint, textTyped)){
-            msgS = true;
-            registerNewMessage(msg);
-            inboxDirty = true;
-            break;
-          }
-        }
-        if(!msgS)
-        {canvas_main.setTextDatum(middle_center); canvas_main.setTextSize(2); 
+      } else {
+        canvas_main.setTextDatum(middle_center); canvas_main.setTextSize(2); 
         canvas_main.fillRect(0, (canvas_h/2)-10, 250, 20, bg_color_rgb565); 
         canvas_main.drawString("Send failed!", canvas_center_x , canvas_h/2); 
-        pushAll();}
-        delay(3000);
+        pushAll();
+        delay(2000); // Shorter delay than 3000
       }
+      
       textTyped = "";
       typingMessage = false;
     }
@@ -3348,7 +3380,7 @@ void runApp(uint8_t appID){
       else{
         drawInfoBox("ERROR!", "Upload failed!", "Check network!", true, false);
       }
-      menuID = 8;
+      menuID = 0;
       return; 
     }
     if(appID == 27){
@@ -4461,6 +4493,13 @@ void runApp(uint8_t appID){
       menuID = 6;
       return;
     }
+    if(appID == 123){
+      #ifdef ENABLE_COREDUMP_LOGGING
+        sendCrashReport();
+      #else
+        drawInfoBox("Error", "Core dump logging is disabled", "Recompile with ENABLE_COREDUMP_LOGGING", true, false);
+      #endif
+    }
     return;
   }
 }
@@ -4556,7 +4595,7 @@ bool getBoolInput(String tittle, String desc, bool defaultValue){
         debounceDelay();
         return defaultValue;
       }
-      if(i=='t'){//'y'){ replace with t for relase - my cardputer keyboard has broken t key
+      if(i=='t'){
         toReturn = true;
       }
       if(i=='f'){
@@ -4569,40 +4608,6 @@ bool getBoolInput(String tittle, String desc, bool defaultValue){
       return toReturn;
     }
   }
-}
-
-
-void drawMenu() {
-  if (isNextPressed()) {
-    if (menu_current_opt < menu_len - 1 ) {
-      menu_current_opt++;
-    } else {
-      menu_current_opt = 0;
-    }
-  }
-
-  if (isPrevPressed()) {
-    if (menu_current_opt > 0) {
-      menu_current_opt--;
-    }
-    else {
-      menu_current_opt = (menu_len - 1);
-    }
-  }
-
-  if(isOkPressed()){
-    return;
-  }
-  if(!singlePage){
-    if(menu_current_opt < 5 && menu_current_page != 1){
-        menu_current_page= 1;
-      
-    } else if(menu_current_opt >= 5 && menu_current_page != 2){
-        menu_current_page = 2;
-      
-  }
-  }
-  //uint8_t test = main_menu[1].command; - how to acces 2`nd column - for me
 }
 
 String userInput(const String &prompt, String desc, int maxLen,  const String &initial){
@@ -4937,6 +4942,7 @@ int drawMultiChoice(String tittle, String toDraw[], uint8_t menuSize , uint8_t p
       }
       marqueeOffset = 0;
       marqueeTick = millis();
+      debounceDelay();
     }
     if (isPrevPressed()) {
       if (menu_current_opt > 0) {
@@ -4949,6 +4955,7 @@ int drawMultiChoice(String tittle, String toDraw[], uint8_t menuSize , uint8_t p
       }
       marqueeOffset = 0;
       marqueeTick = millis();
+      debounceDelay();
     }
     if (!singlePage) {
       menu_current_page = (menu_current_opt / 4) + 1;
@@ -4957,6 +4964,7 @@ int drawMultiChoice(String tittle, String toDraw[], uint8_t menuSize , uint8_t p
       Sound(10000, 100, sound);
       menuID = prevMenuID;
       menu_current_opt = prevOpt;
+      debounceDelay();
       return tempOpt;
     }
   }
@@ -5017,6 +5025,7 @@ int drawMultiChoiceLonger(String tittle, String toDraw[], uint8_t menuSize , uin
         menu_current_opt = 0;
         tempOpt = 0;
       }
+      debounceDelay();
     }
     if (isPrevPressed()) {
       if (menu_current_opt > 0) {
@@ -5027,6 +5036,7 @@ int drawMultiChoiceLonger(String tittle, String toDraw[], uint8_t menuSize , uin
         menu_current_opt = (menu_len - 1);
         tempOpt = (menu_len - 1);
       }
+      debounceDelay();
     }
     if(!singlePage){
       float temp = 1+(menu_current_opt/8);
@@ -5036,6 +5046,7 @@ int drawMultiChoiceLonger(String tittle, String toDraw[], uint8_t menuSize , uin
       Sound(10000, 100, sound);
       menuID = prevMenuID;
       menu_current_opt = prevOpt;
+      debounceDelay();
       return tempOpt;
     }
     
@@ -5096,7 +5107,32 @@ String* makeList(String windowName, uint8_t appid, bool addln, uint8_t maxEntryL
         if(isOkPressed()){break;}
         drawList(listToReturn, writeID);
         pushAll();
-        drawMenu();
+        if (isNextPressed()) {
+            if (menu_current_opt < menu_len - 1 ) {
+            menu_current_opt++;
+          } else {
+            menu_current_opt = 0;
+          }
+          debounceDelay();
+        }
+
+        if (isPrevPressed()) {
+          if (menu_current_opt > 0) {
+            menu_current_opt--;
+          }
+          else {
+            menu_current_opt = (menu_len - 1);
+          }
+          debounceDelay();
+        }
+        if(!singlePage){
+          if(menu_current_opt < 5 && menu_current_page != 1){
+              menu_current_page= 1;
+            
+          } else if(menu_current_opt >= 5 && menu_current_page != 2){
+              menu_current_page = 2;
+          }
+        }
       }
     }
   }
@@ -5549,8 +5585,39 @@ void editWhitelist(){
         String tempArr[listToReturn.size()];
         for (size_t i = 0; i < listToReturn.size(); ++i) tempArr[i] = listToReturn[i];
         drawList(tempArr, writeID);
+        if (isNextPressed()) {
+          if (menu_current_opt < menu_len - 1 ) {
+            menu_current_opt++;
+          } else {
+            menu_current_opt = 0;
+          }
+          debounceDelay();
+        }
+
+        if (isPrevPressed()) {
+          if (menu_current_opt > 0) {
+            menu_current_opt--;
+          }
+          else {
+            menu_current_opt = (menu_len - 1);
+          }
+          debounceDelay();
+        }
+
+        if(isOkPressed()){
+          debounceDelay();
+          break;
+        }
+        if(!singlePage){
+          if(menu_current_opt < 5 && menu_current_page != 1){
+              menu_current_page= 1;
+            
+          } else if(menu_current_opt >= 5 && menu_current_page != 2){
+              menu_current_page = 2;
+          }
+        }
         pushAll();
-        drawMenu();
+        
       }
     }
   }
@@ -5868,8 +5935,15 @@ void drawStats(){
 #include "esp_system.h"
 
 void sendCrashReport(){
+  if (esp_core_dump_image_check() == ESP_OK) {
+  } else {
+    logMessage("Core dump image not found");
+    drawInfoBox("Error", "No coredump log found", "Nothing to send", true, false);
+    menuID = 0;
+    return;
+  }
   //inform user of state
-  drawInfoBox("Error", "A critical error has", "occurred, sending report...", false, false);
+  drawInfoBox("Info", "Trying to tonnect to wifi... Please wait", "", false, false);
   //first try to find saved wifi
   attemptConnectSavedNetworks();
   if(WiFi.status() == WL_CONNECTED){
@@ -5883,11 +5957,6 @@ void sendCrashReport(){
       }
       else{
         drawInfoBox("Error", "Cannot send report", "No wifi connected", true, false);
-        bool test1 = drawQuestionBox("Question", "Do you want to delete", "all report logs?", "Y for yes, N for no");
-        if(test1){
-          esp_core_dump_image_erase();
-          drawInfoBox("Logs deleted", "All coredump logs", "have been deleted", true, false);
-        }
         return;
       }
     }
@@ -5903,6 +5972,9 @@ void sendCrashReport(){
   } else {
     drawInfoBox("Report pending", "Upload not verified", "Coredump kept for retry.", true, false);
   }
+  drawInfoBox("Rebooting", "System will restart", "in 5 seconds...", false, false);
+  delay(5000);
+  ESP.restart();
   menuID = 0;
 }
 

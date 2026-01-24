@@ -23,6 +23,7 @@ extern const char pwngid_root_ca_pem_end[] asm("_binary_certs_pwngrid_root_ca_pe
 
 bool timeInitialized = false;
 bool inited = false;
+static String g_apiInitParam; // used only for passing keysPath to the init task
 
 void api_client::initTime() {
     if (timeInitialized) return;   // stop f***ing reinitializing 
@@ -44,7 +45,7 @@ void api_client::initTime() {
 }
 
 bool saveToken(const String &t) {
-    JsonDocument doc;
+    DynamicJsonDocument doc(256);
     doc["token"] = t;
     String s;
     serializeJson(doc, s);
@@ -61,9 +62,9 @@ bool loadToken() {
     File f = SD.open(tokenPath, "r");
     if (!f) return false;
     String s = f.readString(); f.close();
-    JsonDocument doc;
+    DynamicJsonDocument doc(256);
     if (deserializeJson(doc, s)) return false;
-    if (doc["token"].is<String>()) {
+    if (doc["token"].is<const char*>()) {
         token = String(doc["token"].as<const char*>());
         return true;
     }
@@ -78,7 +79,6 @@ void apiInitTask(void *arg) {
     String *path = (String *)arg;
     initResult = api_client::sub_init(*path);
     xSemaphoreGive(initDone);
-    delete path;
     initTaskHandle = nullptr;
     vTaskDelete(nullptr);
 }
@@ -106,21 +106,21 @@ bool api_client::init(const String &keysPath) {
     initDone = xSemaphoreCreateBinary();
     if (!initDone) return false;
 
-    // copy because passing String by pointer into tasks is cursed otherwise
-    String *param = new String(keysPath);
+    // ---------- FIX: use static global instead of allocating String on heap ----------
+    g_apiInitParam = keysPath;
 
     xTaskCreatePinnedToCore(
         apiInitTask,
         "apiInitTask",
         16384,   // increased stack: HTTPClient + mbedtls can require significantly more stack
-        param,
+        &g_apiInitParam,
         2,       // slightly higher priority to avoid preemption during heavy init
         &initTaskHandle,
         0
     );
 
     if (!initTaskHandle) {
-        delete param;
+        // nothing allocated on heap here to free
         return false;
     }
 
@@ -129,14 +129,18 @@ bool api_client::init(const String &keysPath) {
         // finished normally
         vSemaphoreDelete(initDone);
         initDone = nullptr;
+        // clear global param (not strictly required, but tidy)
+        g_apiInitParam = String();
         return initResult;
     }
 
-    // timeout... time to commit a war crime
+    // timeout... kill the init task (task may be using stack/mbedtls; this is last resort)
     vTaskDelete(initTaskHandle);
     initTaskHandle = nullptr;
     vSemaphoreDelete(initDone);
     initDone = nullptr;
+    // clear global param
+    g_apiInitParam = String();
     return false;
 }
 
@@ -150,10 +154,20 @@ static String httpPostJson(const String &url, const String &json, bool auth) {
         xSemaphoreGive(wifiMutex);
         return String();
     }
+
+    // allocate client and free it after https.end()
     WiFiClientSecure *client = new WiFiClientSecure();
     client->setCACert(pwngid_root_ca_pem_start);
+
     HTTPClient https;
-    https.begin(*client, url);
+    if (!https.begin(*client, url)) {
+        fLogMessage("HTTPS begin() failed\n");
+        https.end();
+        delete client;
+        xSemaphoreGive(wifiMutex);
+        return String();
+    }
+
     https.addHeader("Content-Type", "application/json");
     if (auth && token.length()) {
         https.addHeader("Authorization", "Bearer " + token);
@@ -167,7 +181,8 @@ static String httpPostJson(const String &url, const String &json, bool auth) {
     } else {
         fLogMessage("HTTP POST failed: %d\n", code);
     }
-    https.end(); delete client;
+    https.end();
+    delete client;
     xSemaphoreGive(wifiMutex);
     return body;
 }
@@ -180,6 +195,7 @@ static String httpGet(const String &url, bool auth) {
         xSemaphoreGive(wifiMutex);
         return String();
     }
+
     WiFiClientSecure *client = new WiFiClientSecure();
     if(auth){
         client->setCACert(pwngid_root_ca_pem_start);
@@ -187,14 +203,23 @@ static String httpGet(const String &url, bool auth) {
     else{
         client->setInsecure();
     }
+
     HTTPClient https;
-    https.begin(*client, url);
+    if (!https.begin(*client, url)) {
+        fLogMessage("HTTPS begin() failed (GET)\n");
+        https.end();
+        delete client;
+        xSemaphoreGive(wifiMutex);
+        return String();
+    }
+
     if (auth && token.length()) https.addHeader("Authorization", "Bearer " + token);
     int code = https.GET();
     String body = "";
     if (code > 0) body = https.getString();
     else fLogMessage("HTTP GET failed: %d\n", code);
-    https.end(); delete client;
+    https.end();
+    delete client;
     xSemaphoreGive(wifiMutex);
     return body;
 }
@@ -252,12 +277,12 @@ bool api_client::enrollWithGrid() {
     String pubPEMB64 = pwngrid::crypto::base64Encode(pubVec);
 
     // payload: identity + pub + sig + data (server expects 'data' to be an object)
-    JsonDocument body;
+    DynamicJsonDocument body(1024);
     body["identity"] = identity;
     body["public_key"] = pubPEMB64;
     body["signature"] = signatureB64;
-    JsonObject data = body["data"].to<JsonObject>();
-    JsonObject session = body["session"].to<JsonObject>();
+    JsonObject data = body.createNestedObject("data");
+    JsonObject session = body.createNestedObject("session");
     session["epochs"] = 0;
     data["extra"] = "test";
 
@@ -273,7 +298,7 @@ bool api_client::enrollWithGrid() {
         return false;
     }
 
-    JsonDocument rdoc;
+    DynamicJsonDocument rdoc(512);
     auto err = deserializeJson(rdoc, resp);
     if (err) {
         logMessage("enroll: invalid json response");
@@ -301,7 +326,7 @@ bool api_client::sendMessageTo(const String &recipientFingerprint, const String 
         logMessage("send: could not fetch unit");
         return false;
     }
-    JsonDocument rd;
+    DynamicJsonDocument rd(1024);
     if (deserializeJson(rd, r)) {
         logMessage("send: parse unit json failed");
         return false;
@@ -335,7 +360,7 @@ bool api_client::sendMessageTo(const String &recipientFingerprint, const String 
     String sigB64 = pwngrid::crypto::base64Encode(signature);
 
     // build Message json
-    JsonDocument body;
+    DynamicJsonDocument body(512);
     body["data"] = encB64;
     body["signature"] = sigB64;
     String out; serializeJson(body, out);
@@ -358,7 +383,7 @@ String api_client::getNameFromFingerprint(String fingerprint){
         fLogMessage("poll: could not fetch fingerprint %s\n", fingerprint.c_str());
         return "";
     }
-    JsonDocument ud;
+    DynamicJsonDocument ud(512);
     if(deserializeJson(ud, r1)){
         return "";
     }
@@ -422,13 +447,14 @@ time_t api_client::timegm(struct tm* t) {
 
 int8_t api_client::checkNewMessagesAmount(){
     logMessage("Polling inbox...");
+    logMessage("Free heap before pull: " + String(esp_get_free_heap_size()));
     enrollWithGrid();
     String r = httpGet(String(Endpoint) + "/unit/inbox/?p=1", true);
     if (r.length() == 0) {
         logMessage("poll: empty response");
         return -1;
     }
-    JsonDocument rd;
+    DynamicJsonDocument rd(2048);
     if (deserializeJson(rd, r)) {
         logMessage("poll: parse failed");
         return -1;
@@ -447,13 +473,14 @@ int8_t api_client::checkNewMessagesAmount(){
 
 bool api_client::pollInbox() {
     logMessage("Polling inbox...");
+    logMessage("Free heap before pull: " + String(esp_get_free_heap_size()));
     enrollWithGrid();
     String r = httpGet(String(Endpoint) + "/unit/inbox/?p=1", true);
     if (r.length() == 0) {
         logMessage("poll: empty response");
         return false;
     }
-    JsonDocument rd;
+    DynamicJsonDocument rd(4096);
     if (deserializeJson(rd, r)) {
         logMessage("poll: parse failed");
         return false;
@@ -477,14 +504,14 @@ bool api_client::pollInbox() {
             continue;
         }
 
-        r = httpGet(String(Endpoint) + "/unit/inbox/" + msg_id, true);
-        if(r.length() < 20){
+        String rmsg = httpGet(String(Endpoint) + "/unit/inbox/" + msg_id, true);
+        if(rmsg.length() < 20){
             logMessage("Error pulling message data!");
             continue;
         }
         
-        JsonDocument data;
-        if(deserializeJson(data, r)){
+        DynamicJsonDocument data(2048);
+        if(deserializeJson(data, rmsg)){
             logMessage("Could not fetch message data!");
             continue;
         }
@@ -499,13 +526,13 @@ bool api_client::pollInbox() {
         auto encBytes = pwngrid::crypto::base64Decode(dataB64);
         auto sigBytes = pwngrid::crypto::base64Decode(sigB64);
         // get sender public key
-        String r = httpGet(String(Endpoint) + "/unit/" + sender, false);
-        if (r.length() == 0) {
+        String runit = httpGet(String(Endpoint) + "/unit/" + sender, false);
+        if (runit.length() == 0) {
             fLogMessage("poll: could not fetch sender %s\n", sender.c_str());
             continue;
         }
-        JsonDocument ud;
-        if (deserializeJson(ud, r)) continue;
+        DynamicJsonDocument ud(1024);
+        if (deserializeJson(ud, runit)) continue;
         String senderPubB64 = pwngrid::crypto::deNormalizePublicPEM(ud["public_key"].as<String>());
         logMessage(senderPubB64);
 
@@ -521,7 +548,7 @@ bool api_client::pollInbox() {
             continue;
         }
         String txt((const char*)clear.data(), clear.size());
-        fLogMessage("msg from %s: %s\n", sender.c_str(), txt.c_str());
+        fLogMessage("msg from %s\n decrypted", sender.c_str());
         message newMessage = {
             senderName,
             sender,
@@ -530,9 +557,9 @@ bool api_client::pollInbox() {
             unix_timestamp,
             false
         };
-        r = httpGet(String(Endpoint) + "/unit/inbox/" + msg_id + "/seen", true);
-        logMessage("Set message id as read, response: " + r);
-        if (r == "{\"success\":true}") {
+        String rseen = httpGet(String(Endpoint) + "/unit/inbox/" + msg_id + "/seen", true);
+        logMessage("Set message id as read, response: " + rseen);
+        if (rseen == "{\"success\":true}") {
             logMessage("Message marked as read on server.");
             registerNewMessage(newMessage);
             if(pwnagotchi.sound_on_events){
@@ -561,7 +588,7 @@ static String getPwngridCachePath() {
 bool api_client::queueAPForUpload(const String &essid, const String &bssid) {
     String path = getPwngridCachePath();
 
-    JsonDocument doc;
+    DynamicJsonDocument doc(2048);
     JsonArray arr = doc.to<JsonArray>();
 
     if (SD.exists(path)) {
@@ -617,7 +644,7 @@ bool api_client::uploadCachedAPs() {
         return true;
     }
 
-    JsonDocument doc;
+    DynamicJsonDocument doc(4096);
     DeserializationError err = deserializeJson(doc, s);
     if (err) {
         logMessage("uploadCachedAPs: invalid cache json, clearing");
@@ -658,5 +685,3 @@ bool api_client::uploadCachedAPs() {
     logMessage("uploadCachedAPs: uploaded but failed to clear cache");
     return true;
 }
-
-
