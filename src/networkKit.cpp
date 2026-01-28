@@ -4,6 +4,7 @@
 #include "networkKit.h"
 #include "settings.h"
 #include "src.h"
+#include "inputManager.h"
 
 
 // Maksymalna liczba klientów, których można śledzić
@@ -118,9 +119,14 @@ void broadcastFakeSSIDs(String ssidList[], int ssidCount, bool sound) {
   while (true) {
     M5.update();
     M5Cardputer.update();
+    #ifdef BUTTON_ONLY_INPUT
+    inputManager::update();
+    if(inputManager::isButtonAPressed() || inputManager::isButtonBPressed()){return ;}
+    #else
     if(M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER)){return ;}
     keyboard_changed = M5Cardputer.Keyboard.isChange();
     if(keyboard_changed){Sound(10000, 100, sound);}
+    #endif
     currentTime = millis();
 
     if (currentTime - attackTime > 100) { // Repeat every 100 ms
@@ -249,9 +255,14 @@ void broadcastFakeSSIDs(const char * const ssidList[], int ssidCount, bool sound
   while (true) {
     M5.update();
     M5Cardputer.update();
+    #ifdef BUTTON_ONLY_INPUT
+    inputManager::update();
+    if(inputManager::isButtonAPressed() || inputManager::isButtonBPressed()) return ;
+    #else
     if(M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER)) return ;
     bool keyboard_changed = M5Cardputer.Keyboard.isChange();
     if(keyboard_changed) { Sound(10000, 100, sound); }
+    #endif
     currentTime = millis();
 
     if (currentTime - attackTime > 100) {

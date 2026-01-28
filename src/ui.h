@@ -81,6 +81,8 @@ String findIncomingFingerprint(const std::vector<message> &messages);
 void drawHintBox(const String &text, uint8_t hintID);
 void drawStats();
 void drawSysInfo();
+void drawLittleFSManager();
+void drawStorageInfo();
 bool addUnitToAddressBook(const unit u);
 void themeMenu();
 void setToMainMenu();

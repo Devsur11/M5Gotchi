@@ -46,10 +46,10 @@ bool wifion(){
 #define UNIT_FP_MAX   64
 #define SERIAL_LOGS
 //#define BYPASS_SD_CHECK
-#define SD_CS    12  // G12
-#define SD_MOSI  14  // G14
-#define SD_SCK   40  // G40
-#define SD_MISO  39  // G39
+#define SD_CS    5  // G12
+#define SD_MOSI  4  // G14
+#define SD_SCK   6  // G40
+#define SD_MISO  7  // G39
 #define LORA_RST  3 // G3
 #define MAX_PKT_SIZE 3000
 #define ROW_SIZE 40

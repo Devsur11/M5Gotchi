@@ -5,6 +5,7 @@
 #include <vector>
 #include "ui.h"
 #include "logger.h"
+#include "inputManager.h"
 
 extern M5Canvas canvas_main;
 extern int canvas_top_h;
@@ -80,7 +81,11 @@ static bool isDeveloperMode() {
   extern bool skip_file_manager_checks_in_dev;
   if (skip_file_manager_checks_in_dev && dev_mode) return true;
   if (dev_mode) return true;
+  #ifdef BUTTON_ONLY_INPUT
+  return false; // No developer mode toggle for button-only input
+  #else
   return M5Cardputer.Keyboard.isKeyPressed(KEY_LEFT_CTRL);
+  #endif
 }
 
 static void listDirectory(const String &path, std::vector<Entry> &out) {
@@ -342,6 +347,18 @@ static void viewFile(const String &fullpath) {
 
     M5.update();
     M5Cardputer.update();
+    #ifdef BUTTON_ONLY_INPUT
+    inputManager::update();
+    if (inputManager::isButtonBPressed() || inputManager::isButtonAPressed()) {
+      debounceDelay();
+      break;
+    }
+    if (inputManager::isButtonAPressed()) {
+      debounceDelay();
+      if ((page + 1) * linesPerPage < (int)segments.size()) page++;
+    }
+    // No previous button in button-only mode, just wrap to top
+    #else
     if (M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER) || M5Cardputer.Keyboard.isKeyPressed('`')) {
       debounceDelay();
       break;
@@ -354,6 +371,7 @@ static void viewFile(const String &fullpath) {
       debounceDelay();
       if (page > 0) page--;
     }
+    #endif
   }
 }
 
@@ -654,6 +672,17 @@ void sdmanager::runFileManager() {
     M5.update();
     M5Cardputer.update();
 
+#ifdef BUTTON_ONLY_INPUT
+    inputManager::update();
+    if (inputManager::isButtonAPressed()) {
+      debounceDelay();
+      if (entries.empty()) continue;
+      String name = entries[cur].name;
+      String full = curPath;
+      if (!full.endsWith("/")) full += "/";
+      full += name;
+      if (entries[cur].isDir) {
+#else
     if (M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER)) {
       debounceDelay();
       if (entries.empty()) continue;
@@ -662,6 +691,7 @@ void sdmanager::runFileManager() {
       if (!full.endsWith("/")) full += "/";
       full += name;
       if (entries[cur].isDir) {
+#endif
         // enter dir
         canvas_main.setTextDatum(middle_center);
         canvas_main.setTextSize(2);
@@ -708,6 +738,11 @@ void sdmanager::runFileManager() {
         while (true) {
           M5.update();
           M5Cardputer.update();
+#ifdef BUTTON_ONLY_INPUT
+          inputManager::update();
+          if (inputManager::isButtonAPressed()) { debounceDelay(); viewFile(full); break; }
+          if (inputManager::isButtonBPressed() || inputManager::isButtonBLongPressed()) { debounceDelay(); break; }
+#else
           if (M5Cardputer.Keyboard.isKeyPressed('v')) { debounceDelay(); viewFile(full); break; }
           if (M5Cardputer.Keyboard.isKeyPressed('e')) {
             debounceDelay();
@@ -740,7 +775,6 @@ void sdmanager::runFileManager() {
               }
               if (SD.rename(full.c_str(), target.c_str())) {
                 drawInfoBox("OK", "Moved/renamed", target, true, false);
-                listDirectory(curPath, entries);
               } else {
                 drawInfoBox("ERROR", "Move/rename failed", target, true, true);
               }
@@ -804,10 +838,32 @@ void sdmanager::runFileManager() {
             break;
           }
           if (M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER) || M5Cardputer.Keyboard.isKeyPressed('`')) { debounceDelay(); break; }
+#endif  // BUTTON_ONLY_INPUT
         }
       }
     }
 
+    #ifdef BUTTON_ONLY_INPUT
+    inputManager::update();
+    // Long press B = go up / exit, short B = next entry
+    if (inputManager::isButtonBLongPressed()) {
+      debounceDelay();
+      // go up or exit
+      if (curPath == "/") {
+        // exit manager
+        menuID = 0;
+        return;
+      }
+      int lastSlash = curPath.lastIndexOf('/');
+      if (lastSlash == 0) curPath = "/"; else curPath = curPath.substring(0, lastSlash);
+      listDirectory(curPath, entries);
+      cur = 0; scroll = 0;
+    } else if (inputManager::isButtonBPressed()) {
+      debounceDelay();
+      cur = (cur + 1) % ( (entries.empty()) ? 1 : entries.size() );
+    }
+    // Use A to select/open (handled by the enter/selection branch above)
+    #else
     if (M5Cardputer.Keyboard.isKeyPressed('.')) { debounceDelay(); cur = (cur + 1) % ( (entries.empty()) ? 1 : entries.size() ); }
     if (M5Cardputer.Keyboard.isKeyPressed(';')) { debounceDelay(); if (!entries.empty()) cur = (cur + entries.size() - 1) % entries.size(); }
 
@@ -824,6 +880,7 @@ void sdmanager::runFileManager() {
       listDirectory(curPath, entries);
       cur = 0; scroll = 0;
     }
+    #endif
 
     if (M5Cardputer.Keyboard.isKeyPressed('c')) {
       debounceDelay();

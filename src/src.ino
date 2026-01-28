@@ -26,6 +26,14 @@
 #include "esp_partition.h"
 #include "fontDownloader.h"
 
+#ifdef USE_LITTLEFS
+#include "storageManager.h"
+#endif
+
+#ifdef BUTTON_ONLY_INPUT
+#include "inputManager.h"
+#endif
+
 bool firstSoundEnable;
 bool isSoundPlayed = false;
 
@@ -406,8 +414,8 @@ bool sendCoredump() {
 void initM5() {
   auto cfg = M5.config();
   M5.begin(cfg);
-  M5Cardputer.begin(cfg, true);
-  M5Cardputer.Keyboard.begin();
+  // M5Cardputer.begin(cfg, true);
+  // M5Cardputer.Keyboard.begin();
 }
 
 void setup() {
@@ -416,6 +424,22 @@ void setup() {
   logMessage("System booting...");
   initM5();
   logMessage("Board ID: " + String(M5.getBoard()));
+  
+  #ifdef USE_LITTLEFS
+  logMessage("Initializing LittleFS storage...");
+  if (!storageManager::init()) {
+    logMessage("WARNING: LittleFS initialization failed!");
+  } else {
+    logMessage("LittleFS initialized successfully");
+    logMessage(storageManager::getDetailedStorageInfo());
+  }
+  #endif
+  
+  #ifdef BUTTON_ONLY_INPUT
+  logMessage("Initializing button-only input mode...");
+  inputManager::init();
+  #endif
+  
   if(M5.getBoard() == m5::board_t::board_M5CardputerADV){
     cardputer_adv = true;
     logMessage("Cardputer ADV detected, enabling ADV features");
@@ -426,7 +450,7 @@ void setup() {
   sdSPI.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
   if(initVars()){}
   else{
-    #ifndef SKIP_SD_CHECK
+    #ifndef BYPASS_SD_CHECK
     initColorSettings();
     initUi();
     drawInfoBox("ERROR!", "SD card is needed to work.", "Insert it and restart", false, true);
@@ -439,14 +463,14 @@ void setup() {
   initColorSettings();
   initUi();
   preloadMoods();
-  initPersonality();
+  //initPersonality();
   
   // Ensure mood text/face files exist and load them from SD
-  if (!initMoodsFromSD()) {
-    logMessage("Moods: failed to initialize from SD, using defaults");
-  } else {
-    logMessage("Moods: initialized from SD");
-  }
+  // if (!initMoodsFromSD()) {
+  //   logMessage("Moods: failed to initialize from SD, using defaults");
+  // } else {
+  //   logMessage("Moods: initialized from SD");
+  // }
   
   setMoodToStartup();
   updateUi(false, false);
@@ -649,18 +673,25 @@ void setup() {
 
 void loop() {
   M5.update();
-  M5Cardputer.update();
+  M5.update();
+  
+  #ifdef BUTTON_ONLY_INPUT
+  inputManager::update();
+  #endif
+  
   updateUi(true);
+  #ifndef BUTTON_ONLY_INPUT
   if(M5Cardputer.Keyboard.isKeyPressed(KEY_OPT) && M5Cardputer.Keyboard.isKeyPressed(KEY_LEFT_CTRL) && M5Cardputer.Keyboard.isKeyPressed(KEY_FN)){
     // Toggle dev menu instead of crashing the device
     drawInfoBox("DevTools", "Opening developer tools...", "", false, false);
     delay(200);
     runApp(99);
   }
+  #endif
 }
 
 void Sound(int frequency, int duration, bool sound){
-  if(sound){M5Cardputer.Speaker.tone(frequency, duration);
+  if(sound){M5.Speaker.tone(frequency, duration);
 }}
 
 void fontSetup(){

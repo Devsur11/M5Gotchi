@@ -31,6 +31,11 @@
 #include "wardrive.h"
 #include "M5GFX.h"
 #include <FS.h>
+#include "storageManager.h"
+#include "storageAbstraction.h"
+#ifdef USE_LITTLEFS
+#include "usbMassStorage.h"
+#endif
 
 M5Canvas canvas_top(&M5.Display);
 M5Canvas canvas_main(&M5.Display);
@@ -203,6 +208,11 @@ menu settings_menu[] = {
 
   // Logging / Storage
   {"SD Logging", 58},                     // Log to SD
+  {"LittleFS Manager", 71},               // LittleFS manager
+  {"Storage Info", 72},
+  #ifdef USE_LITTLEFS
+  {"USB Mass Storage", 73},
+  #endif
 
   // System / Maintenance
   {"System Update", 44},                  // Update system
@@ -375,9 +385,9 @@ void buttonTask(void *param) {
       if(!toogle_pwnagothi_with_gpio0)
       {dimmed = !dimmed;
       if (dimmed) {
-        M5Cardputer.Display.setBrightness(0);  // example dim value
+        M5.Display.setBrightness(0);  // example dim value
       } else {
-        M5Cardputer.Display.setBrightness(brightness);
+        M5.Display.setBrightness(brightness);
       }}
       else{
         buttonDirty = true;
@@ -388,12 +398,12 @@ void buttonTask(void *param) {
         else{
           //lets draw a little message here too
           if (displayMutex) xSemaphoreTake(displayMutex, portMAX_DELAY);
-          M5Cardputer.Display.fillRect(0, (display_h/2) - 20 , 250, 20, bg_color_rgb565);
-          M5Cardputer.Display.setTextDatum(middle_center);
-          M5Cardputer.Display.setTextColor(tx_color_rgb565);
-          M5Cardputer.Display.setTextSize(2);
-          M5Cardputer.Display.drawString("Deactivating...", canvas_center_x , (display_h/2) - 10);
-          M5Cardputer.Display.pushState();
+          M5.Display.fillRect(0, (display_h/2) - 20 , 250, 20, bg_color_rgb565);
+          M5.Display.setTextDatum(middle_center);
+          M5.Display.setTextColor(tx_color_rgb565);
+          M5.Display.setTextSize(2);
+          M5.Display.drawString("Deactivating...", canvas_center_x , (display_h/2) - 10);
+          M5.Display.pushState();
           if (displayMutex) xSemaphoreGive(displayMutex);
           pwnagotchiModeFromButton = false;
           logMessage("Pwnagotchi mode deactivated");
@@ -468,6 +478,7 @@ void initUi() {
 
   display_w = M5.Display.width();
   display_h = M5.Display.height();
+  logMessage("Display width: " + String(display_w) + ", height: " + String(display_h));
   canvas_h = display_h * .8;
   canvas_center_x = display_w / 2;
   canvas_top_h = display_h * .1;
@@ -483,7 +494,25 @@ void initUi() {
 
 uint8_t returnBrightness(){return currentBrightness;}
 
+#ifdef BUTTON_ONLY_INPUT
+#include "inputManager.h"
 
+bool toggleMenuBtnPressed() {
+  return inputManager::isButtonBLongPressed(); // Long press Button B for menu
+}
+
+bool isOkPressed() {
+  return inputManager::isButtonAPressed(); // Button A is OK/Select
+}
+
+bool isNextPressed() {
+  return inputManager::isButtonBPressed(); // Button B is Next/Down navigation
+}
+
+bool isPrevPressed() {
+  return false; // Single button for navigation, no prev
+}
+#else
 
 bool toggleMenuBtnPressed() {
   return (M5Cardputer.Keyboard.isKeyPressed('`'));
@@ -499,6 +528,8 @@ bool isNextPressed() {
 bool isPrevPressed() {
   return M5Cardputer.Keyboard.isKeyPressed(';');
 }
+
+#endif
 
 bool needsUiRedraw = true;
 static unsigned long lastRedrawTime = 0;
@@ -1037,10 +1068,13 @@ void drawInfoBox(String tittle, String info, String info2, bool canBeQuit, bool 
     // Push (separate lock inside pushAll)
     pushAll();
     M5.update();
-    M5Cardputer.update();
+
+#ifdef BUTTON_ONLY_INPUT
+    inputManager::update();
+#endif
 
     if(canBeQuit){
-      if(M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER)){
+      if(isOkPressed()){
         Sound(10000, 100, sound);
         return ;
       }
@@ -1104,8 +1138,28 @@ void drawHintBox(const String &text, uint8_t hintID) {
     if (displayMutex) xSemaphoreGive(displayMutex);
     pushAll();
     M5.update();
-    M5Cardputer.update();
 
+#ifdef BUTTON_ONLY_INPUT
+    inputManager::update();
+    // Button B to navigate between options
+    if (isNextPressed()) {
+      current_option = (current_option + 1) % 2;
+      debounceDelay();
+    }
+    // Button A to select
+    if (isOkPressed()) {
+      if (current_option == 0) {
+        Sound(10000, 100, sound);
+        selecting = false;
+      } else if (current_option == 1) {
+        bitSet(hintsDisplayed, hintID);
+        saveSettings();
+        Sound(10000, 100, sound);
+        selecting = false;
+      }
+    }
+#else
+    M5.update();
     // Use lightweight checks to avoid copying large structs onto the stack
     keyboard_changed = M5Cardputer.Keyboard.isChange();
     if (keyboard_changed) {
@@ -1144,6 +1198,7 @@ void drawHintBox(const String &text, uint8_t hintID) {
         }
       }
     }
+#endif
 
     // yield a little to reduce CPU pressure and avoid tight-loop stack issues
     delay(10);
@@ -1502,7 +1557,7 @@ void pwngridMessenger() {
 
   while (true) {
     M5.update();
-    M5Cardputer.update();
+    M5.update();
 
     uint64_t now = millis();
 
@@ -1545,12 +1600,59 @@ void pwngridMessenger() {
     canvas_main.drawString(">" + textTyped, 8, 86);
 
     canvas_main.setTextSize(1);
+    #ifdef BUTTON_ONLY_INPUT
+    canvas_main.drawString(
+      typingMessage ? "ENTER:send  B:exit" :
+      "B:scroll  A:input  A long:delete",
+      2, 102
+    );
+    #else
     canvas_main.drawString(
       typingMessage ? "Input mode - ENTER send / DEL exit" :
       "[d] delete  [`] exit  [i] input  [;][.] scroll",
       2, 102
     );
+    #endif
 
+    #ifdef BUTTON_ONLY_INPUT
+    inputManager::update();
+    if (!typingMessage) {
+      // prioritize long-press B as special action
+      if (inputManager::isButtonBLongPressed()) {
+        // Delete chat
+        if(drawQuestionBox("Delete chat?", "Are you sure?", "")){
+          SD.remove("/pwngrid/chats/" + chats[result]);
+          drawInfoBox("Info", "Chat deleted.", "", true, false);
+          menuID = 8;
+          debounceDelay();
+          stopPwngridInboxTask();
+          return;
+        }
+        debounceDelay();
+      }
+
+      if (inputManager::isButtonBPressed()) {
+        // Scroll
+        scroll--;
+        delay(50);
+        lastInboxSync = now;
+      }
+
+      if (inputManager::isButtonAPressed()) {
+        // Toggle to input mode
+        typingMessage = true;
+        debounceDelay();
+        lastInboxSync = now;
+      }
+    } else {
+      // Input Mode
+      if (inputManager::isButtonBLongPressed()) {
+        // Exit input mode on long press
+        typingMessage = false;
+        debounceDelay();
+      }
+    }
+    #else
     Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
 
     for (auto c : status.word) {
@@ -1616,6 +1718,7 @@ void pwngridMessenger() {
       textTyped = "";
       typingMessage = false;
     }
+    #endif
 
     pushAll();
   }
@@ -1712,7 +1815,7 @@ void runApp(uint8_t appID){
     }
     if(appID == 6){
       debounceDelay();
-      drawMenuList(settings_menu,6,23);
+      drawMenuList(settings_menu,6,26);
     }
     if(appID == 7){
       if(hostname == "M5Gotchi"){
@@ -1872,7 +1975,15 @@ void runApp(uint8_t appID){
       identity_canvas.pushSprite(110, 35);
       while(true){
         M5.update();
-        M5Cardputer.update();
+        M5.update();
+#ifdef BUTTON_ONLY_INPUT
+        inputManager::update();
+        if (isOkPressed() || toggleMenuBtnPressed()){
+          M5.Display.setBrightness(brightness);
+          menuID = 8;
+          return;
+        }
+#else
         auto keysState = M5Cardputer.Keyboard.keysState();
         if(keysState.enter){
           M5.Display.setBrightness(brightness);
@@ -1886,6 +1997,7 @@ void runApp(uint8_t appID){
             return;
           }
         }
+#endif
       }
       menuID = 8;
     }
@@ -1893,6 +2005,12 @@ void runApp(uint8_t appID){
       debounceDelay();
       sdmanager::runFileManager();
       menuID = 1;
+    }
+    if (appID == 71) {
+      debounceDelay();
+      // Simple LittleFS info screen + basic actions
+      drawLittleFSManager();
+      menuID = 6; // return to settings
     }
     if(appID == 14){
       if(!pwnagothiMode){
@@ -2033,7 +2151,7 @@ void runApp(uint8_t appID){
         canvas_main.drawRect(200, canvas_h - 37, 27, 15, (current_option == 2)? tx_color_rgb565: bg_color_rgb565);
         pushAll();
         M5.update();
-        M5Cardputer.update();
+        M5.update();
         auto keys_status = M5Cardputer.Keyboard.keysState();
         auto keyboard_changed = M5Cardputer.Keyboard.isChange();
         if(keyboard_changed){Sound(10000, 100, sound);}
@@ -2342,7 +2460,7 @@ void runApp(uint8_t appID){
         (current_option == 1) ? canvas_main.drawRect(165, canvas_h - 37, 35, 15, tx_color_rgb565): void();
         pushAll();
         M5.update();
-        M5Cardputer.update();
+        M5.update();
         auto keys_status = M5Cardputer.Keyboard.keysState();
         auto keyboard_changed = M5Cardputer.Keyboard.isChange();
         if(keyboard_changed){Sound(10000, 100, sound);}
@@ -2428,7 +2546,7 @@ void runApp(uint8_t appID){
       pushAll();
       while(true){
         M5.update();
-        M5Cardputer.update();
+        M5.update();
         auto keysState = M5Cardputer.Keyboard.keysState();
         for(auto i : keysState.word){
           if(i=='`'){
@@ -2585,7 +2703,7 @@ void runApp(uint8_t appID){
 
       while (true) {
       M5.update();
-      M5Cardputer.update();
+      M5.update();
       
       if (searching) {
         drawTopCanvas();
@@ -2849,7 +2967,7 @@ void runApp(uint8_t appID){
             
             while(true) {
             M5.update();
-            M5Cardputer.update();
+            M5.update();
             keyboard_changed = M5Cardputer.Keyboard.isChange();
             if(keyboard_changed){Sound(10000, 100, sound);}
             Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
@@ -2924,7 +3042,7 @@ void runApp(uint8_t appID){
         while(true){
           updatePortal();
           M5.update();
-          M5Cardputer.update();
+          M5.update();
           Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
           if(!loginCaptured.equals("") && !passCaptured.equals("")){
             drawInfoBox("New victim!", loginCaptured, passCaptured, false, false);
@@ -2948,7 +3066,7 @@ void runApp(uint8_t appID){
       if(tempChoice == 1){
         String ssidMenu[] = {"Funny SSID", "Broken SSID", "Rick Roll", "Make your own :)"};
         M5.update();
-        M5Cardputer.update();
+        M5.update();
         debounceDelay();
         uint8_t ssidChoice = drawMultiChoice("Select list", ssidMenu, 4 , 2 , 2);
         if(ssidChoice==0){
@@ -3196,7 +3314,7 @@ void runApp(uint8_t appID){
           uint8_t line;
           while(true){
             M5.update();
-            M5Cardputer.update();  
+            M5.update();  
             keyboard_changed = M5Cardputer.Keyboard.isChange();
             if(keyboard_changed){Sound(10000, 100, sound);}
             ;
@@ -3268,7 +3386,7 @@ void runApp(uint8_t appID){
           while(true){
             debounceDelay();
             M5.update();
-            M5Cardputer.update();  
+            M5.update();  
             keyboard_changed = M5Cardputer.Keyboard.isChange();
             if(keyboard_changed){Sound(10000, 100, sound);}
             keyboard_changed = M5Cardputer.Keyboard.isChange();
@@ -3709,7 +3827,7 @@ void runApp(uint8_t appID){
         canvas_main.drawString(String(idx+1) + "/" + String(faces.size()), 2, 2);
         pushAll();
         M5.update();
-        M5Cardputer.update();
+        M5.update();
         Keyboard_Class::KeysState ks = M5Cardputer.Keyboard.keysState();
         if(ks.fn){
           for(auto c : ks.word){ if(c == '`'){ debounceDelay(); return; } }
@@ -4222,7 +4340,7 @@ void runApp(uint8_t appID){
           String detailInfo2 = "Bssid: " + entries[selection].bssid;
           drawInfoBox(entries[selection].ssid, detailInfo, detailInfo2, true , false);
           M5.update();
-          M5Cardputer.update();
+          M5.update();
           Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
           if(M5Cardputer.Keyboard.isChange()){Sound(10000, 100, sound);}
         }
@@ -4523,7 +4641,7 @@ int16_t getNumberfromUser(String tittle, String desc, uint16_t maxNumber){
     canvas_main.drawString(String(number), canvas_center_x, canvas_h / 2);
     pushAll();
     M5.update();
-    M5Cardputer.update();
+    M5.update();
     ;
     keyboard_changed = M5Cardputer.Keyboard.isChange();
     if(keyboard_changed){Sound(10000, 100, sound);}
@@ -4584,7 +4702,7 @@ bool getBoolInput(String tittle, String desc, bool defaultValue){
     }
     pushAll();
     M5.update();
-    M5Cardputer.update();
+    M5.update();
     ;
     keyboard_changed = M5Cardputer.Keyboard.isChange();
     if(keyboard_changed){Sound(10000, 100, sound);}
@@ -4612,97 +4730,227 @@ bool getBoolInput(String tittle, String desc, bool defaultValue){
 
 String userInput(const String &prompt, String desc, int maxLen,  const String &initial){
   debounceDelay();
-    String result = initial;
-    bool editing = true;
-    unsigned long lastKeyTime = 0;
-    
-    while (editing) {
-        drawTopCanvas();
-        drawBottomCanvas();
-        canvas_main.fillSprite(bg_color_rgb565);
-        canvas_main.setTextSize(1);
-        canvas_main.setTextColor(tx_color_rgb565);
-        
-        canvas_main.drawString(prompt, 6, 6);
-        
-        // Calculate lines needed for text
-        int maxWidth = canvas_main.width() - 16;
-        int lineHeight = 12;
-        int numLines = max(1, (int)((result.length() * 6) / maxWidth + 1));
-        int rectHeight = numLines * lineHeight + 8;
-        
-        canvas_main.drawRect(4, 24, canvas_main.width()-8, rectHeight, tx_color_rgb565);
-        canvas_main.setCursor(8, 28);
-        if(result.length() == 0) {
-            canvas_main.setTextColor(tx_color_rgb565 / 2); // Dim color for placeholder
-            canvas_main.print("<empty>");
-            canvas_main.setTextColor(tx_color_rgb565);
-        } else {
-            // Wrap text manually
-            if(result.length() * 6 <= maxWidth) {
-                canvas_main.print(result);
-            } else {
-                int start = 0;
-                int lineNum = 0;
-                while (start < result.length()) {
-                    canvas_main.setTextColor(tx_color_rgb565);
-                    int lineLen = min((maxWidth / 6), (int)result.length() - start);
-                    canvas_main.setCursor(8, 28 + (lineNum * lineHeight));
-                    canvas_main.print(result.substring(start, start + lineLen));
-                    start += lineLen;
-                    lineNum++;
-                }
-            }
-        }
-        
-        // Cursor - calculate position across lines
-        int charPos = result.length();
-        int charsPerLine = maxWidth / 6;
-        int cursorLine = charPos / charsPerLine;
-        int cursorX = 8 + ((charPos % charsPerLine) * 6);
-        int cursorY = 28 + (cursorLine * lineHeight);
-        
-        if ((millis() / 500) % 2) {
-            canvas_main.fillRect(cursorX, cursorY, 1, 10, tx_color_rgb565);
-        }
-        
-        canvas_main.drawString("ENTER:ok  ESC:cancel  BKSP:delete", 6, canvas_main.height()-12);
-        
-        pushAll();
-        M5.update();
-        M5Cardputer.update();
-        Keyboard_Class::KeysState keys = M5Cardputer.Keyboard.keysState();
-        if (millis() - lastKeyTime > 50) {
-            if (keys.enter) {
-                debounceDelay();
-                editing = false;
-            } else if (M5Cardputer.Keyboard.isKeyPressed('`')) {
-                debounceDelay();
-                result = initial;
-                editing = false;
-            } else if (keys.del) {
-                debounceDelay();
-                if (result.length() > 0) {
-                    result = result.substring(0, result.length()-1);
-                }
-                lastKeyTime = millis();
-            } else {
-                // Check for printable characters
-                for (uint8_t i = 32; i < 127; i++) {
-                    if (M5Cardputer.Keyboard.isKeyPressed(i)) {
-                        if (result.length() < maxLen) {
-                            result += (char)i;
-                        }
-                        lastKeyTime = millis();
-                        debounceDelay();
-                        break;
-                    }
-                }
-            }
-        }
+  String result = initial;
+  
+  // QWERTY keyboard layout with exact rows
+  // Each row is a string of characters
+  const char* kb_rows_lower[] = {
+    "`1234567890-=",
+    "qwertyuiop[]\\",
+    "asdfghjkl;'",
+    "zxcvbnm,./"
+  };
+  
+  const char* kb_rows_upper[] = {
+    "~!@#$%^&*()_+",
+    "QWERTYUIOP{}|",
+    "ASDFGHJKL:\"",
+    "ZXCVBNM<>?"
+  };
+  
+  const char** kb_rows = kb_rows_lower;
+  const char* special_keys = "BKSP ENTR SPC SHFT";
+  
+  bool shift_active = false;
+  uint8_t current_row = 0;
+  uint8_t current_col = 0;
+  uint8_t max_rows = 4;
+  
+  auto get_max_col = [&]() -> size_t {
+    if (current_row < 4) {
+      return strlen(kb_rows[current_row]);
     }
-    debounceDelay();
-    return result;
+    return (size_t)4; // special keys row
+  };
+  
+  auto get_char = [&]() -> char {
+    if (current_row < 4) {
+      return kb_rows[current_row][current_col];
+    }
+    return '\0'; // special key
+  };
+  
+  auto get_special_key = [&]() -> String {
+    const char* keys[] = {"BKSP", "ENTR", "SPC", "SHFT"};
+    if (current_row == 4 && current_col < 4) {
+      return keys[current_col];
+    }
+    return "";
+  };
+  
+  bool editing = true;
+  while (editing) {
+    drawTopCanvas();
+    drawBottomCanvas();
+    canvas_main.fillSprite(bg_color_rgb565);
+    canvas_main.setTextSize(1);
+    canvas_main.setTextColor(tx_color_rgb565);
+    canvas_main.setTextDatum(top_left);
+    
+    // Draw prompt and input box
+    canvas_main.drawString(prompt, 6, 6);
+    canvas_main.drawRect(4, 18, 232, 18, tx_color_rgb565);
+    
+    // Draw typed text
+    canvas_main.setTextSize(1);
+    canvas_main.setCursor(8, 22);
+    if (result.length() == 0) {
+      canvas_main.setTextColor(tx_color_rgb565 / 2);
+      canvas_main.print("<empty>");
+    } else {
+      canvas_main.setTextColor(tx_color_rgb565);
+      // Truncate if too long
+      String display = result;
+      if (display.length() > 28) {
+        display = "..." + display.substring(display.length() - 25);
+      }
+      canvas_main.print(display);
+    }
+    
+    // Draw layout indicator
+    canvas_main.setTextSize(1);
+    canvas_main.setTextColor(tx_color_rgb565);
+    String mode = shift_active ? "UPPER" : "lower";
+    canvas_main.drawString("[" + mode + "]", 200, 6);
+    
+    // Draw keyboard rows
+    int start_y = 40;
+    int row_height = 13;
+    int key_width = 10;
+    int key_height = 11;
+    float row_offsets[] = {0.0, 0.0, 0.5, 1.5};
+    
+    for (int row = 0; row < 4; row++) {
+      String row_str = kb_rows[row];
+      int y = start_y + (row * row_height);
+      
+      for (int col = 0; col < row_str.length(); col++) {
+        int x = 60 + (row_offsets[row] * key_width) + (col * key_width);
+        
+        // Highlight current selection
+        if (row == current_row && col == current_col) {
+          canvas_main.fillRect(x - 1, y - 1, key_width, key_height, tx_color_rgb565);
+          canvas_main.setTextColor(bg_color_rgb565);
+        } else {
+          canvas_main.setTextColor(tx_color_rgb565);
+        }
+        
+        char key = row_str[col];
+        canvas_main.setCursor(x, y);
+        canvas_main.printf("%c", key);
+      }
+    }
+    
+    // Draw special keys row
+    int special_y = start_y + (4 * row_height);
+    String special_keys_arr[] = {"BKSP", "ENTR", "SPC", "SHFT"};
+    int special_x_positions[] = {6+40, 50+40, 94+40, 138+40};
+    
+    for (int i = 0; i < 4; i++) {
+      int x = special_x_positions[i];
+      int y = special_y;
+      
+      if (current_row == 4 && current_col == i) {
+        canvas_main.fillRect(x - 1, y - 1, 40, key_height, tx_color_rgb565);
+        canvas_main.setTextColor(bg_color_rgb565);
+      } else {
+        canvas_main.setTextColor(tx_color_rgb565);
+      }
+      
+      canvas_main.setTextSize(1);
+      canvas_main.drawString(special_keys_arr[i], x, y);
+    }
+    
+    pushAll();
+    
+    M5.update();
+    M5.update();
+    
+    #ifdef BUTTON_ONLY_INPUT
+    inputManager::update();
+    
+    if (inputManager::isButtonBPressed()) {
+      debounceDelay();
+      // Navigate to next key
+      current_col++;
+      int max_col = get_max_col();
+      if (current_col >= max_col) {
+        current_col = 0;
+        current_row++;
+        if (current_row > 4) {
+          current_row = 0;
+        }
+      }
+    }
+    
+    if (inputManager::isButtonAPressed()) {
+      debounceDelay();
+      
+      if (current_row < 4) {
+        // Regular character key
+        char selected = get_char();
+        if (result.length() < maxLen) {
+          result += selected;
+        }
+      } else {
+        // Special key
+        String special = get_special_key();
+        if (special == "BKSP") {
+          if (result.length() > 0) {
+            result = result.substring(0, result.length() - 1);
+          }
+        } else if (special == "ENTR") {
+          editing = false;
+        } else if (special == "SPC") {
+          if (result.length() < maxLen) {
+            result += ' ';
+          }
+        } else if (special == "SHFT") {
+          shift_active = !shift_active;
+          kb_rows = shift_active ? kb_rows_upper : kb_rows_lower;
+          current_col = 0;
+        }
+      }
+    }
+    
+    if (inputManager::isButtonBLongPressed()) {
+      debounceDelay();
+      editing = false;
+    }
+    
+    #else
+    Keyboard_Class::KeysState keys = M5Cardputer.Keyboard.keysState();
+    if (keys.enter) {
+      debounceDelay();
+      editing = false;
+    } else if (M5Cardputer.Keyboard.isKeyPressed('`')) {
+      debounceDelay();
+      result = initial;
+      editing = false;
+    } else if (keys.del) {
+      debounceDelay();
+      if (result.length() > 0) {
+        result = result.substring(0, result.length() - 1);
+      }
+    } else {
+      // Check for printable characters
+      for (uint8_t i = 32; i < 127; i++) {
+        if (M5Cardputer.Keyboard.isKeyPressed(i)) {
+          if (result.length() < maxLen) {
+            result += (char)i;
+          }
+          debounceDelay();
+          break;
+        }
+      }
+    }
+    #endif
+    
+    delay(100);
+  }
+  
+  debounceDelay();
+  return result;
 }
 
 String multiplyChar(char toMultiply, uint8_t literations){
@@ -4769,7 +5017,37 @@ bool drawQuestionBox(String tittle, String info, String info2, String label) {
 
     pushAll();
     M5.update();
-    M5Cardputer.update();
+    M5.update();
+    
+    #ifdef BUTTON_ONLY_INPUT
+    inputManager::update();
+    // Long press B to cancel/back
+    if (inputManager::isButtonBLongPressed()) {
+        Sound(10000, 100, sound);
+        logMessage("No");
+        debounceDelay();
+        return false;
+    }
+    // Button B toggles between yes/no
+    if (inputManager::isButtonBPressed()) {
+        Sound(10000, 100, sound);
+        selected = !selected;
+        debounceDelay();
+    }
+    // Button A confirms current selection
+    if (inputManager::isButtonAPressed()) {
+        Sound(10000, 100, sound);
+        if (selected) {
+            logMessage("yes");
+            debounceDelay();
+            return true;
+        } else {
+            logMessage("No");
+            debounceDelay();
+            return false;
+        }
+    }
+    #else
     keyboard_changed = M5Cardputer.Keyboard.isChange();
     if(keyboard_changed){Sound(10000, 100, sound);}    
     Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
@@ -4805,6 +5083,7 @@ bool drawQuestionBox(String tittle, String info, String info2, String label) {
         debounceDelay();
       }
     }
+    #endif
   }
   appRunning = false;
 }
@@ -4826,9 +5105,15 @@ int drawMultiChoice(String tittle, String toDraw[], uint8_t menuSize , uint8_t p
     drawTopCanvas();
     drawBottomCanvas();
     M5.update();
-    M5Cardputer.update();  
+    M5.update();  
+    
+    #ifdef BUTTON_ONLY_INPUT
+    inputManager::update();
+    #else
     keyboard_changed = M5Cardputer.Keyboard.isChange();
     if(keyboard_changed){Sound(10000, 100, sound);}
+    #endif
+    
     Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
 
     canvas_main.clear(bg_color_rgb565);
@@ -4920,9 +5205,44 @@ int drawMultiChoice(String tittle, String toDraw[], uint8_t menuSize , uint8_t p
 
     canvas_main.fillRect(sbX - 5, sbY, 20, sbH, bg_color_rgb565);
     canvas_main.fillRect(sbX - 2, barY, 4, barH, tx_color_rgb565);
+    
+    #ifdef BUTTON_ONLY_INPUT
+    // Draw button help text for button-only mode
+    canvas_main.setTextSize(1);
+    canvas_main.setTextDatum(bottom_left);
+    canvas_main.drawString("A:Select  B:Back", 2, canvas_main.height() - 2);
+    #endif
 
     pushAll();
 
+    #ifdef BUTTON_ONLY_INPUT
+    // Button-based navigation: short B = next, short A = select, long B = back/exit
+    inputManager::update();
+    if (inputManager::isButtonBLongPressed()) {
+      Sound(10000, 100, sound);
+      menuID = prevMenuID;
+      menu_current_opt = prevOpt;
+      return -1;
+    }
+
+    if (inputManager::isButtonBPressed()) {
+      // Navigate to next item (down)
+      if (menu_current_opt < menu_len - 1) {
+        menu_current_opt++;
+        tempOpt++;
+      } else {
+        // Wrap around to first item
+        menu_current_page = 1;
+        menu_current_opt = 0;
+        tempOpt = 0;
+      }
+      marqueeOffset = 0;
+      marqueeTick = millis();
+      Sound(10000, 100, sound);
+      debounceDelay();
+    }
+    #else
+    // Keyboard-based navigation
     for(auto i : status.word){
       if(i=='`'){
         Sound(10000, 100, sound);
@@ -4957,9 +5277,21 @@ int drawMultiChoice(String tittle, String toDraw[], uint8_t menuSize , uint8_t p
       marqueeTick = millis();
       debounceDelay();
     }
+    #endif
+    
     if (!singlePage) {
       menu_current_page = (menu_current_opt / 4) + 1;
     }
+    
+    #ifdef BUTTON_ONLY_INPUT
+    if (inputManager::isButtonAPressed()) {
+      Sound(10000, 100, sound);
+      menu_current_opt = tempOpt;
+      menuID = prevMenuID;
+      debounceDelay();
+      return tempOpt;
+    }
+    #else
     if(isOkPressed()){
       Sound(10000, 100, sound);
       menuID = prevMenuID;
@@ -4967,6 +5299,7 @@ int drawMultiChoice(String tittle, String toDraw[], uint8_t menuSize , uint8_t p
       debounceDelay();
       return tempOpt;
     }
+    #endif
   }
 }
 int drawMultiChoiceLonger(String tittle, String toDraw[], uint8_t menuSize , uint8_t prevMenuID, uint8_t prevOpt) {
@@ -4980,7 +5313,7 @@ int drawMultiChoiceLonger(String tittle, String toDraw[], uint8_t menuSize , uin
     drawTopCanvas();
     drawBottomCanvas();
     M5.update();
-    M5Cardputer.update();  
+    M5.update();  
     keyboard_changed = M5Cardputer.Keyboard.isChange();
     if(keyboard_changed){Sound(10000, 100, sound);}
     Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
@@ -5103,7 +5436,7 @@ String* makeList(String windowName, uint8_t appid, bool addln, uint8_t maxEntryL
         keyboard_changed = M5Cardputer.Keyboard.isChange();
         if(keyboard_changed){Sound(10000, 100, sound);}  
         M5.update();
-        M5Cardputer.update();
+        M5.update();
         if(isOkPressed()){break;}
         drawList(listToReturn, writeID);
         pushAll();
@@ -5142,7 +5475,7 @@ void drawList(String toDraw[], uint8_t menu_size) {
   menu_len = menu_size;
 
   M5.update();
-  M5Cardputer.update();
+  M5.update();
 
   canvas_main.fillSprite(bg_color_rgb565);
   canvas_main.setTextColor(tx_color_rgb565);
@@ -5321,7 +5654,7 @@ void drawMenuList(menu toDraw[], uint8_t menuIDPriv, uint8_t menu_size) {
   menu_len = menu_size;
 
   M5.update();
-  M5Cardputer.update();
+  M5.update();
 
   canvas_main.fillSprite(bg_color_rgb565);
   canvas_main.setTextColor(tx_color_rgb565);
@@ -5457,6 +5790,34 @@ void drawMenuList(menu toDraw[], uint8_t menuIDPriv, uint8_t menu_size) {
   // ============================================================
   // input handling
   // ============================================================
+  #ifdef BUTTON_ONLY_INPUT
+  inputManager::update();
+  if (toggleMenuBtnPressed()) {
+    debounceDelay();
+    return;
+  }
+  if (isOkPressed()) {
+    debounceDelay();
+    runApp(toDraw[menu_current_opt].command);
+    debounceDelay();
+    return;
+  }
+  if (isNextPressed()) {
+    menu_current_opt = (menu_current_opt + 1) % menu_len;
+    marqueeOffset = 0;
+    marqueeTick = millis();
+    debounceDelay();
+    return;
+  }
+  if (isPrevPressed()) {
+    menu_current_opt = (menu_current_opt + menu_len - 1) % menu_len;
+    marqueeOffset = 0;
+    marqueeTick = millis();
+    debounceDelay();
+    return;
+  }
+  
+  #else
   auto &keys = M5Cardputer.Keyboard;
 
   if (keys.isKeyPressed(KEY_ENTER)) {
@@ -5483,6 +5844,7 @@ void drawMenuList(menu toDraw[], uint8_t menuIDPriv, uint8_t menu_size) {
     debounceDelay();
     return;
   }
+  #endif
 }
 
 void logVictim(String login, String pass){
@@ -5512,7 +5874,7 @@ void pushAll(){
   canvas_main.pushSprite(0, canvas_top_h);
   M5.Display.endWrite();
   if (displayMutex) xSemaphoreGive(displayMutex);
-  M5Cardputer.update();
+  M5.update();
   keyboard_changed = M5Cardputer.Keyboard.isChange();
   if(keyboard_changed){Sound(10000, 100, sound);}   
 }
@@ -5579,7 +5941,7 @@ void editWhitelist(){
           }
         }
         M5.update();
-        M5Cardputer.update();
+        M5.update();
         if(isOkPressed()){break;}
         // Convert vector to array for drawList
         String tempArr[listToReturn.size()];
@@ -5680,7 +6042,7 @@ String colorPickerUI(bool pickingText, String bg_color_toset) {
 
     // Handle input
     M5.update();
-    M5Cardputer.update();
+    M5.update();
     Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
     keyboard_changed = M5Cardputer.Keyboard.isChange();
     if(keyboard_changed){Sound(10000, 100, sound);}  
@@ -5743,7 +6105,6 @@ void coordsPickerUI() {
     canvas_main.drawString("X:" + String(x) + " Y:" + String(y), 4, 4);
     pushAll();
     M5.update();
-    M5Cardputer.update();
     Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
     if (status.fn) {
       for (auto k : status.word) {
@@ -5787,7 +6148,6 @@ int brightnessPicker(){
     canvas_main.setColor(bg_color_rgb565);
     pushAll();
     M5.update();
-    M5Cardputer.update();
     Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
     keyboard_changed = M5Cardputer.Keyboard.isChange();
     if(keyboard_changed){Sound(10000, 100, sound);}  
@@ -5825,13 +6185,10 @@ int brightnessPicker(){
 void debounceDelay(){
   while(M5Cardputer.Keyboard.isPressed() != 0){
     M5.update();
-    M5Cardputer.update();
     delay(10);
   }
-  M5Cardputer.update();
   M5.update();
   delay(40);
-  M5Cardputer.update();
   M5.update();
 }
 
@@ -5857,7 +6214,7 @@ void drawSysInfo(){
   debounceDelay();
   while(true){
     M5.update();
-    M5Cardputer.update();
+    M5.update();
     if(isOkPressed()) break;
     if(M5Cardputer.Keyboard.isKeyPressed('`')) {
       debounceDelay();
@@ -5910,7 +6267,15 @@ void drawStats(){
   debounceDelay();
   while(true){
     M5.update();
-    M5Cardputer.update();
+    M5.update();
+    #ifdef BUTTON_ONLY_INPUT
+    inputManager::update();
+    if (inputManager::isButtonAPressed() || inputManager::isButtonBPressed()) {
+      debounceDelay();
+      menuID = 0;
+      return;
+    }
+    #else
     Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
     if (true) {
       for (auto k : status.word) {
@@ -5926,6 +6291,67 @@ void drawStats(){
       menuID = 0;
       return;
     }
+    #endif
+    delay(100);
+  }
+}
+
+/* LittleFS manager UI */
+void drawLittleFSManager() {
+  debounceDelay();
+  storageManager::init();
+
+  drawTopCanvas();
+  drawBottomCanvas();
+  canvas_main.clear(bg_color_rgb565);
+  canvas_main.setTextColor(tx_color_rgb565);
+  canvas_main.setTextSize(2);
+  canvas_main.setTextDatum(middle_center);
+  canvas_main.drawString("LittleFS Manager", canvas_center_x, 6);
+  canvas_main.setTextSize(1);
+  canvas_main.setTextDatum(top_left);
+
+  String info = storageManager::getDetailedStorageInfo();
+  int y = 30;
+  int line = 0;
+  // crude line split
+  int start = 0;
+  while (start < info.length()) {
+    String part = info.substring(start, min(start + 32, (int)info.length()));
+    canvas_main.drawString(part, 6, y + (line * 12));
+    start += 32; line++;
+  }
+
+  canvas_main.setTextDatum(middle_center);
+  canvas_main.drawString("A: Back    B: Format (hold B to confirm)", canvas_center_x, canvas_h - 12);
+  pushAll();
+
+  while (true) {
+    M5.update();
+    M5.update();
+#ifdef BUTTON_ONLY_INPUT
+    inputManager::update();
+    if (inputManager::isButtonAPressed()) {
+      debounceDelay();
+      return;
+    }
+    if (inputManager::isButtonBLongPressed()) {
+      // confirm format
+      bool ok = drawQuestionBox("Format LittleFS?", "All files will be lost", "");
+      if (ok) {
+        LittleFS.format();
+        storageManager::init();
+        drawInfoBox("Info", "LittleFS formatted", "", true, false);
+        return;
+      }
+    }
+#else
+    Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
+    if (status.enter) { debounceDelay(); return; }
+    for (auto c : status.word) {
+      if (c == '`') { debounceDelay(); return; }
+    }
+#endif
     delay(100);
   }
 }
@@ -6060,4 +6486,129 @@ void themeMenu() {
   }
 
   menuID = 6;
+}
+// Storage display UI with usage bars
+void drawStorageInfo() {
+  debounceDelay();
+  
+  while (true) {
+    drawTopCanvas();
+    drawBottomCanvas();
+    canvas_main.fillSprite(bg_color_rgb565);
+    canvas_main.setTextColor(tx_color_rgb565);
+    
+    // Title
+    canvas_main.setTextSize(2);
+    canvas_main.setTextDatum(middle_center);
+    canvas_main.drawString("Storage", canvas_center_x, 6);
+    canvas_main.setTextSize(1);
+    canvas_main.setTextDatum(top_left);
+    
+    #ifdef USE_LITTLEFS
+    // Get LittleFS info
+    StorageManager::StorageInfo lfs_info = StorageManager::getStorageInfo();
+    
+    int y = 30;
+    int bar_height = 10;
+    int bar_y = y + 12;
+    int bar_width = 200;
+    
+    // LittleFS section
+    canvas_main.drawString("LittleFS:", 6, y);
+    
+    // Draw percentage
+    String lfs_used_mb = String((float)lfs_info.usedBytes / 1024.0f / 1024.0f, 1);
+    String lfs_total_mb = String((float)lfs_info.totalBytes / 1024.0f / 1024.0f, 1);
+    String lfs_percent = String((int)lfs_info.percentUsed);
+    canvas_main.drawString(lfs_used_mb + "MB / " + lfs_total_mb + "MB (" + lfs_percent + "%)", 6, y + 10);
+    
+    // Draw usage bar
+    canvas_main.drawRect(6, bar_y, bar_width, bar_height, tx_color_rgb565);
+    int filled_width = (bar_width * lfs_info.percentUsed) / 100.0f;
+    canvas_main.fillRect(6, bar_y, filled_width, bar_height, tx_color_rgb565);
+    
+    y += 30;
+    bar_y = y + 12;
+    
+    #else
+    // If SD card is being used
+    int y = 30;
+    int bar_height = 10;
+    int bar_y = y + 12;
+    int bar_width = 200;
+    
+    canvas_main.drawString("SD Card:", 6, y);
+    
+    uint64_t card_size = SD.cardSize();
+    uint64_t used_size = 0;
+    
+    // Calculate used space (rough estimate)
+    File root = SD.open("/");
+    if (root) {
+      // Simple dir traversal for used space
+      File file = root.openNextFile();
+      while (file) {
+        if (!file.isDirectory()) {
+          used_size += file.size();
+        }
+        file = root.openNextFile();
+      }
+      root.close();
+    }
+    
+    float percent_used = (card_size > 0) ? ((float)used_size / card_size * 100.0f) : 0;
+    String sd_used_mb = String((float)used_size / 1024.0f / 1024.0f, 1);
+    String sd_total_mb = String((float)card_size / 1024.0f / 1024.0f, 1);
+    String sd_percent = String((int)percent_used);
+    
+    canvas_main.drawString(sd_used_mb + "MB / " + sd_total_mb + "MB (" + sd_percent + "%)", 6, y + 10);
+    
+    // Draw usage bar
+    canvas_main.drawRect(6, bar_y, bar_width, bar_height, tx_color_rgb565);
+    int filled_width = (bar_width * percent_used) / 100.0f;
+    canvas_main.fillRect(6, bar_y, filled_width, bar_height, tx_color_rgb565);
+    
+    y += 30;
+    
+    #endif
+    
+    #ifdef USE_LITTLEFS
+    // USB Mass Storage option
+    canvas_main.drawString("USB Mode:", 6, y);
+    canvas_main.drawString("Enable to copy files", 6, y + 10);
+    canvas_main.drawString("via USB drive", 6, y + 20);
+    #endif
+    
+    // Instructions
+    canvas_main.setTextSize(1);
+    canvas_main.setTextDatum(middle_center);
+    canvas_main.drawString("A: Back", canvas_center_x, canvas_main.height() - 12);
+    
+    pushAll();
+    
+    M5.update();
+    M5.update();
+    
+    #ifdef BUTTON_ONLY_INPUT
+    inputManager::update();
+    if (inputManager::isButtonAPressed()) {
+      debounceDelay();
+      return;
+    }
+    #else
+    Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
+    if (status.enter) { 
+      debounceDelay(); 
+      return; 
+    }
+    for (auto c : status.word) {
+      if (c == '`') { 
+        debounceDelay(); 
+        return; 
+      }
+    }
+    #endif
+    
+    delay(100);
+  }
 }
