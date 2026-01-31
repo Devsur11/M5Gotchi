@@ -1,13 +1,14 @@
+#include "settings.h"
 #include <Arduino.h>
 #include <vector>
-#include <SD.h>
+#include "SD.h"
 #include <map>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include "wardrive.h"
 #include "logger.h"
 #include "crypto.h"
-#include "settings.h"
+
 
 static const int GPS_RX_PIN = 15; // AT6H TX -> ESP RX
 static const int GPS_TX_PIN = 13; // AT6H RX <- ESP TX
@@ -171,9 +172,9 @@ static int channelToFrequency(int ch) {
 
 // ---- first-seen persistence ----
 static void ensureWardrivingDir() {
-    // ensure directory exists; SD.mkdir returns true if directory created or already exists
-    if (!SD.exists("/wardriving")) {
-        SD.mkdir("/wardriving");
+    // ensure directory exists; FSYS.mkdir returns true if directory created or already exists
+    if (!FSYS.exists("/wardriving")) {
+        FSYS.mkdir("/wardriving");
     }
 }
 
@@ -269,13 +270,13 @@ void startWardriveSession(unsigned long gpsTimeoutMs) {
 //
 // Returns true on HTTP 2xx. If outHttpCode provided, filled with returned HTTP code.
 bool uploadToWigle(const String& encodedToken, const char* csvPath, int* outHttpCode) {
-    if (!SD.exists(csvPath)) {
+    if (!FSYS.exists(csvPath)) {
         fLogMessage("uploadToWigle: file does not exist: %s", csvPath);
         if (outHttpCode) *outHttpCode = 0;
         return false;
     }
 
-    File f = SD.open(csvPath, FILE_READ);
+    File f = FSYS.open(csvPath, FILE_READ);
     if (!f) {
         if (outHttpCode) *outHttpCode = 0;
         return false;
@@ -469,7 +470,7 @@ wardriveStatus wardrive(const std::vector<wifiSpeedScan>& networks, unsigned lon
                bestFix.valid, bestFix.lat, bestFix.lon, bestFix.hdop, bestFix.alt, bestFix.timeIso.c_str());
 
     // Open session file for append (create with wigle header if new)
-    File f = SD.open(currentWardrivePath.c_str(), FILE_APPEND);
+    File f = FSYS.open(currentWardrivePath.c_str(), FILE_APPEND);
     if (!f) {
         fLogMessage("Cannot open wardrive file: %s", currentWardrivePath.c_str());
         return {false, bestFix.valid, bestFix.lat, bestFix.lon, bestFix.hdop, bestFix.alt, bestFix.timeIso, 0, 0};

@@ -2,7 +2,7 @@
 #include "ui.h"
 #include <Update.h>
 #include <FS.h>
-#include <SD.h>
+#include "SD.h"
 #include <ESPAsyncWebServer.h>
 #include <Update.h>
 #include "githubUpdater.h"
@@ -97,16 +97,6 @@ SPIClass sd1SPI(FSPI);  // FSPI bus is typically used on ESP32-S3
 
 void updateFromSd(){
   uint8_t cardType;
-  // You can uncomment this and build again
-  // logMessage("Update successfull");
-  sd1SPI.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
-  //first init and check SD card
-  if (!SD.begin(SD_CS, sd1SPI, 1000000)) {
-     drawInfoBox("ERROR", "SD card not found","",  true, true);
-     return;
-     //rebootEspWithReason("Card Mount Failed");
-  }
-
   if(drawQuestionBox("Are you sure?", "Are want to update?", "This can not be undone!")){
     updateFromFS(SD);
     }

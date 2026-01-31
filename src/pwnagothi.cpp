@@ -1,7 +1,7 @@
+#include "settings.h"
 #include "pwnagothi.h"
 #include "WiFi.h"
 #include "logger.h"
-#include "settings.h"
 #include "ArduinoJson.h"
 #include "mood.h"
 #include "networkKit.h"
@@ -141,6 +141,7 @@ bool pwnagothiBegin(){
     lastSessionPeers = 0;
     lastSessionTime = 0;
     saveSettings();
+    #ifndef BUTTON_ONLY_INPUT
     drawInfoBox("Waiting", "3 seconds to cancel", "Press ` to cancel", false, false);
     uint32_t start = millis();
     while(millis() - start < 3000){
@@ -155,6 +156,19 @@ bool pwnagothiBegin(){
             }
         }
     }
+    #else
+    drawInfoBox("Waiting", "3 seconds to cancel", "Press any button to cancel", false, false);
+    uint32_t start = millis();
+    while(millis() - start < 3000){
+        M5.update();
+        inputManager::update();
+        if(inputManager::isButtonAPressed() || inputManager::isButtonBPressed()){
+            debounceDelay();
+            setMID();
+            return false;
+        }
+    }
+    #endif
     logMessage("Pwnagothi auto mode init!");
     parseWhitelist();
     pwnagothiMode = true;

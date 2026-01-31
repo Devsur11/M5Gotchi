@@ -1,5 +1,7 @@
+#ifndef BUTTON_ONLY_INPUT
 #include "M5Cardputer.h"
-#include <SD.h>
+#endif
+#include "SD.h"
 
 #define MOOD_BROKEN 19
 #ifndef MOOD_H

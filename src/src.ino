@@ -1,7 +1,9 @@
+#include "settings.h"
+#ifndef BUTTON_ONLY_INPUT
 #include "M5Cardputer.h"
+#endif
 #include "M5Unified.h"
 #include "ui.h"
-#include "settings.h"
 #include "mood.h"
 #include "pwnagothi.h"
 #include "moodLoader.h"
@@ -25,11 +27,9 @@
 #include "wpa_sec.h"
 #include "esp_partition.h"
 #include "fontDownloader.h"
-
 #ifdef USE_LITTLEFS
 #include "storageManager.h"
 #endif
-
 #ifdef BUTTON_ONLY_INPUT
 #include "inputManager.h"
 #endif
@@ -414,8 +414,13 @@ bool sendCoredump() {
 void initM5() {
   auto cfg = M5.config();
   M5.begin(cfg);
-  // M5Cardputer.begin(cfg, true);
-  // M5Cardputer.Keyboard.begin();
+  #ifndef M5STICKS3_ENV
+  logMessage("Initializing M5Cardputer features...");
+  M5Cardputer.begin(cfg, true);
+  M5Cardputer.Keyboard.begin();
+  #else
+    M5.Power.begin();
+  #endif
 }
 
 void setup() {
@@ -433,11 +438,30 @@ void setup() {
     logMessage("LittleFS initialized successfully");
     logMessage(storageManager::getDetailedStorageInfo());
   }
+  // lets draw simle loading screen
+  M5.Display.begin();
+  M5.Display.fillScreen(BLACK);
+  M5.Display.setTextColor(WHITE);
+  M5.Display.setTextSize(2);
+  M5.Display.setCursor(10, 10);
+  M5.Display.println("Initializing...");
+  M5.Display.println("Storage Manager:");
+  M5.Display.println("LittleFS");
+  M5.Display.println("Please wait...");
+  M5.Display.pushState();
   #endif
   
   #ifdef BUTTON_ONLY_INPUT
   logMessage("Initializing button-only input mode...");
   inputManager::init();
+  #endif
+
+  #ifdef M5STICKS3_ENV
+  logMessage("M5StickS3 detected, configuring power outputs and CS pins");
+  M5.Power.setExtOutput(true);
+  digitalWrite(9, LOW); // M5RF433 avoid Jamming
+  pinMode(46, OUTPUT);
+  digitalWrite(46, LOW); // Infrared LED Off
   #endif
   
   if(M5.getBoard() == m5::board_t::board_M5CardputerADV){
@@ -463,14 +487,14 @@ void setup() {
   initColorSettings();
   initUi();
   preloadMoods();
-  //initPersonality();
+  initPersonality();
   
   // Ensure mood text/face files exist and load them from SD
-  // if (!initMoodsFromSD()) {
-  //   logMessage("Moods: failed to initialize from SD, using defaults");
-  // } else {
-  //   logMessage("Moods: initialized from SD");
-  // }
+  if (!initMoodsFromSD()) {
+    logMessage("Moods: failed to initialize from SD, using defaults");
+  } else {
+    logMessage("Moods: initialized from SD");
+  }
   
   setMoodToStartup();
   updateUi(false, false);
@@ -630,6 +654,15 @@ void setup() {
   //VFS partition not found
   //SPIFFS partition found at address: 670000
   //Coredump partition found at address: 7f0000
+  //Sticks3 generic:
+  //Partition layout detection:
+  //App0 size: 300000
+  //App0 address: 10000
+  //App1 address: 10000
+  //App1 size: 300000
+  //VFS partition not found
+  //SPIFFS partition found at address: 610000
+  //Coredump partition not found
   logMessage("Evaluating install type for feature limitations...");
   setMoodToStatus();
   updateUi(true, false, true);
@@ -648,6 +681,22 @@ void setup() {
       saveSettings();
     }
   }
+  #ifdef M5STICKS3_ENV
+  else if (part_spiffs && part_spiffs->address == 0x610000 && app1_size == 0x300000 && !part_coredump && !part_vfs && part_app0->size == 0x300000) {
+    logMessage("Sticks3 generic install detected!");
+    if(newVersionAvailable) {
+      drawHintBox("A new firmware version is available!\nPlease update via the menu\nPlease note tha bugs from older version will not be reviewed!", 3);
+    }
+    logMessage("No feature limitations applied.");
+    drawHintBox("Welcome to M5Gotchi!\nSet your device name in setting and explore!\nEnjoy your stay! (Regardless of your choice this will only be shown once)", 13);
+    if(!bitRead(hintsDisplayed, 13)){
+      drawInfoBox("", "", "", false, false);
+      //now lets disable entirely hint 13 regardless of user choice
+      hintsDisplayed |= (1 << 13);
+      saveSettings();
+    }
+  }
+  #endif
   else {
     drawHintBox("Welcome to M5Gotchi!\nSet your device name in setting and explore!\nEnjoy your stay! (Regardless of your choice this will only be shown once)", 13);
     //now lets disable entirely hint 13 regardless of user choice
@@ -660,8 +709,11 @@ void setup() {
     }
     limitFeatures = true;
   }
+  #ifndef M5STICKS3_ENV
   drawHintBox("Hi there!\nPress esc to open menu.\nUse arrows to navigate.\nSometimes keyboard.\nLook around, and enjoy!", 2);
-  
+  #else
+  drawHintBox("Hi there!\nHold side button to open and close menu.\nUse blue button to select.\nLook around, and enjoy!", 2);
+  #endif
 
   if(pwnagothiModeEnabled) {
     logMessage("Pwnagothi mode enabled");
@@ -673,7 +725,6 @@ void setup() {
 
 void loop() {
   M5.update();
-  M5.update();
   
   #ifdef BUTTON_ONLY_INPUT
   inputManager::update();
@@ -681,7 +732,15 @@ void loop() {
   
   updateUi(true);
   #ifndef BUTTON_ONLY_INPUT
+  M5Cardputer.update();
   if(M5Cardputer.Keyboard.isKeyPressed(KEY_OPT) && M5Cardputer.Keyboard.isKeyPressed(KEY_LEFT_CTRL) && M5Cardputer.Keyboard.isKeyPressed(KEY_FN)){
+    // Toggle dev menu instead of crashing the device
+    drawInfoBox("DevTools", "Opening developer tools...", "", false, false);
+    delay(200);
+    runApp(99);
+  }
+  #else
+  if(inputManager::isButtonALongPressed()){
     // Toggle dev menu instead of crashing the device
     drawInfoBox("DevTools", "Opening developer tools...", "", false, false);
     delay(200);
@@ -695,7 +754,7 @@ void Sound(int frequency, int duration, bool sound){
 }}
 
 void fontSetup(){
-  if(SD.exists("/fonts/big.vlw") && SD.exists("/fonts/small.vlw")){
+  if(FSYS.exists("/fonts/big.vlw") && FSYS.exists("/fonts/small.vlw")){
     logMessage("Fonts folder already exists, skipping download");
     return;
   }
@@ -715,7 +774,7 @@ void fontSetup(){
     return;
   }
   //now lets check if fonts folder exists, if not create it
-  if(!SD.exists("fonts")){
+  if(!FSYS.exists("fonts")){
     if(drawQuestionBox("Setup fonts?", "Fonts not present, install them now? If not installed, moods will not display correctly.", "", "This will take a few seconds")){
       drawInfoBox("Downloading...", "Downloading fonts, please wait...", "", false, false);
       downloadFonts();

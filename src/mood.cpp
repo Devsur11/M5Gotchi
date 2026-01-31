@@ -1,8 +1,8 @@
-#include "mood.h"
 #include "settings.h"
+#include "mood.h"
 #include "pwngrid.h"
 #include "logger.h"
-#include <SD.h>
+#include "SD.h"
 #include <map>
 #include <vector>
 #include <cstdarg>
@@ -184,7 +184,7 @@ static std::map<String, std::vector<String>> textsMap;
 
 // Helper: write a file with given content
 static bool writeTextFile(const String &path, const String &content) {
-  File f = SD.open(path.c_str(), FILE_WRITE);
+  File f = FSYS.open(path.c_str(), FILE_WRITE);
   if (!f) {
     logMessage("Failed to open " + path + " for writing");
     return false;
@@ -196,8 +196,8 @@ static bool writeTextFile(const String &path, const String &content) {
 
 // Create default faces.txt and texts.txt under /moods
 bool createDefaultMoodFiles() {
-  if (!SD.exists("/moods")) {
-    SD.mkdir("/moods");
+  if (!FSYS.exists("/moods")) {
+    FSYS.mkdir("/moods");
   }
 
   // Faces
@@ -258,7 +258,7 @@ bool createDefaultMoodFiles() {
 
 // Parse simple INI-like file with [section] and lines
 static bool parseSectionedFile(const String &path, std::map<String, std::vector<String>> &out) {
-  File f = SD.open(path.c_str(), FILE_READ);
+  File f = FSYS.open(path.c_str(), FILE_READ);
   if (!f) return false;
   String section = "";
   while (f.available()) {
@@ -358,7 +358,7 @@ void debugPrintMoods() {
 
 bool initMoodsFromSD() {
   // ensure files exist
-  if (!SD.exists("/moods/faces.txt") || !SD.exists("/moods/texts.txt")) {
+  if (!FSYS.exists("/moods/faces.txt") || !FSYS.exists("/moods/texts.txt")) {
     createDefaultMoodFiles();
   }
   initedMoods = true;

@@ -1,17 +1,6 @@
-// Full crypto implementation for ESP32 (Arduino) using mbedTLS + SD
-// - RSA-OAEP for key encapsulation
-// - AES-256-GCM for payload
-// - RSA-PSS (mbedTLS pk_sign/verify) with SHA256
-//
-// WARNING:
-// - RSA 4096 is heavy. Key generation may take a long time and may fail if
-//   mbedTLS was built with too-small MPI limits. If failing, generate keys on PC
-//   and copy to SD card under keysPath (/sd/keys/id_rsa and id_rsa.pub).
-// - Ensure SD.begin() has been called before using ensureKeys/load*.
-//
-
+#include "settings.h"
 #include "crypto.h"
-#include <SD.h>
+#include "SD.h"
 #include "mbedtls/pk.h"
 #include "mbedtls/rsa.h"
 #include "mbedtls/entropy.h"
@@ -23,7 +12,7 @@
 #include "mbedtls/sha256.h"
 #include <vector>
 #include <cstring>
-#include "settings.h"
+
 #include "esp_heap_caps.h"
 #include "esp_system.h"
 #include "freertos/semphr.h"
@@ -90,8 +79,8 @@ void keygenTask(void *arg) {
     size_t free_before = esp_get_free_heap_size();
     fLogMessage("[crypto] free heap before keygen: %u\n", (unsigned)free_before);
 
-    if (!SD.exists(privPath.c_str()) || !SD.exists(pubPath.c_str())) {
-        logMessage("[crypto] keys not found on SD. Generating RSA keypair (this will take a while)...");
+    if (!FSYS.exists(privPath.c_str()) || !FSYS.exists(pubPath.c_str())) {
+        logMessage("[crypto] keys not found on FSYS. Generating RSA keypair (this will take a while)...");
 
         mbedtls_pk_context pk;
         mbedtls_entropy_context entropy;
@@ -167,7 +156,7 @@ void keygenTask(void *arg) {
         {
             // Scope String usage to free heap before cleanup
             String dir = g_keysPath;
-            if (!SD.exists(dir.c_str())) SD.mkdir(dir.c_str());
+            if (!FSYS.exists(dir.c_str())) FSYS.mkdir(dir.c_str());
 
             bool ok1 = writeFileSD(privPath, (const uint8_t*)prv_buf, prv_len);
             
@@ -199,7 +188,7 @@ cleanup:
 
 // ---------- SD helpers ----------
 static bool writeFileSD(const String &path, const uint8_t *data, size_t len) {
-    File f = SD.open(path.c_str(), FILE_WRITE);
+    File f = FSYS.open(path.c_str(), FILE_WRITE);
     if (!f) {
         fLogMessage("[crypto] writeFileSD: open failed %s\n", path.c_str());
         return false;
@@ -209,8 +198,8 @@ static bool writeFileSD(const String &path, const uint8_t *data, size_t len) {
     return w == len;
 }
 static bool readFileSD(const String &path, std::vector<uint8_t> &out) {
-    if (!SD.exists(path.c_str())) return false;
-    File f = SD.open(path.c_str(), FILE_READ);
+    if (!FSYS.exists(path.c_str())) return false;
+    File f = FSYS.open(path.c_str(), FILE_READ);
     if (!f) return false;
     out.clear();
     while (f.available()) out.push_back((uint8_t)f.read());

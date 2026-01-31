@@ -5,7 +5,7 @@
 namespace inputManager {
     
     // Button timing
-    const uint32_t LONG_PRESS_THRESHOLD = 1000; // 1 second for long press
+    const uint32_t LONG_PRESS_THRESHOLD = 700; // 1 second for long press
     
     // Button state tracking
     struct ButtonTracker {
@@ -30,19 +30,24 @@ void update() {
     if (btnA_pressed && !buttonA.isCurrentlyPressed) {
         // Button just pressed
         buttonA.isCurrentlyPressed = true;
-        buttonA.wasPressed = true;
         buttonA.pressStartTime = millis();
         buttonA.longPressDetected = false;
+        buttonA.wasPressed = false;
         Serial.println("BtnA pressed");
     } else if (btnA_pressed && buttonA.isCurrentlyPressed) {
         // Button held - check for long press
         if (!buttonA.longPressDetected && (millis() - buttonA.pressStartTime >= LONG_PRESS_THRESHOLD)) {
             buttonA.longPressDetected = true;
+            buttonA.wasPressed = true;
             Serial.println("BtnA long press detected");
         }
     } else if (!btnA_pressed && buttonA.isCurrentlyPressed) {
         // Button just released
         buttonA.isCurrentlyPressed = false;
+        if (!buttonA.longPressDetected) {
+            // It was a short press
+            buttonA.wasPressed = true;
+        }
         Serial.println("BtnA released");
     }
     
@@ -51,19 +56,24 @@ void update() {
     if (btnB_pressed && !buttonB.isCurrentlyPressed) {
         // Button just pressed
         buttonB.isCurrentlyPressed = true;
-        buttonB.wasPressed = true;
         buttonB.pressStartTime = millis();
         buttonB.longPressDetected = false;
+        buttonB.wasPressed = false;
         Serial.println("BtnB pressed");
     } else if (btnB_pressed && buttonB.isCurrentlyPressed) {
         // Button held - check for long press
         if (!buttonB.longPressDetected && (millis() - buttonB.pressStartTime >= LONG_PRESS_THRESHOLD)) {
             buttonB.longPressDetected = true;
+            buttonB.wasPressed = true;
             Serial.println("BtnB long press detected");
         }
     } else if (!btnB_pressed && buttonB.isCurrentlyPressed) {
         // Button just released
         buttonB.isCurrentlyPressed = false;
+        if (!buttonB.longPressDetected) {
+            // It was a short press
+            buttonB.wasPressed = true;
+        }
         Serial.println("BtnB released");
     }
 }

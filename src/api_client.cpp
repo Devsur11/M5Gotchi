@@ -1,13 +1,14 @@
+#include "settings.h"
 #include "api_client.h"
 #include "crypto.h"
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
-#include <SD.h>
+#include "SD.h"
 #include <mbedtls/sha256.h>
-#include "settings.h"
 #include "ui.h"
 #include "esp_heap_caps.h"
+
 
 using namespace api_client;
 using namespace pwngrid::crypto;
@@ -49,7 +50,7 @@ bool saveToken(const String &t) {
     doc["token"] = t;
     String s;
     serializeJson(doc, s);
-    File f = SD.open(tokenPath, "w");
+    File f = FSYS.open(tokenPath, "w");
     if (!f) return false;
     f.print(s);
     f.close();
@@ -58,8 +59,8 @@ bool saveToken(const String &t) {
 }
 
 bool loadToken() {
-    if (!SD.exists(tokenPath)) return false;
-    File f = SD.open(tokenPath, "r");
+    if (!FSYS.exists(tokenPath)) return false;
+    File f = FSYS.open(tokenPath, "r");
     if (!f) return false;
     String s = f.readString(); f.close();
     DynamicJsonDocument doc(256);
@@ -237,7 +238,7 @@ static String sha256Hex(const String &s) {
     return hex;
 }
 
-#include "settings.h"
+
 
 bool api_client::enrollWithGrid() {
     if(!((uint64_t)time(nullptr) > (lastTokenRefresh+(30*60)))){
@@ -580,7 +581,7 @@ bool api_client::pollInbox() {
 // helper: ensures /pwngrid dir exists and returns cache file path
 static String getPwngridCachePath() {
     const char *p = "/pwngrid";
-    if (!SD.exists(p)) SD.mkdir(p);
+    if (!FSYS.exists(p)) FSYS.mkdir(p);
     return String("/pwngrid/cracks.conf");
 }
 
@@ -591,8 +592,8 @@ bool api_client::queueAPForUpload(const String &essid, const String &bssid) {
     DynamicJsonDocument doc(2048);
     JsonArray arr = doc.to<JsonArray>();
 
-    if (SD.exists(path)) {
-        File f = SD.open(path, FILE_READ);
+    if (FSYS.exists(path)) {
+        File f = FSYS.open(path, FILE_READ);
         if (f) {
             String s = f.readString();
             f.close();
@@ -612,7 +613,7 @@ bool api_client::queueAPForUpload(const String &essid, const String &bssid) {
     // write back
     String out;
     serializeJson(arr, out);
-    File wf = SD.open(path, FILE_WRITE);
+    File wf = FSYS.open(path, FILE_WRITE);
     if (!wf) {
         logMessage("queueAP: could not open cache for writing");
         return false;
@@ -627,12 +628,12 @@ bool api_client::queueAPForUpload(const String &essid, const String &bssid) {
 bool api_client::uploadCachedAPs() {
     enrollWithGrid();
     String path = getPwngridCachePath();
-    if (!SD.exists(path)) {
+    if (!FSYS.exists(path)) {
         logMessage("uploadCachedAPs: nothing to upload");
         return true; // nothing to do
     }
 
-    File f = SD.open(path, FILE_READ);
+    File f = FSYS.open(path, FILE_READ);
     if (!f) {
         logMessage("uploadCachedAPs: failed to open cache");
         return false;
@@ -649,7 +650,7 @@ bool api_client::uploadCachedAPs() {
     if (err) {
         logMessage("uploadCachedAPs: invalid cache json, clearing");
         // clear corrupted file
-        File wf = SD.open(path, FILE_WRITE);
+        File wf = FSYS.open(path, FILE_WRITE);
         if (wf) { wf.print("[]"); wf.close(); }
         return false;
     }
@@ -674,7 +675,7 @@ bool api_client::uploadCachedAPs() {
     
 
     // On success, clear cache file
-    File wf = SD.open(path, FILE_WRITE);
+    File wf = FSYS.open(path, FILE_WRITE);
     if (wf) {
         wf.print("[]");
         wf.close();

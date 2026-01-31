@@ -1,7 +1,6 @@
 #pragma once
-#include "logger.h"
-#include "M5GFX.h"
 #include "settings.h"
+#include "logger.h"
 
 struct menu {
   const char *name;
@@ -57,7 +56,9 @@ void pushAll();
 extern SemaphoreHandle_t displayMutex; // protects all display/canvas operations
 void updateM5(){
   M5.update();
+  #ifndef BUTTON_ONLY_INPUT
   M5Cardputer.update();
+  #endif
 }
 void editWhitelist();
 uint16_t RGBToRGB565(uint8_t r, uint8_t g, uint8_t b);
@@ -82,6 +83,7 @@ void drawHintBox(const String &text, uint8_t hintID);
 void drawStats();
 void drawSysInfo();
 void drawLittleFSManager();
+void drawStorageInfo();
 void drawStorageInfo();
 bool addUnitToAddressBook(const unit u);
 void themeMenu();

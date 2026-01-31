@@ -1,12 +1,14 @@
+#include "settings.h"
 #include <cstdio>
 #include <string>
 #include <deque>
 #include <vector>
 #include <algorithm>
 #include "logger.h"
+#ifndef BUTTON_ONLY_INPUT
 #include "M5Cardputer.h"
+#endif
 #include "Arduino.h"
-#include "settings.h"
 #include "SD.h"
 
 // In-memory circular buffer for overlay logs with timestamps
@@ -31,8 +33,8 @@ void drawOverlayLogs() {
     const int lineHeight = 12;
     const int maxLines = 8;
     
-    M5Cardputer.Display.setTextColor(TFT_WHITE, TFT_BLACK);
-    M5Cardputer.Display.setTextSize(1);
+    M5.Display.setTextColor(TFT_WHITE, TFT_BLACK);
+    M5.Display.setTextSize(1);
 
     uint32_t now_ms = millis();
     // remove expired entries (>5s)
@@ -42,9 +44,9 @@ void drawOverlayLogs() {
 
     int lineNum = 0;
     for (auto it = overlayLogs.rbegin(); it != overlayLogs.rend() && lineNum < maxLines; ++it, ++lineNum) {
-        M5Cardputer.Display.setCursor(startX, startY + lineNum * lineHeight);
-        M5Cardputer.Display.fillRect(startX, startY,lineNum * lineHeight, 256, TFT_BLACK);
-        M5Cardputer.Display.print(it->txt);
+        M5.Display.setCursor(startX, startY + lineNum * lineHeight);
+        M5.Display.fillRect(startX, startY,lineNum * lineHeight, 256, TFT_BLACK);
+        M5.Display.print(it->txt);
     }
 }
 

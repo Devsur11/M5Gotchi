@@ -1,9 +1,12 @@
-#include "sdmanager.h"
-#include "M5Cardputer.h"
-#include <FS.h>
-#include <SD.h>
-#include <vector>
 #include "ui.h"
+#include "settings.h"
+#include "sdmanager.h"
+#ifndef BUTTON_ONLY_INPUT
+#include "M5Cardputer.h"
+#endif
+#include <FS.h>
+#include "SD.h"
+#include <vector>
 #include "logger.h"
 #include "inputManager.h"
 
@@ -90,7 +93,16 @@ static bool isDeveloperMode() {
 
 static void listDirectory(const String &path, std::vector<Entry> &out) {
   out.clear();
-  File dir = SD.open(path.c_str());
+  
+  // Add ".." entry to go back (except in root)
+  if (path != "/") {
+    Entry backEntry;
+    backEntry.name = "..";
+    backEntry.isDir = true;
+    out.push_back(backEntry);
+  }
+  
+  File dir = FSYS.open(path.c_str());
   if (!dir) return;
   File file = dir.openNextFile();
   while (file) {
@@ -107,7 +119,7 @@ static void listDirectory(const String &path, std::vector<Entry> &out) {
 // Read file into vector of lines
 static void readFileLines(const String &fullpath, std::vector<String> &lines) {
   lines.clear();
-  File f = SD.open(fullpath.c_str(), FILE_READ);
+  File f = FSYS.open(fullpath.c_str(), FILE_READ);
   if (!f) return;
   String cur = "";
   while (f.available()) {
@@ -126,10 +138,10 @@ static void readFileLines(const String &fullpath, std::vector<String> &lines) {
 
 // Write vector of lines to file (overwrite)
 static bool writeFileLines(const String &fullpath, const std::vector<String> &lines) {
-  if (!SD.remove(fullpath.c_str())) {
+  if (!FSYS.remove(fullpath.c_str())) {
     // ignore remove failure
   }
-  File f = SD.open(fullpath.c_str(), FILE_WRITE);
+  File f = FSYS.open(fullpath.c_str(), FILE_WRITE);
   if (!f) return false;
   for (size_t i = 0; i < lines.size(); ++i) {
     f.print(lines[i]);
@@ -142,11 +154,11 @@ static bool writeFileLines(const String &fullpath, const std::vector<String> &li
 
 // Recursive delete for directories and files
 static bool recursiveDelete(const String &path) {
-  File f = SD.open(path.c_str());
+  File f = FSYS.open(path.c_str());
   if (!f) return false;
   if (!f.isDirectory()) {
     f.close();
-    return SD.remove(path.c_str());
+    return FSYS.remove(path.c_str());
   }
   // directory: iterate children
   File child = f.openNextFile();
@@ -157,19 +169,19 @@ static bool recursiveDelete(const String &path) {
     if (!childPath.endsWith("/")) childPath += "/";
     childPath += name;
     // if child is directory, recurse
-    File probe = SD.open(childPath.c_str());
+    File probe = FSYS.open(childPath.c_str());
     if (probe && probe.isDirectory()) {
       probe.close();
       recursiveDelete(childPath);
     } else {
       if (probe) probe.close();
-      SD.remove(childPath.c_str());
+      FSYS.remove(childPath.c_str());
     }
     child = f.openNextFile();
   }
   f.close();
   // remove the now-empty directory
-  return SD.rmdir(path.c_str());
+  return FSYS.rmdir(path.c_str());
 }
 
 static void drawEntries(const String &path, const std::vector<Entry> &entries, int cur, int scroll) {
@@ -206,7 +218,11 @@ static void drawEntries(const String &path, const std::vector<Entry> &entries, i
   // draw hints
   canvas_main.setTextSize(1);
   canvas_main.setTextColor(tx_color_rgb565);
+#ifdef BUTTON_ONLY_INPUT
+  canvas_main.drawString("A:select  B:navigate  Long B:back/exit", 3, canvas_main.height() - 12);
+#else
   canvas_main.drawString("Enter: open/view  e:edit  c:new  d:del  `:back/exit", 3, canvas_main.height() - 12);
+#endif
 
   // Scrollbar
   int total = entries.size();
@@ -233,8 +249,9 @@ static void drawEntries(const String &path, const std::vector<Entry> &entries, i
   // push all canvases together to avoid leaving stale UI
   pushAll();
 }
+
 static void viewFile(const String &fullpath) {
-  File f = SD.open(fullpath.c_str(), FILE_READ);
+  File f = FSYS.open(fullpath.c_str(), FILE_READ);
   if (!f) {
     drawInfoBox("ERROR", "Cannot open file", fullpath, true, true);
     return;
@@ -322,7 +339,11 @@ static void viewFile(const String &fullpath) {
     // scrolling hints marquee for long hint text
     static unsigned long hintTick = 0;
     static int hintOffset = 0;
+    #ifdef BUTTON_ONLY_INPUT
+    String hint = "A: exit/view  B:scroll ";
+    #else
     String hint = "ENTER: exit  .:next page  ;:prev page";
+    #endif
     int hintW = canvas_main.textWidth(hint);
     int availW = canvas_main.width()- 12; // leave space for scrollbar
     if (hintW > availW) {
@@ -346,19 +367,26 @@ static void viewFile(const String &fullpath) {
     pushAll();
 
     M5.update();
-    M5Cardputer.update();
+    
     #ifdef BUTTON_ONLY_INPUT
+    
     inputManager::update();
-    if (inputManager::isButtonBPressed() || inputManager::isButtonAPressed()) {
+    if (inputManager::isButtonAPressed()) {
       debounceDelay();
       break;
     }
-    if (inputManager::isButtonAPressed()) {
+    if (inputManager::isButtonBPressed()) {
       debounceDelay();
-      if ((page + 1) * linesPerPage < (int)segments.size()) page++;
+      if ((page + 1) * linesPerPage < (int)segments.size()){
+        page++;
+      }
+      else{
+        page = 0;
+      }
     }
     // No previous button in button-only mode, just wrap to top
     #else
+    M5Cardputer.update();
     if (M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER) || M5Cardputer.Keyboard.isKeyPressed('`')) {
       debounceDelay();
       break;
@@ -377,6 +405,10 @@ static void viewFile(const String &fullpath) {
 
 // Vim-like modal editor: normal mode (navigation) and insert mode (editing) with cursor display
 static void editFile(const String &fullpath) {
+  #ifdef BUTTON_ONLY_INPUT
+  drawInfoBox("ERROR", "Editing not supported", "without keyboard", true, true);
+  return;
+  #else
   std::vector<String> lines;
   readFileLines(fullpath, lines);
   if (lines.size() == 0) lines.push_back("");
@@ -646,6 +678,7 @@ static void editFile(const String &fullpath) {
     
     delay(80);
   }
+  #endif
 }
 
 void sdmanager::runFileManager() {
@@ -654,7 +687,7 @@ void sdmanager::runFileManager() {
   int cur = 0;
   int scroll = 0;
 
-  if (!SD.begin()) {
+  if (!FSYS.begin()) {
     drawInfoBox("ERROR", "SD not mounted", "Insert SD card", true, true);
     return;
   }
@@ -670,7 +703,9 @@ void sdmanager::runFileManager() {
     drawEntries(curPath, entries, cur, scroll);
 
     M5.update();
+#ifndef BUTTON_ONLY_INPUT
     M5Cardputer.update();
+#endif
 
 #ifdef BUTTON_ONLY_INPUT
     inputManager::update();
@@ -682,6 +717,34 @@ void sdmanager::runFileManager() {
       if (!full.endsWith("/")) full += "/";
       full += name;
       if (entries[cur].isDir) {
+        // Check if it's the ".." entry
+        if (name == "..") {
+          // Go back one directory
+          if (curPath == "/") {
+            // exit manager
+            menuID = 0;
+            return;
+          }
+          int lastSlash = curPath.lastIndexOf('/');
+          if (lastSlash == 0) curPath = "/"; else curPath = curPath.substring(0, lastSlash);
+          listDirectory(curPath, entries);
+          cur = 0; scroll = 0;
+        } else {
+          // enter dir
+          canvas_main.setTextDatum(middle_center);
+          canvas_main.setTextSize(2);
+          canvas_main.fillRect( canvas_main.textWidth("Opening...") / 2 - 10,
+                               canvas_main.height() / 2 - 16,
+                               canvas_main.textWidth("Opening...") + 20,
+                               32,
+                               bg_color_rgb565);
+          canvas_main.setTextColor(tx_color_rgb565);
+          canvas_main.drawString("Opening...", canvas_main.width() / 2, canvas_main.height() / 2);
+          pushAll();
+          curPath = full;
+          listDirectory(curPath, entries);
+          cur = 0; scroll = 0;
+        }
 #else
     if (M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER)) {
       debounceDelay();
@@ -691,21 +754,35 @@ void sdmanager::runFileManager() {
       if (!full.endsWith("/")) full += "/";
       full += name;
       if (entries[cur].isDir) {
+        // Check if it's the ".." entry
+        if (name == "..") {
+          // Go back one directory
+          if (curPath == "/") {
+            // exit manager
+            menuID = 0;
+            return;
+          }
+          int lastSlash = curPath.lastIndexOf('/');
+          if (lastSlash == 0) curPath = "/"; else curPath = curPath.substring(0, lastSlash);
+          listDirectory(curPath, entries);
+          cur = 0; scroll = 0;
+        } else {
+          // enter dir
+          canvas_main.setTextDatum(middle_center);
+          canvas_main.setTextSize(2);
+          canvas_main.fillRect( canvas_main.textWidth("Opening...") / 2 - 10,
+                               canvas_main.height() / 2 - 16,
+                               canvas_main.textWidth("Opening...") + 20,
+                               32,
+                               bg_color_rgb565);
+          canvas_main.setTextColor(tx_color_rgb565);
+          canvas_main.drawString("Opening...", canvas_main.width() / 2, canvas_main.height() / 2);
+          pushAll();
+          curPath = full;
+          listDirectory(curPath, entries);
+          cur = 0; scroll = 0;
+        }
 #endif
-        // enter dir
-        canvas_main.setTextDatum(middle_center);
-        canvas_main.setTextSize(2);
-        canvas_main.fillRect( canvas_main.textWidth("Opening...") / 2 - 10,
-                             canvas_main.height() / 2 - 16,
-                             canvas_main.textWidth("Opening...") + 20,
-                             32,
-                             bg_color_rgb565);
-        canvas_main.setTextColor(tx_color_rgb565);
-        canvas_main.drawString("Opening...", canvas_main.width() / 2, canvas_main.height() / 2);
-        pushAll();
-        curPath = full;
-        listDirectory(curPath, entries);
-        cur = 0; scroll = 0;
       } else {
         canvas_main.setTextDatum(middle_center);
         canvas_main.setTextSize(2);
@@ -717,38 +794,137 @@ void sdmanager::runFileManager() {
         canvas_main.setTextColor(tx_color_rgb565);
         canvas_main.drawString("Reading...", canvas_main.width() / 2, canvas_main.height() / 2);
         pushAll();
-        // file: show submenu: view/edit/delete
-        canvas_main.setTextDatum(top_left);
-        drawTopCanvas(); drawBottomCanvas();
-        canvas_main.fillSprite(bg_color_rgb565);
-        canvas_main.setTextSize(1.5);
-        canvas_main.setTextColor(tx_color_rgb565);
-        canvas_main.drawString(name, 6, 20);
-        canvas_main.setTextSize(1);
-        //show file size and modified time
-        File f = SD.open(full.c_str(), FILE_READ);
-        if (f) {
-          size_t fsize = f.size();
-          String sizeStr = String(fsize) + " bytes";
-          canvas_main.drawString(sizeStr, 6, 40);
-          f.close();
-        }
-        canvas_main.drawString("v:view e:edit m:move/rename d:del `:back", 2, canvas_main.height() - 12);
-        pushAll();
+        
+        // file: show submenu with selection boxes
+        String actions[] = {"View", "Edit", "Delete", "Back"};
+        int actionCur = 0;
+        
         while (true) {
+          drawTopCanvas(); drawBottomCanvas();
+          canvas_main.fillSprite(bg_color_rgb565);
+          canvas_main.setTextDatum(top_left);
+          canvas_main.setTextSize(1.5);
+          canvas_main.setTextColor(tx_color_rgb565);
+          canvas_main.drawString(name, 6, 5);
+          
+          // Show file size
+          canvas_main.setTextSize(1);
+          File f = FSYS.open(full.c_str(), FILE_READ);
+          if (f) {
+            size_t fsize = f.size();
+            String sizeStr = String(fsize) + " bytes";
+            canvas_main.drawString(sizeStr, 6, 25);
+            f.close();
+          }
+          
+          // Draw action selection boxes
+          int boxY = 35;
+          int boxH = 18;
+          for (int i = 0; i < 4; i++) {
+            uint16_t boxColor = (i == actionCur) ? tx_color_rgb565 : bg_color_rgb565;
+            uint16_t textColor = (i == actionCur) ? bg_color_rgb565 : tx_color_rgb565;
+            
+            canvas_main.drawRect(10, boxY + (i * boxH), canvas_main.width() - 20, boxH - 2, tx_color_rgb565);
+            if (i == actionCur) canvas_main.fillRect(10, boxY + (i * boxH), canvas_main.width() - 20, boxH - 2, boxColor);
+            
+            canvas_main.setTextColor(textColor);
+            canvas_main.setTextDatum(middle_center);
+            canvas_main.setTextSize(1.2);
+            canvas_main.drawString(actions[i], canvas_main.width() / 2, boxY + (i * boxH) + 9);
+          }
+          
+          canvas_main.setTextDatum(top_left);
+          canvas_main.setTextSize(1);
+          canvas_main.setTextColor(tx_color_rgb565);
+          canvas_main.drawString("A:select  B:back", 3, canvas_main.height() - 12);
+          
+          pushAll();
+          
           M5.update();
+#ifndef BUTTON_ONLY_INPUT
           M5Cardputer.update();
+#endif
+          
 #ifdef BUTTON_ONLY_INPUT
           inputManager::update();
-          if (inputManager::isButtonAPressed()) { debounceDelay(); viewFile(full); break; }
-          if (inputManager::isButtonBPressed() || inputManager::isButtonBLongPressed()) { debounceDelay(); break; }
+          if (inputManager::isButtonAPressed()) {
+            debounceDelay();
+            if (actionCur == 0) {
+              // View
+              viewFile(full);
+              break;
+            } else if (actionCur == 1) {
+              // Edit
+              if (isPathProtected(full) && !isDeveloperMode()) {
+                drawInfoBox("PROTECTED", "Cannot edit", "critical firmware files", true, true);
+                debounceDelay();
+                break;
+              }
+              editFile(full);
+              break;
+            } else if (actionCur == 2) {
+              // Delete
+              if (isPathProtected(full) && !isDeveloperMode()) {
+                drawInfoBox("PROTECTED", "This data is critical", "to firmware functionality", true, true);
+                debounceDelay();
+                break;
+              }
+              if (drawQuestionBox("Delete?", "Delete file:", name)) {
+                File probe = FSYS.open(full.c_str());
+                if (probe && probe.isDirectory()) {
+                  probe.close();
+                  if (drawQuestionBox("Recursive?", "Delete directory and all contents?", name)) {
+                    canvas_main.setTextDatum(middle_center);
+                    canvas_main.setTextSize(2);
+                    canvas_main.fillRect( canvas_main.textWidth("Deleting...") / 2 - 10,
+                                         canvas_main.height() / 2 - 16,
+                                         canvas_main.textWidth("Deleting...") + 20,
+                                         32,
+                                         bg_color_rgb565);
+                    canvas_main.setTextColor(tx_color_rgb565);
+                    canvas_main.drawString("Deleting...", canvas_main.width() / 2, canvas_main.height() / 2);
+                    pushAll();
+                    canvas_main.setTextDatum(top_left);
+                    if (recursiveDelete(full)) {
+                      drawInfoBox("Deleted", name, "", true, false);
+                      listDirectory(curPath, entries);
+                    } else {
+                      drawInfoBox("ERROR", "Recursive delete failed", name, true, true);
+                    }
+                  }
+                } else {
+                  if (probe) probe.close();
+                  canvas_main.setTextDatum(middle_center);
+                  canvas_main.setTextSize(2);
+                  canvas_main.fillRect( canvas_main.textWidth("Deleting...") / 2 - 10,
+                                        canvas_main.height() / 2 - 16,
+                                        canvas_main.textWidth("Deleting...") + 20,
+                                        32,
+                                        bg_color_rgb565);
+                  canvas_main.setTextColor(tx_color_rgb565);
+                  canvas_main.drawString("Deleting...", canvas_main.width() / 2, canvas_main.height() / 2);
+                  pushAll();
+                  FSYS.remove(full);
+                  listDirectory(curPath, entries);
+                  cur = 0; scroll = 0;
+                }
+              }
+              break;
+            } else if (actionCur == 3) {
+              // Back
+              debounceDelay();
+              break;
+            }
+          } else if (inputManager::isButtonBPressed()) {
+            debounceDelay();
+            actionCur = (actionCur + 1) % 4;
+          }
 #else
+          // Keyboard support for non-button devices
           if (M5Cardputer.Keyboard.isKeyPressed('v')) { debounceDelay(); viewFile(full); break; }
           if (M5Cardputer.Keyboard.isKeyPressed('e')) {
             debounceDelay();
-            // Check if file is protected
-            if (isPathProtected(full)  && !isDeveloperMode()) {
-              // Show protection warning and ask for developer mode
+            if (isPathProtected(full) && !isDeveloperMode()) {
               drawInfoBox("PROTECTED", "Cannot edit", "critical firmware files", true, true);
               debounceDelay();
               break;
@@ -756,49 +932,18 @@ void sdmanager::runFileManager() {
             editFile(full);
             break;
           }
-          if (M5Cardputer.Keyboard.isKeyPressed('m')) {
-            debounceDelay();
-            // Check if file is protected
-            if (isPathProtected(full) && !isDeveloperMode()) {
-              drawInfoBox("PROTECTED", "Cannot move/rename", "critical firmware files", true, true);
-              debounceDelay();
-              break;
-            }
-            String newname = userInput("Move/rename:", "Type new path for file (old: " + name + ")", 128);
-            if (newname.length()) {
-              String target = newname;
-              // if target is relative (no leading /), put in same directory
-              if (!target.startsWith("/")) {
-                String base = curPath;
-                if (!base.endsWith("/")) base += "/";
-                target = base + target;
-              }
-              if (SD.rename(full.c_str(), target.c_str())) {
-                drawInfoBox("OK", "Moved/renamed", target, true, false);
-              } else {
-                drawInfoBox("ERROR", "Move/rename failed", target, true, true);
-              }
-            }
-            break;
-          }
           if (M5Cardputer.Keyboard.isKeyPressed('d')) {
             debounceDelay();
-            
-            // Check if file is protected
-            if (isPathProtected(full)  && !isDeveloperMode()) {
-              // Show protection warning
+            if (isPathProtected(full) && !isDeveloperMode()) {
               drawInfoBox("PROTECTED", "This data is critical", "to firmware functionality", true, true);
               debounceDelay();
               break;
             }
-            
             if (drawQuestionBox("Delete?", "Delete file:", name)) {
-              // if it's a directory, ask for recursive delete
-              File probe = SD.open(full.c_str());
+              File probe = FSYS.open(full.c_str());
               if (probe && probe.isDirectory()) {
                 probe.close();
                 if (drawQuestionBox("Recursive?", "Delete directory and all contents?", name)) {
-                  //draw little deleting box
                   canvas_main.setTextDatum(middle_center);
                   canvas_main.setTextSize(2);
                   canvas_main.fillRect( canvas_main.textWidth("Deleting...") / 2 - 10,
@@ -819,7 +964,6 @@ void sdmanager::runFileManager() {
                 }
               } else {
                 if (probe) probe.close();
-                //draw little deleting box
                 canvas_main.setTextDatum(middle_center);
                 canvas_main.setTextSize(2);
                 canvas_main.fillRect( canvas_main.textWidth("Deleting...") / 2 - 10,
@@ -830,7 +974,7 @@ void sdmanager::runFileManager() {
                 canvas_main.setTextColor(tx_color_rgb565);
                 canvas_main.drawString("Deleting...", canvas_main.width() / 2, canvas_main.height() / 2);
                 pushAll();
-                SD.remove(full);
+                FSYS.remove(full);
                 listDirectory(curPath, entries);
                 cur = 0; scroll = 0;
               }
@@ -838,7 +982,7 @@ void sdmanager::runFileManager() {
             break;
           }
           if (M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER) || M5Cardputer.Keyboard.isKeyPressed('`')) { debounceDelay(); break; }
-#endif  // BUTTON_ONLY_INPUT
+#endif
         }
       }
     }
@@ -880,7 +1024,6 @@ void sdmanager::runFileManager() {
       listDirectory(curPath, entries);
       cur = 0; scroll = 0;
     }
-    #endif
 
     if (M5Cardputer.Keyboard.isKeyPressed('c')) {
       debounceDelay();
@@ -893,7 +1036,7 @@ void sdmanager::runFileManager() {
           String full = curPath;
           if (!full.endsWith("/")) full += "/";
           full += name;
-          File f = SD.open(full.c_str(), FILE_WRITE);
+          File f = FSYS.open(full.c_str(), FILE_WRITE);
           if (f) { f.print(""); f.close(); listDirectory(curPath, entries); }
           else drawInfoBox("ERROR", "Cannot create file", full, true, true);
         }
@@ -903,7 +1046,7 @@ void sdmanager::runFileManager() {
           String full = curPath;
           if (!full.endsWith("/")) full += "/";
           full += name;
-          if (!SD.mkdir(full.c_str())) drawInfoBox("ERROR", "Cannot create dir", full, true, true);
+          if (!FSYS.mkdir(full.c_str())) drawInfoBox("ERROR", "Cannot create dir", full, true, true);
           listDirectory(curPath, entries);
         }
       }
@@ -928,7 +1071,7 @@ void sdmanager::runFileManager() {
       if (drawQuestionBox("Delete?", "Confirm delete", name)) {
         if (entries[cur].isDir) {
           // check if empty
-          File dd = SD.open(full.c_str());
+          File dd = FSYS.open(full.c_str());
           if (dd) {
             bool empty = (dd.openNextFile() == 0);
             dd.close();
@@ -943,7 +1086,7 @@ void sdmanager::runFileManager() {
               canvas_main.setTextColor(tx_color_rgb565);
               canvas_main.drawString("Deleting...", canvas_main.width() / 2, canvas_main.height() / 2);
               pushAll();
-              SD.rmdir(full.c_str());
+              FSYS.rmdir(full.c_str());
               listDirectory(curPath, entries);
             } else {
               // ask for recursive delete
@@ -980,11 +1123,12 @@ void sdmanager::runFileManager() {
           canvas_main.setTextColor(tx_color_rgb565);
           canvas_main.drawString("Deleting...", canvas_main.width() / 2, canvas_main.height() / 2);
           pushAll();
-          SD.remove(full.c_str());
+          FSYS.remove(full.c_str());
           listDirectory(curPath, entries);
         }
       }
     }
+    #endif
 
     delay(10);
   }
@@ -997,7 +1141,7 @@ String sdmanager::selectFile(const String allowedExtensions) {
   int cur = 0;
   int scroll = 0;
 
-  if (!SD.begin()) return "";
+  if (!FSYS.begin()) return "";
 
   auto reloadDir = [&]() {
     std::vector<Entry> all;
@@ -1038,6 +1182,7 @@ String sdmanager::selectFile(const String allowedExtensions) {
     drawEntries(curPath, entries, cur, scroll);
 
     M5.update();
+#ifndef BUTTON_ONLY_INPUT
     M5Cardputer.update();
 
     // down
@@ -1085,6 +1230,40 @@ String sdmanager::selectFile(const String allowedExtensions) {
       else curPath = curPath.substring(0, lastSlash);
       reloadDir();
     }
+#else
+    inputManager::update();
+    if (inputManager::isButtonAPressed()) {
+      debounceDelay();
+      if (entries.empty()) continue;
+      
+      Entry &e = entries[cur];
+      String full = curPath;
+      if (!full.endsWith("/")) full += "/";
+      full += e.name;
+
+      if (e.isDir) {
+        // Check if it's ".."
+        if (e.name == "..") {
+          if (curPath == "/") {
+            return "";
+          }
+          int lastSlash = curPath.lastIndexOf('/');
+          if (lastSlash <= 0) curPath = "/";
+          else curPath = curPath.substring(0, lastSlash);
+        } else {
+          curPath = full;
+        }
+        reloadDir();
+      } else {
+        return full;
+      }
+    }
+    
+    if (inputManager::isButtonBPressed()) {
+      debounceDelay();
+      cur = (cur + 1) % ( (entries.empty()) ? 1 : entries.size() );
+    }
+#endif
 
     delay(10);
   }

@@ -1,5 +1,5 @@
-#include <vector>
 #include "settings.h"
+#include <vector>
 #include "ArduinoJson.h"
 #include "SD.h"
 #include "logger.h"
@@ -110,16 +110,23 @@ personality pwnagotchi = {
 };
 
 bool initPersonality(){
-    if(!SD.begin(SD_CS, sdSPI, 1000000)) {
-        logMessage("Personality init failed, sd card init failed");
+    #ifdef USE_LITTLEFS
+    if (!FSYS.begin()) {
+        logMessage("LittleFS init failed");
         return false;
     }
+    #else
+    if (!FSYS.begin(SD_CS, sdSPI, 1000000)) {
+        logMessage("SD card init failed");
+        return false;
+    }
+    #endif
     bool personalityChanged = false;
     JsonDocument personalityDoc;
     
-    if(SD.exists(PERSONALITY_FILE)) {
+    if(FSYS.exists(PERSONALITY_FILE)) {
         logMessage("Personality file found, loading data");
-        File file = SD.open(PERSONALITY_FILE, FILE_READ);
+        File file = FSYS.open(PERSONALITY_FILE, FILE_READ);
         if (!file) {
             logMessage("Failed to open personality file");
             return false;
@@ -228,7 +235,7 @@ bool initPersonality(){
     
     if (personalityChanged) {
         logMessage("Personality updated with missing/default values, saving...");
-        FConf = SD.open(PERSONALITY_FILE, FILE_WRITE, true);
+        FConf = FSYS.open(PERSONALITY_FILE, FILE_WRITE, true);
         if (FConf) {
             String output;
             serializeJsonPretty(personalityDoc, output);
@@ -268,7 +275,7 @@ bool savePersonality(){
     personalityDoc["gps_fix_timeout"] = pwnagotchi.gps_fix_timeout;
 
     logMessage("Personality JSON data creation successful, proceeding to save");
-    FConf = SD.open(PERSONALITY_FILE, FILE_WRITE, false);
+    FConf = FSYS.open(PERSONALITY_FILE, FILE_WRITE, false);
     if (FConf) {
         String output;
         serializeJsonPretty(personalityDoc, output);
@@ -287,10 +294,17 @@ bool savePersonality(){
 bool configChanged = false;
 
 bool initVars() {
-    if (!SD.begin(SD_CS, sdSPI, 1000000)) {
-        logMessage("JSON parser failed, sd card init failed");
+    #ifdef USE_LITTLEFS
+    if (!FSYS.begin()) {
+        logMessage("LittleFS init failed");
         return false;
     }
+    #else
+    if (!FSYS.begin(SD_CS, sdSPI, 1000000)) {
+        logMessage("SD card init failed");
+        return false;
+    }
+    #endif
 
     String macAddr = WiFi.macAddress();
     originalMacAddress = macAddr;
@@ -299,9 +313,9 @@ bool initVars() {
     
     JsonDocument config;
 
-    if (SD.exists(NEW_CONFIG_FILE)) {
+    if (FSYS.exists(NEW_CONFIG_FILE)) {
         logMessage("Conf file found, loading data");
-        File file = SD.open(NEW_CONFIG_FILE, FILE_READ);
+        File file = FSYS.open(NEW_CONFIG_FILE, FILE_READ);
         if (!file) {
             logMessage("Failed to open config file");
             return false;
@@ -317,7 +331,7 @@ bool initVars() {
             initUi();
             drawInfoBox("CRITICALL ERROR!", "Config file is corrupted and will be recreated. All settings will be lost!","",  false, false);
             delay(5000);
-            SD.remove(NEW_CONFIG_FILE);
+            FSYS.remove(NEW_CONFIG_FILE);
             ESP.restart();
             return false;
         }
@@ -529,7 +543,7 @@ bool initVars() {
 
     if (configChanged) {
         logMessage("Config updated with missing/default values, saving...");
-        FConf = SD.open(NEW_CONFIG_FILE, FILE_WRITE, true);
+        FConf = FSYS.open(NEW_CONFIG_FILE, FILE_WRITE, true);
         if (FConf) {
             String output;
             serializeJsonPretty(config, output);
@@ -597,7 +611,7 @@ bool saveSettings(){
     config["sync_pwned_on_boot"] = sync_pwned_on_boot;
 
     logMessage("JSON data creation successful, proceeding to save");
-    FConf = SD.open(NEW_CONFIG_FILE, FILE_WRITE, false);
+    FConf = FSYS.open(NEW_CONFIG_FILE, FILE_WRITE, false);
     if (FConf) {
         String output;
         serializeJsonPretty(config, output);

@@ -1,4 +1,7 @@
+#include "settings.h"
+#ifndef BUTTON_ONLY_INPUT
 #include "M5Cardputer.h"
+#endif
 #include "lgfx/v1/misc/enum.hpp"
 #include "lgfx/v1/misc/DataWrapper.hpp"
 #include "HWCDC.h"
@@ -6,9 +9,8 @@
 #include <ArduinoJson.h>
 #include "ui.h"
 #include <FS.h>
-#include <SD.h>
+#include "SD.h"
 #include <WiFi.h>
-#include "settings.h"
 #include "pwnagothi.h"
 #include "EapolSniffer.h"
 #include "PMKIDGrabber.h"
@@ -16,7 +18,6 @@
 #include "updater.h"
 #include <Update.h>
 #include <FS.h>
-#include <SD.h>
 #include "evilPortal.h"
 #include "networkKit.h"
 #include "src.h"
@@ -29,13 +30,10 @@
 #include "textsEditor.h"
 #include <vector>
 #include "wardrive.h"
-#include "M5GFX.h"
 #include <FS.h>
 #include "storageManager.h"
 #include "storageAbstraction.h"
-#ifdef USE_LITTLEFS
 #include "usbMassStorage.h"
-#endif
 
 M5Canvas canvas_top(&M5.Display);
 M5Canvas canvas_main(&M5.Display);
@@ -146,7 +144,9 @@ menu main_menu[] = {
     {"Wardriving", 8},            // Wardriving companion
     {"Files", 70},                // File manager
     {"Statistics", 5},            // Stats
-    {"Settings", 6}               // Config
+    {"Settings", 6},               // Config
+    {"Web file manager", 73},         // Web file manager
+    {"Back", 255}
 };
 
 // menuID 2
@@ -156,18 +156,21 @@ menu wifi_menu[] = {
     {"PMKID Capture", 61},        // PMKID Grabber
     {"Access Point", 22},         // Acces point
     {"Deauthentication", 23},     // Deauth
-    {"Packet Sniffing", 24}       // Sniffing
+    {"Packet Sniffing", 24},       // Sniffing
+    {"Back", 255}
 };
 
 // menuID 7
 menu wpasec_menu[] = {
   {"Sync Server", 52},           // Sync with server
   {"Cracked Results", 53},      // Check cracked results
-  {"API Key change", 54}                // Change API key
+  {"API Key change", 54},       // Change API key
+  {"Back", 255}
 };
 
 menu wpasec_setup_menu[] = {
-  {"Set API Key", 54}            // Setup WPA-SEC API key
+  {"Set API Key", 54},            // Setup WPA-SEC API key
+  {"Back", 255}
 };
 
 // menuID 5
@@ -177,6 +180,7 @@ menu pwngotchi_menu[] = {
   {"Whitelist", 38},             // Whitelist editor
   {"Handshakes", 39},            // Handshakes file list
   {"Personality", 57},           // Personality editor
+  {"Back", 255}
 };
 
 // menuID 6
@@ -208,11 +212,11 @@ menu settings_menu[] = {
 
   // Logging / Storage
   {"SD Logging", 58},                     // Log to SD
-  {"LittleFS Manager", 71},               // LittleFS manager
-  {"Storage Info", 72},
   #ifdef USE_LITTLEFS
-  {"USB Mass Storage", 73},
+  {"LittleFS Manager", 71},               // LittleFS manager
+  {"Web file manager", 73},                 // Enable USB drive mode
   #endif
+  {"Storage Info", 72},
 
   // System / Maintenance
   {"System Update", 44},                  // Update system
@@ -224,13 +228,15 @@ menu settings_menu[] = {
 
   // Optional / advanced
   {"Skip EAPOL Check", 49},                // Skip EAPOL integrity check
-  {"Send bug report to dev", 123}
+  {"Send bug report to dev", 123},
+  {"Back", 255}                           // Back to main menu
 };
 
 
 menu gps_pins_menu[] = {
   {"Default Pins", 30},                   // Use default pins
-  {"Custom Pins", 31}                     // Set custom pins
+  {"Custom Pins", 31},                     // Set custom pins
+  {"Back", 255}
 };
 
 // menuID 8
@@ -241,7 +247,8 @@ menu pwngrid_menu[] = {
   {"Friends", 17},                        // Frends list
   {"Nothing to Send", 0},                 // No new captured networks to send
   {"Identity", 13},                       // View identity/fingerprint
-  {"Reset Identity", 15}                  // Reset pwngrid/fingerprint
+  {"Reset Identity", 15},                 // Reset pwngrid/fingerprint
+  {"Back", 255}
 };
 
 menu pwngrid_menu_to_send[] = {
@@ -251,11 +258,13 @@ menu pwngrid_menu_to_send[] = {
   {"Friends", 17},                        // Frends list
   {"Send pwn data", 26},                  // No new captured networks to send
   {"Identity", 13},                       // View identity/fingerprint
-  {"Reset Identity", 15}                  // Reset pwngrid/fingerprint
+  {"Reset Identity", 15},                 // Reset pwngrid/fingerprint
+  {"Back", 255}
 };
 
 menu pwngrid_not_enrolled_menu[] = {
-  {"Enroll Device", 12}                    // Enroll with Pwngrid
+  {"Enroll Device", 12},                    // Enroll with Pwngrid
+  {"Back", 255}
 };
 
 // devtools menu
@@ -272,7 +281,13 @@ menu devtools_menu[] = {
   {"Scan Speed Test", 109},                // Speed scan test
   {"Coordinate Picker", 110},              // Coordinate picker
   {"Mood Font Tester", 112},               // Test all text faces with font
-  {"Crash Test", 111}                      // Crash test
+  {"Crash Test", 111},                      // Crash test
+  {"Back", 255}
+};
+
+menu devtools_locked_menu[] = {
+  {"Unlock Dev Mode", 100},                // Unlock dev mode
+  {"Back", 255}
 };
 
 // menuID 9 
@@ -280,13 +295,15 @@ menu wardrivingMenuWithWiggle[] = {
   {"Start Wardriving", 18},                // Wardriving mode
   {"View Logs", 19},                       // View logs
   {"Upload to Wiggle", 28},                // Upload to Wiggle.net
-  {"Reset Wiggle Config", 27}              // Reset Wiggle.net config
+  {"Reset Wiggle Config", 27},              // Reset Wiggle.net config
+  {"Back", 255}
 };
 
 menu wardrivingMenuWithWiggleUnsett[] = {
   {"Start Wardriving", 18},                // Wardriving mode
   {"View Logs", 19},                       // View logs
-  {"Set Wiggle API Key", 25}               // Set up Wiggle.net api key
+  {"Set Wiggle API Key", 25},               // Set up Wiggle.net api key
+  {"Back", 255}
 };
 
 
@@ -470,7 +487,7 @@ void initUi() {
   }
   attachInterrupt(digitalPinToInterrupt(0), handleInterrupt, FALLING);
   xTaskCreate(buttonTask, "ButtonTask", 4096, NULL, 1, NULL);
-  crackedList = SD.exists("/pwngrid/cracks.conf");
+  crackedList = FSYS.exists("/pwngrid/cracks.conf");
   M5.Display.setRotation(1);
   M5.Display.setTextSize(1);
   M5.Display.fillScreen(bg_color_rgb565);
@@ -561,8 +578,11 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
     buttonDirty = false;
   }
 
+#ifndef BUTTON_ONLY_INPUT
   keyboard_changed = M5Cardputer.Keyboard.isChange();
-  if(keyboard_changed){Sound(10000, 100, sound);}       
+  M5Cardputer.update();
+  if(keyboard_changed){Sound(10000, 100, sound);}
+#endif       
   if (toggleMenuBtnPressed()) {
     debounceDelay();
     if(pwnagothiMode){
@@ -588,15 +608,15 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
   }
   
   if (menuID == 1) {
-    drawMenuList(main_menu, 1, 8);
+    drawMenuList(main_menu, 1, 10);
     prevMID = 1;
   } 
   else if (menuID == 2){
-    drawMenuList( wifi_menu , 2, 6);
+    drawMenuList( wifi_menu , 2, 7);
     prevMID = 2;
   }
   else if (menuID == 5){
-    drawMenuList( pwngotchi_menu , 5, 5);
+    drawMenuList( pwngotchi_menu , 5, 6);
     prevMID = 5;
   }
   else if (menuID == 6){
@@ -702,6 +722,11 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
 
         // Logging / Storage
         { val_11, 58 },        // SD Logging
+        #ifdef USE_LITTLEFS
+        {"LittleFS Manager", 71},               // LittleFS manager
+        {"Web file manager", 73},                 // Enable USB drive mode
+        #endif
+        {"Storage Info", 72},
 
         // System / Maintenance
         { "System Update", 44 },
@@ -713,35 +738,44 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
 
         // Optional / Advanced
         { val_12, 49 },         // Skip EAPOL Check
-        { "Send bug report to devs", 123 } // Send bug report
+        { "Send bug report to devs", 123 }, // Send bug report
+        { "Back", 255 }
     };
-    
-    drawMenuList( new_settings_menu , 6, 27);
+    #ifdef USE_LITTLEFS
+    drawMenuList( new_settings_menu , 6, 31);
+    #else
+    drawMenuList( new_settings_menu , 6, 29);
+    #endif
     prevMID = 6;
   }  
   else if (menuID == 7){
-    (wpa_sec_api_key.length()>5)?drawMenuList(wpasec_menu, 7, 3):drawMenuList(wpasec_setup_menu, 7, 1);
+    (wpa_sec_api_key.length()>5)?drawMenuList(wpasec_menu, 7, 4):drawMenuList(wpasec_setup_menu, 7, 2);
     prevMID = 7;
   }
   else if (menuID == 8){
-    if(!(prevMID == 8)){toUpload = SD.open("/pwngrid/cracks.conf");}
+    if(!(prevMID == 8)){toUpload = FSYS.open("/pwngrid/cracks.conf");}
     if((toUpload && toUpload.size() > 5) && (pwngrid_indentity.length()>10)){ 
-      drawMenuList(pwngrid_menu_to_send, 8, 7);
+      drawMenuList(pwngrid_menu_to_send, 8, 8);
     }
-    else (pwngrid_indentity.length()>10)? drawMenuList(pwngrid_menu, 8, 7): drawMenuList(pwngrid_not_enrolled_menu, 8, 1);
+    else (pwngrid_indentity.length()>10)? drawMenuList(pwngrid_menu, 8, 8): drawMenuList(pwngrid_not_enrolled_menu, 8, 2);
     prevMID = 8;
   }
   else if (menuID == 9){
     if(wiggle_api_key.length() > 5){
-      drawMenuList(wardrivingMenuWithWiggle, 9, 4);
+      drawMenuList(wardrivingMenuWithWiggle, 9, 5);
     }
     else{
-      drawMenuList(wardrivingMenuWithWiggleUnsett, 9, 3);
+      drawMenuList(wardrivingMenuWithWiggleUnsett, 9, 4);
     }
     prevMID = 9;
   }
   else if (menuID == 99) {
-    drawMenuList(devtools_menu, 99, dev_mode?13:1);
+    if(dev_mode){
+      drawMenuList(devtools_menu, 99, 13);
+    }
+    else{
+      drawMenuList(devtools_locked_menu, 99, 2);
+    }
     prevMID = 99;
   }
   else if (menuID == 0)
@@ -973,7 +1007,7 @@ void drawMood(String face, String phrase) {
         // Safe VLW Loading for Face
         // 1. Reset TextSize before loading VLW to prevent metric calculation errors
         canvas_main.setTextSize(1.0); 
-        canvas_main.loadFont(SD, "/fonts/big.vlw");
+        canvas_main.loadFont(FSYS, "/fonts/big.vlw");
         delay(50);
         
         // 2. Draw
@@ -1000,7 +1034,7 @@ void drawMood(String face, String phrase) {
     if(getPwngridTotalPeers() > 0){
         // Safe VLW Loading for Peers
         canvas_main.setTextSize(1.0); // Reset size BEFORE loading
-        canvas_main.loadFont(SD, "/fonts/small.vlw");
+        canvas_main.loadFont(FSYS, "/fonts/small.vlw");
         
         canvas_main.setTextSize(0.35); 
         
@@ -1224,7 +1258,7 @@ bool registerNewMessage(message newMess) {
 
   // load file or create new JSON
   JsonDocument doc;
-  File f = SD.open(path, FILE_READ);
+  File f = FSYS.open(path, FILE_READ);
   if (f) {
       DeserializationError err = deserializeJson(doc, f);
       f.close();
@@ -1249,7 +1283,7 @@ bool registerNewMessage(message newMess) {
   obj["outgoing"] = newMess.outgoing;
 
   // write back
-  File w = SD.open(path, FILE_WRITE);
+  File w = FSYS.open(path, FILE_WRITE);
   if (!w) return false;
   serializeJson(doc, w);
   w.close();
@@ -1267,9 +1301,9 @@ std::vector<message> loadMessageHistory(const String &unitName) {
     // Construct path safely
     String path = "/pwngrid/chats/" + unitName; // Hardcoded path is safer than String(BASE_DIR) + ...
     
-    if (!SD.exists(path)) return out;
+    if (!FSYS.exists(path)) return out;
 
-    File f = SD.open(path, FILE_READ);
+    File f = FSYS.open(path, FILE_READ);
     if (!f) return out;
 
     // SAFETY: Don't try to load massive files into RAM
@@ -1399,7 +1433,7 @@ String resolveChatFingerprint(const String &chatName, const std::vector<message>
   if (fp.length() > 10) return fp;
 
   // 2. Fall back to contacts.json (slow path, but only once)
-  File contacts = SD.open(ADDRES_BOOK_FILE, FILE_READ, false);
+  File contacts = FSYS.open(ADDRES_BOOK_FILE, FILE_READ, false);
   if (!contacts) return String();
 
   JsonDocument doc;
@@ -1433,7 +1467,7 @@ void pwngridMessenger() {
   }
 
   // 2. Setup Directory
-  if (!SD.exists("/pwngrid/chats")) SD.mkdir("/pwngrid/chats");
+  if (!FSYS.exists("/pwngrid/chats")) FSYS.mkdir("/pwngrid/chats");
 
   drawInfoBox("Please wait", "Syncing inbox", "with pwngrid...", false, false);
 
@@ -1448,7 +1482,7 @@ void pwngridMessenger() {
   // 3. Load Chat List (Safe Method)
   std::vector<String> chats;
   {
-      File dir = SD.open("/pwngrid/chats");
+      File dir = FSYS.open("/pwngrid/chats");
       if (dir) {
           dir.rewindDirectory();
           while (true) {
@@ -1480,7 +1514,7 @@ void pwngridMessenger() {
 
   // 4. Handle New Chat Creation
   if (result == (int)chats.size() - 1) {
-    File contacts = SD.open(ADDRES_BOOK_FILE, FILE_READ, false);
+    File contacts = FSYS.open(ADDRES_BOOK_FILE, FILE_READ, false);
     
     // FIX: Check validity and size, close if invalid
     if (!contacts || contacts.size() < 5) {
@@ -1527,7 +1561,7 @@ void pwngridMessenger() {
     }
 
     // Create file safely
-    File newChat = SD.open("/pwngrid/chats/" + names[result], FILE_WRITE, true);
+    File newChat = FSYS.open("/pwngrid/chats/" + names[result], FILE_WRITE, true);
     if(newChat) newChat.close();
     
     chats.push_back(names[result]);
@@ -1602,8 +1636,8 @@ void pwngridMessenger() {
     canvas_main.setTextSize(1);
     #ifdef BUTTON_ONLY_INPUT
     canvas_main.drawString(
-      typingMessage ? "ENTER:send  B:exit" :
-      "B:scroll  A:input  A long:delete",
+      typingMessage ? "A:send long A: edit B:exit" :
+      "A:input A long: Del B:scroll B long:exit",
       2, 102
     );
     #else
@@ -1618,10 +1652,10 @@ void pwngridMessenger() {
     inputManager::update();
     if (!typingMessage) {
       // prioritize long-press B as special action
-      if (inputManager::isButtonBLongPressed()) {
+      if (inputManager::isButtonALongPressed()) {
         // Delete chat
         if(drawQuestionBox("Delete chat?", "Are you sure?", "")){
-          SD.remove("/pwngrid/chats/" + chats[result]);
+          FSYS.remove("/pwngrid/chats/" + chats[result]);
           drawInfoBox("Info", "Chat deleted.", "", true, false);
           menuID = 8;
           debounceDelay();
@@ -1631,24 +1665,74 @@ void pwngridMessenger() {
         debounceDelay();
       }
 
+      if (inputManager::isButtonBLongPressed()) {
+        // Exit chat
+        stopPwngridInboxTask();
+        menuID = 8;
+        return;
+      }
+
       if (inputManager::isButtonBPressed()) {
         // Scroll
-        scroll--;
+        scroll++;
         delay(50);
+        if (scroll > maxScroll) scroll = 0;
         lastInboxSync = now;
       }
 
       if (inputManager::isButtonAPressed()) {
         // Toggle to input mode
+        textTyped = userInput("Type message:", "", 24);
         typingMessage = true;
         debounceDelay();
         lastInboxSync = now;
       }
     } else {
       // Input Mode
-      if (inputManager::isButtonBLongPressed()) {
+      if (inputManager::isButtonBPressed()) {
         // Exit input mode on long press
         typingMessage = false;
+        debounceDelay();
+      }
+      if (inputManager::isButtonAPressed()) {
+        // Send message
+        if (textTyped.length()) {
+          message msg = { chats[result], pwngrid_indentity, 0, textTyped, 0, true };
+          
+          canvas_main.setTextDatum(middle_center); canvas_main.setTextSize(2); 
+          canvas_main.fillRect(0, (canvas_h/2)-10, 250, 20, bg_color_rgb565); 
+          canvas_main.drawString("Sending...", canvas_center_x , canvas_h/2); 
+          pushAll();
+
+          bool msgSent = false;
+          
+          // Retry logic for sending
+          for(uint8_t i = 0; i < 2; i++){
+            if(api_client::sendMessageTo(chatFingerprint, textTyped)){
+              msgSent = true;
+              break;
+            }
+            delay(200);
+          }
+
+          if (msgSent) {
+            registerNewMessage(msg);
+            inboxDirty = true;
+          } else {
+            canvas_main.setTextDatum(middle_center); canvas_main.setTextSize(2); 
+            canvas_main.fillRect(0, (canvas_h/2)-10, 250, 20, bg_color_rgb565); 
+            canvas_main.drawString("Send failed!", canvas_center_x , canvas_h/2); 
+            pushAll();
+            delay(2000); // Shorter delay than 3000
+          }
+          
+          textTyped = "";
+          typingMessage = false;
+        }
+      }
+      if(inputManager::isButtonALongPressed()){
+        // Edit typed text
+        textTyped = userInput("Edit message:", textTyped, 24);
         debounceDelay();
       }
     }
@@ -1663,7 +1747,7 @@ void pwngridMessenger() {
           
           if (c == 'd') {
             if(drawQuestionBox("Delete chat?", "Are you sure?", "")){
-              SD.remove("/pwngrid/chats/" + chats[result]);
+              FSYS.remove("/pwngrid/chats/" + chats[result]);
               drawInfoBox("Info", "Chat deleted.", "", true, false);
               menuID = 8;
               debounceDelay();
@@ -1736,7 +1820,7 @@ String isoTimestampToDateTimeString(String isoTimestamp) {
 }
 
 bool addUnitToAddressBook(const unit u) {
-    File file = SD.open(ADDRES_BOOK_FILE, FILE_READ);
+    File file = FSYS.open(ADDRES_BOOK_FILE, FILE_READ);
     if (!file) {
         logMessage("Failed to open address book for reading.");
         return false;
@@ -1766,7 +1850,7 @@ bool addUnitToAddressBook(const unit u) {
     serializeUnit(u, newObj);
 
     // Write back to file
-    file = SD.open(ADDRES_BOOK_FILE, FILE_WRITE);
+    file = FSYS.open(ADDRES_BOOK_FILE, FILE_WRITE);
     if (!file) {
         logMessage("Failed to open address book for writing.");
         return false;
@@ -1784,6 +1868,14 @@ void runApp(uint8_t appID){
   menu_current_opt = 0;
   menu_current_page = 1;
   if(appID){
+    if(appID == 255){
+      if(menuID != 1){
+        menuID = 1;
+      }
+      else{
+        menuID = 0;
+      }
+    }
     if(appID == 1){
       drawHintBox("For all features of manual mode to work, wifi will always disconnect before entering menu.", 4);
       if(WiFi.status() == WL_CONNECTED){
@@ -1867,8 +1959,8 @@ void runApp(uint8_t appID){
         }
       }
       api_client::init(KEYS_FILE);
-      File contacts = SD.open(ADDRES_BOOK_FILE, FILE_READ);
-      if(!SD.open(ADDRES_BOOK_FILE)){
+      File contacts = FSYS.open(ADDRES_BOOK_FILE, FILE_READ);
+      if(!FSYS.open(ADDRES_BOOK_FILE)){
         drawInfoBox("ERROR", "No frends found.", "Meet and add one.", true, false);
       }
       JsonDocument contacts_json;
@@ -1924,10 +2016,10 @@ void runApp(uint8_t appID){
       }
       drawHintBox("Depending on network and device speed, enrollment may take several minutes or even fail.", 10);
       drawInfoBox("Init", "Initializing keys...", "This may take a while.", false, false);
-      SD.mkdir("/pwngrid");
-      SD.mkdir("/pwngrid/keys");
-      SD.mkdir("/pwngrid/chats");
-      File cont = SD.open(ADDRES_BOOK_FILE, FILE_WRITE);
+      FSYS.mkdir("/pwngrid");
+      FSYS.mkdir("/pwngrid/keys");
+      FSYS.mkdir("/pwngrid/chats");
+      File cont = FSYS.open(ADDRES_BOOK_FILE, FILE_WRITE);
       cont.print("[]");
       cont.flush();
       cont.close();
@@ -2012,6 +2104,53 @@ void runApp(uint8_t appID){
       drawLittleFSManager();
       menuID = 6; // return to settings
     }
+    if (appID == 72) {
+      debounceDelay();
+      // Storage info screen
+      drawStorageInfo();
+      menuID = 6; // return to settings
+    }
+    if (appID == 73) {
+      //check for wifi and connect to it if not connected
+      if(!(WiFi.status() == WL_CONNECTED)){
+        drawInfoBox("Info", "Network connection needed", "To start server!", false, false);
+        delay(3000);
+        runApp(43);
+        if(WiFi.status() != WL_CONNECTED){
+          drawInfoBox("ERROR!", "No network connection", "Operation abort!", true, false);
+          menuID = 6;
+          return;
+        }
+      }
+      debounceDelay();
+      bool enable_usb = drawQuestionBox("Web file manager", "Start server?", "WiFi needs to be connected.");
+      if (enable_usb) {
+        if (USBMassStorage::begin(18, 20)) {
+          #ifdef BUTTON_ONLY_INPUT
+          drawInfoBox("Server Enabled", "Goto " + WiFi.localIP().toString() + ":8080", "to access files. Hold B to exit.", false, false);
+          delay(3000);
+          logMessage(WiFi.localIP().toString() + " entered USB mass storage mode");
+          while(!inputManager::isButtonBLongPressed()){
+            M5.update();
+            inputManager::update();
+          }
+          #else
+          drawInfoBox("Server Enabled", "Goto " + WiFi.localIP().toString() + ":8080", "to access files. Press ENTER to exit.", false, false);
+          delay(3000);
+          logMessage(WiFi.localIP().toString() + " entered USB mass storage mode");
+          while(!M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER)){
+            M5.update();
+            M5Cardputer.update();
+          }
+          #endif
+          USBMassStorage::end();
+          drawInfoBox("Server disabled", "", "", true, false);
+        } else {
+          drawInfoBox("Error", "Failed to enable. ", "", true, false);
+        }
+      }
+      menuID = 6;
+    }
     if(appID == 14){
       if(!pwnagothiMode){
         bool answear = drawQuestionBox("CONFIRMATION", "Operate only if you ", "have premision!");
@@ -2072,25 +2211,25 @@ void runApp(uint8_t appID){
         canvas_main.drawString("Deletion in progress, please wait...", canvas_center_x, (canvas_h*6)/7);
         pushAll();
         //TODO: Deletion of all pwngrid files
-        SD.remove("/pwngrid/keys/id_rsa");
-        SD.remove("/pwngrid/keys/id_rsa.pub");
-        SD.remove("/pwngrid/token.json");
-        SD.remove(ADDRES_BOOK_FILE);
-        SD.rmdir("/pwngrid/keys");
-        SD.rmdir("/pwngrid/chats");
-        SD.remove("/pwngrid/cracks.conf");
-        File chatsDis = SD.open("/pwngrid/chats");
+        FSYS.remove("/pwngrid/keys/id_rsa");
+        FSYS.remove("/pwngrid/keys/id_rsa.pub");
+        FSYS.remove("/pwngrid/token.json");
+        FSYS.remove(ADDRES_BOOK_FILE);
+        FSYS.rmdir("/pwngrid/keys");
+        FSYS.rmdir("/pwngrid/chats");
+        FSYS.remove("/pwngrid/cracks.conf");
+        File chatsDis = FSYS.open("/pwngrid/chats");
         while(true){
           String nextFileName = chatsDis.getNextFileName();
           if(nextFileName.length()>8){
-            SD.remove(nextFileName);
+            FSYS.remove(nextFileName);
           }
           else{
             break;
           }
         }
         chatsDis.close();
-        SD.rmdir("/pwngrid");
+        FSYS.rmdir("/pwngrid");
         lastTokenRefresh = 0;
 
         delay(5000);
@@ -2131,7 +2270,7 @@ void runApp(uint8_t appID){
       canvas_main.clear(bg_color_rgb565);
       canvas_main.setTextSize(0.4);
       canvas_main.setTextDatum(middle_center);
-      canvas_main.loadFont(SD, "/fonts/small.vlw");
+      canvas_main.loadFont(FSYS, "/fonts/small.vlw");
       canvas_main.drawString(peers_list[choice].face, canvas_center_x, canvas_h / 8);
       canvas_main.unloadFont();
       canvas_main.setTextSize(1.5);
@@ -2151,7 +2290,8 @@ void runApp(uint8_t appID){
         canvas_main.drawRect(200, canvas_h - 37, 27, 15, (current_option == 2)? tx_color_rgb565: bg_color_rgb565);
         pushAll();
         M5.update();
-        M5.update();
+#ifndef BUTTON_ONLY_INPUT
+        M5Cardputer.update();
         auto keys_status = M5Cardputer.Keyboard.keysState();
         auto keyboard_changed = M5Cardputer.Keyboard.isChange();
         if(keyboard_changed){Sound(10000, 100, sound);}
@@ -2166,6 +2306,14 @@ void runApp(uint8_t appID){
           }
         }
         if(keys_status.enter){
+#else
+        inputManager::update();
+        if (inputManager::isButtonBPressed()) {
+          (current_option == 2)? current_option = 0: current_option++;
+          debounceDelay();
+        }
+        if (isOkPressed()) {
+#endif
           if(current_option == 2){
             menuID = 8;
             debounceDelay();
@@ -2174,7 +2322,7 @@ void runApp(uint8_t appID){
           if(current_option == 0){
             debounceDelay();
             // Open contacts file for reading and parse JSON into a vector
-            File contactsFile = SD.open(ADDRES_BOOK_FILE, FILE_READ);
+            File contactsFile = FSYS.open(ADDRES_BOOK_FILE, FILE_READ);
             unit newPeer = {peers_list[choice].name, peers_list[choice].identity};
                   
             if (contactsFile) {
@@ -2194,7 +2342,7 @@ void runApp(uint8_t appID){
                 contactsFile.close();  // Close the file first
               
                 // Reopen the file in write mode to overwrite
-                contactsFile = SD.open(ADDRES_BOOK_FILE, FILE_WRITE);
+                contactsFile = FSYS.open(ADDRES_BOOK_FILE, FILE_WRITE);
                 contactsFile.print(out); 
                 contactsFile.flush();
                 contactsFile.close();
@@ -2213,7 +2361,7 @@ void runApp(uint8_t appID){
               // Write the new JSON to file
               String out;
               serializeJsonPretty(doc, out);
-              contactsFile = SD.open(ADDRES_BOOK_FILE, FILE_WRITE);
+              contactsFile = FSYS.open(ADDRES_BOOK_FILE, FILE_WRITE);
               contactsFile.print(out);
               contactsFile.flush();
               contactsFile.close();
@@ -2261,7 +2409,7 @@ void runApp(uint8_t appID){
     if(appID == 17){
       debounceDelay();
 
-      File contacts = SD.open(ADDRES_BOOK_FILE, FILE_READ, true);
+      File contacts = FSYS.open(ADDRES_BOOK_FILE, FILE_READ, true);
       if (!contacts) {
           logMessage("Failed to open contacts file");
           menuID = 8;
@@ -2391,7 +2539,7 @@ void runApp(uint8_t appID){
         }
         debounceDelay();
         // Open contacts file for reading and parse JSON into a vector
-        File contactsFile = SD.open(ADDRES_BOOK_FILE, FILE_READ);
+        File contactsFile = FSYS.open(ADDRES_BOOK_FILE, FILE_READ);
         unit newPeer = {name, fingerprint};
               
         if (contactsFile) {
@@ -2409,7 +2557,7 @@ void runApp(uint8_t appID){
             contactsFile.close();  // Close the file first
           
             // Reopen the file in write mode to overwrite
-            contactsFile = SD.open(ADDRES_BOOK_FILE, FILE_WRITE);
+            contactsFile = FSYS.open(ADDRES_BOOK_FILE, FILE_WRITE);
             contactsFile.print(out); 
             contactsFile.flush();
             contactsFile.close();
@@ -2428,7 +2576,7 @@ void runApp(uint8_t appID){
           // Write the new JSON to file
           String out;
           serializeJsonPretty(doc, out);
-          contactsFile = SD.open(ADDRES_BOOK_FILE, FILE_WRITE);
+          contactsFile = FSYS.open(ADDRES_BOOK_FILE, FILE_WRITE);
           contactsFile.print(out);
           contactsFile.flush();
           contactsFile.close();
@@ -2460,7 +2608,8 @@ void runApp(uint8_t appID){
         (current_option == 1) ? canvas_main.drawRect(165, canvas_h - 37, 35, 15, tx_color_rgb565): void();
         pushAll();
         M5.update();
-        M5.update();
+#ifndef BUTTON_ONLY_INPUT
+        M5Cardputer.update();
         auto keys_status = M5Cardputer.Keyboard.keysState();
         auto keyboard_changed = M5Cardputer.Keyboard.isChange();
         if(keyboard_changed){Sound(10000, 100, sound);}
@@ -2475,6 +2624,14 @@ void runApp(uint8_t appID){
           }
         }
         if(keys_status.enter){
+#else
+        inputManager::update();
+        if (inputManager::isButtonBPressed()) {
+          (current_option == 1)? current_option = 0: current_option++;
+          debounceDelay();
+        }
+        if(inputManager::isButtonAPressed()){
+#endif
           if(current_option == 1){
             menuID = 8;
             return;
@@ -2482,7 +2639,7 @@ void runApp(uint8_t appID){
           if (current_option == 0) {
             debounceDelay();
 
-            File contactsFile = SD.open(ADDRES_BOOK_FILE, FILE_READ);
+            File contactsFile = FSYS.open(ADDRES_BOOK_FILE, FILE_READ);
             unit peerToDelete = {contacts_vector[result].name, contacts_vector[result].fingerprint};
 
             if (contactsFile) {
@@ -2506,7 +2663,7 @@ void runApp(uint8_t appID){
                     }
                   
                     // write back
-                    File outFile = SD.open(ADDRES_BOOK_FILE, FILE_WRITE);
+                    File outFile = FSYS.open(ADDRES_BOOK_FILE, FILE_WRITE);
                     if (outFile) {
                         serializeJsonPretty(doc, outFile);
                         outFile.close();
@@ -2546,7 +2703,8 @@ void runApp(uint8_t appID){
       pushAll();
       while(true){
         M5.update();
-        M5.update();
+#ifndef BUTTON_ONLY_INPUT
+        M5Cardputer.update();
         auto keysState = M5Cardputer.Keyboard.keysState();
         for(auto i : keysState.word){
           if(i=='`'){
@@ -2560,6 +2718,19 @@ void runApp(uint8_t appID){
             return;
           }
         }
+#else
+        inputManager::update();
+        if(inputManager::isButtonBLongPressed()){
+          logMessage("Wardriver stopped by user");
+          canvas_main.clear(bg_color_rgb565);
+          canvas_main.setTextSize(1.5);
+          canvas_main.setTextDatum(middle_center);
+          canvas_main.drawString("Exited!", canvas_center_x, canvas_h/2);
+          pushAll();
+          menuID = 9;
+          return;
+        }
+#endif
         speedScan();
         canvas_main.drawString("Scan complete, getting GPS fix...", 5, 27);
         std::vector<wifiSpeedScan> results = getSpeedScanResults();
@@ -2600,6 +2771,8 @@ void runApp(uint8_t appID){
       menuID = 9;
       return;
     }
+    // IMPROVED VERSION - Replace lines 2774-3208 in src/ui.cpp
+
     if(appID == 19){
       drawHintBox("This app is VERY slow due to complexity of whole csv parsing. Please be patient or use only for searching", 14);
       File csvFile;
@@ -2614,10 +2787,10 @@ void runApp(uint8_t appID){
       }
       if(fileChoice == 0){
         selectedPath = sdmanager::selectFile(".csv");
-        csvFile = SD.open(selectedPath, FILE_READ);
+        csvFile = FSYS.open(selectedPath, FILE_READ);
       }
       else {
-        csvFile = SD.open("/wardriving/first_seen.csv", FILE_READ);
+        csvFile = FSYS.open("/wardriving/first_seen.csv", FILE_READ);
       }
       if (!csvFile) {
         drawInfoBox("Error", "File not found", "Wrong selection?", true, false);
@@ -2638,15 +2811,15 @@ void runApp(uint8_t appID){
       csvFile.close();
 
       if (totalLines < 3) {
-      drawInfoBox("Info", "CSV file is empty or invalid", "", true, false);
-      menuID = 9;
-      return;
+        drawInfoBox("Info", "CSV file is empty or invalid", "", true, false);
+        menuID = 9;
+        return;
       }
       
       // Function to read a specific line from file without storing all lines
       auto readLineAtIndex = [&](uint32_t lineIndex) -> String {
         String result = "";
-        File f = SD.open(selectedPath, FILE_READ);
+        File f = FSYS.open(selectedPath, FILE_READ);
         if (!f) return result;
         
         uint32_t currentLine = 0;
@@ -2667,7 +2840,6 @@ void runApp(uint8_t appID){
         return result;
       };
 
-
       // Parse CSV helper function
       auto parseCSVLine = [](const String& csvLine) -> std::vector<String> {
         std::vector<String> fields;
@@ -2676,16 +2848,33 @@ void runApp(uint8_t appID){
         for (size_t i = 0; i < csvLine.length(); i++) {
           char c = csvLine[i];
           if (c == '"') {
-          inQuotes = !inQuotes;
+            inQuotes = !inQuotes;
           } else if (c == ',' && !inQuotes) {
-          fields.push_back(field);
-          field = "";
+            fields.push_back(field);
+            field = "";
           } else {
-          field += c;
+            field += c;
           }
-      }
-      fields.push_back(field);
-      return fields;
+        }
+        fields.push_back(field);
+        return fields;
+      };
+
+      // Helper to get context-aware button instructions
+      auto getButtonHints = [](bool isSearchMode) -> String {
+        #ifdef BUTTON_ONLY_INPUT
+          if (isSearchMode) {
+            return "A:char B-:del A-:search B--:cancel";
+          } else {
+            return "A:down B:search A--:detail B--:back";
+          }
+        #else
+          if (isSearchMode) {
+            return "[DEL] clear, [ENTER] search, [`] cancel";
+          } else {
+            return "[/]next [,]prev [S]search [ENTER]details [`]back";
+          }
+        #endif
       };
 
       String searchTerm = "";
@@ -2702,285 +2891,359 @@ void runApp(uint8_t appID){
       int sectionH = 70;
 
       while (true) {
-      M5.update();
-      M5.update();
-      
-      if (searching) {
-        drawTopCanvas();
-        drawBottomCanvas();
-        canvas_main.fillSprite(bg_color_rgb565);
-        canvas_main.setTextSize(2);
-        canvas_main.setTextColor(tx_color_rgb565);
-        canvas_main.setTextDatum(middle_center);
-        canvas_main.drawString("Search CSV", canvas_center_x, canvas_h / 6);
-        canvas_main.setTextSize(1.2);
-        canvas_main.drawString("SSID/BSSID:", canvas_center_x, canvas_h / 3);
-        canvas_main.setTextSize(1.5);
-        canvas_main.drawString(searchTerm, canvas_center_x, canvas_h / 2);
-        canvas_main.setTextSize(1);
-        canvas_main.drawString("[DEL] clear, [ENTER] search, [`] cancel", canvas_center_x, canvas_h * 0.9);
-        pushAll();
+        M5.update();
+        #ifndef BUTTON_ONLY_INPUT
+        M5Cardputer.update();
+        #endif
         
-        keyboard_changed = M5Cardputer.Keyboard.isChange();
-        if(keyboard_changed){Sound(10000, 100, sound);}
-        Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
-        uint32_t now = millis();
-        
-        for (auto k : status.word) {
-          if (k == '`') {
+        if (searching) {
+          #ifdef BUTTON_ONLY_INPUT
+          searchTerm = userInput("Search CSV", "Enter SSID or BSSID to search:", 32);
+          #endif
+          drawTopCanvas();
+          drawBottomCanvas();
+          canvas_main.fillSprite(bg_color_rgb565);
+          canvas_main.setTextSize(2);
+          canvas_main.setTextColor(tx_color_rgb565);
+          canvas_main.setTextDatum(middle_center);
+          canvas_main.drawString("Search CSV", canvas_center_x, canvas_h / 6);
+          canvas_main.setTextSize(1.2);
+          canvas_main.drawString("SSID/BSSID:", canvas_center_x, canvas_h / 3);
+          canvas_main.setTextSize(1.5);
+          canvas_main.drawString(searchTerm, canvas_center_x, canvas_h / 2);
+          canvas_main.setTextSize(1);
+          canvas_main.setTextDatum(middle_center);
+          canvas_main.drawString(getButtonHints(true), canvas_center_x, canvas_h * 0.9);
+          pushAll();
+          
+    #ifndef BUTTON_ONLY_INPUT
+          M5Cardputer.update();
+          keyboard_changed = M5Cardputer.Keyboard.isChange();
+          if(keyboard_changed){Sound(10000, 100, sound);}
+          Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
+          uint32_t now = millis();
+          
+          for (auto k : status.word) {
+            if (k == '`') {
+              searching = false;
+              debounceDelay();
+              break;
+            }
+            searchTerm += k;
+            lastSearchTime = now;
+            debounceDelay();
+          }
+          if (status.del && searchTerm.length() > 0) {
+            searchTerm.remove(searchTerm.length() - 1);
+            lastSearchTime = now;
+            debounceDelay();
+          }
+          if (status.enter) {
+    #else
+          
+          inputManager::update();
+          uint32_t now = millis();
+          
+          // Long press B to cancel search
+          if (inputManager::isButtonBLongPressed()) {
             searching = false;
             debounceDelay();
-            break;
           }
-          searchTerm += k;
-          lastSearchTime = now;
-          debounceDelay();
-        }
-        if (status.del && searchTerm.length() > 0) {
-          searchTerm.remove(searchTerm.length() - 1);
-          lastSearchTime = now;
-          debounceDelay();
-        }
-        if (status.enter) {
-          drawInfoBox("Searching...", "Filtering results", "Please wait", false, false);
-          filteredIndices.clear();
-          String lowerSearch = searchTerm;
-          lowerSearch.toLowerCase();
-          
-          // Optimized: Read file once and parse line by line
-          File csvFile = SD.open("/wardrive.csv", FILE_READ);
-          if (csvFile) {
-            uint32_t currentLine = 0;
-            String line = "";
-            char c;
+          // Short press B to delete last character
+          else if (inputManager::isButtonBPressed() && searchTerm.length() > 0) {
+            searchTerm.remove(searchTerm.length() - 1);
+            lastSearchTime = now;
+            debounceDelay();
+          }
+          // Long press A to execute search
+          else if (true) {
+    #endif
+            drawInfoBox("Searching...", "Filtering results", "Please wait", false, false);
+            filteredIndices.clear();
+            String lowerSearch = searchTerm;
+            lowerSearch.toLowerCase();
             
-            while (csvFile.available()) {
-              c = csvFile.read();
+            // Optimized: Read file once and parse line by line
+            File csvFile = FSYS.open("/wardrive.csv", FILE_READ);
+            if (csvFile) {
+              uint32_t currentLine = 0;
+              String line = "";
+              char c;
               
-              if (c == '\n' || c == '\r') {
-                // Process complete line
-                if (currentLine >= 2 && line.length() > 0) {
-                  String lowerLine = line;
-                  lowerLine.toLowerCase();
-                  if (lowerLine.indexOf(lowerSearch) >= 0) {
-                    filteredIndices.push_back(currentLine);
-                  }
-                }
-                line = "";
-                currentLine++;
+              while (csvFile.available()) {
+                c = csvFile.read();
                 
-                // Skip extra newlines/carriage returns
-                if (c == '\r' && csvFile.available() && csvFile.peek() == '\n') {
-                  csvFile.read();
+                if (c == '\n' || c == '\r') {
+                  // Process complete line
+                  if (currentLine >= 2 && line.length() > 0) {
+                    String lowerLine = line;
+                    lowerLine.toLowerCase();
+                    if (lowerLine.indexOf(lowerSearch) >= 0) {
+                      filteredIndices.push_back(currentLine);
+                    }
+                  }
+                  line = "";
+                  currentLine++;
+                  
+                  // Skip extra newlines/carriage returns
+                  if (c == '\r' && csvFile.available() && csvFile.peek() == '\n') {
+                    csvFile.read();
+                  }
+                } else {
+                  line += c;
                 }
-              } else {
-                line += c;
               }
+              
+              // Don't forget the last line if file doesn't end with newline
+              if (line.length() > 0 && currentLine >= 2) {
+                String lowerLine = line;
+                lowerLine.toLowerCase();
+                if (lowerLine.indexOf(lowerSearch) >= 0) {
+                  filteredIndices.push_back(currentLine);
+                }
+              }
+              
+              csvFile.close();
             }
             
-            // Don't forget the last line if file doesn't end with newline
-            if (line.length() > 0 && currentLine >= 2) {
-              String lowerLine = line;
-              lowerLine.toLowerCase();
-              if (lowerLine.indexOf(lowerSearch) >= 0) {
-                filteredIndices.push_back(currentLine);
-              }
-            }
-            
-            csvFile.close();
+            displayIndex = 0;
+            selectedIndex = 0;
+            searching = false;
+            debounceDelay();
+    #ifndef BUTTON_ONLY_INPUT
           }
-          
-          displayIndex = 0;
-          selectedIndex = 0;
-          searching = false;
-          debounceDelay();
-        }
-      } else {
-        drawTopCanvas();
-        drawBottomCanvas();
-        canvas_main.fillSprite(bg_color_rgb565);
-        canvas_main.setTextSize(1);
-        canvas_main.setTextColor(tx_color_rgb565);
-        canvas_main.setTextDatum(top_left);
-        
-        int totalEntries = filteredIndices.empty() ? (totalLines - 2) : filteredIndices.size();
-        int currentPage = (displayIndex / 4) + 1;
-        int totalPages = (totalEntries + 3) / 4;
-        canvas_main.setTextSize(2);
-        canvas_main.drawString("Wardriving db viewer", 1, 3);
-        canvas_main.setTextSize(1);
-        canvas_main.setTextDatum(middle_center);
-        canvas_main.drawString("Page " + String(currentPage) + "/" + String(totalPages) + " | Entries: " + String(totalEntries), canvas_center_x, canvas_h - 18);
-        canvas_main.setTextDatum(top_left);
-        // Draw table header
-        canvas_main.setTextSize(1);
-        int headerY = 22;
-        int col1X = 5;
-        int col2X = 120;
-        int scrollbarX = displayW - 8;
-        canvas_main.drawLine(col1X, headerY + 12, displayW - 15, headerY + 12, tx_color_rgb565);
-        canvas_main.drawString("SSID", col1X, headerY);
-        canvas_main.drawString("BSSID", col2X, headerY);
-        
-        // Draw entries
-        int rowHeight = 12;
-        int rowY = headerY + 16;
-        int visibleRows = 4;
-        
-        for (int i = 0; i < visibleRows && (displayIndex + i) < totalEntries; i++) {
-        int csvIdx = filteredIndices.empty() ? (displayIndex + i + 2) : filteredIndices[displayIndex + i];
-        String csvLine = readLineAtIndex(csvIdx);
-        auto fields = parseCSVLine(csvLine);
-        
-        if (fields.size() < 6) continue;
-        
-        String ssid = fields[1];
-        String mac = fields[0];
-        
-        // Truncate SSID for display
-        if (ssid.length() > 18) ssid = ssid.substring(0, 15) + "...";
-        // Truncate MAC for display
-        if (mac.length() > 17) mac = mac.substring(0, 14) + "...";
-        
-        // Highlight selected row
-        if (selectedIndex == (displayIndex + i)) {
-          canvas_main.fillRect(col1X - 3, rowY - 2, displayW - 15, rowHeight, tx_color_rgb565);
-          canvas_main.setTextColor(bg_color_rgb565);
-          canvas_main.drawString(">", col1X - 5, rowY);
-          canvas_main.drawString(ssid, col1X, rowY);
-          canvas_main.drawString(mac, col2X, rowY);
-          canvas_main.setTextColor(tx_color_rgb565);
+    #else
+          }
+          // Short press A to add character (keyboard mode would handle this)
+    #endif
         } else {
-          canvas_main.drawString(ssid, col1X, rowY);
-          canvas_main.drawString(mac, col2X, rowY);
-        }
-        
-        rowY += rowHeight;
-        }
-        
-        // Draw scrollbar
-        int scrollbarY = headerY + 14;
-        int scrollbarHeight = visibleRows * rowHeight;
-        canvas_main.drawLine(scrollbarX, scrollbarY, scrollbarX, scrollbarY + scrollbarHeight, tx_color_rgb565);
-        
-        if (totalEntries > visibleRows) {
-          float scrollRatio = (float)displayIndex / (totalEntries - visibleRows);
-          int thumbHeight = max(5, (scrollbarHeight * visibleRows) / totalEntries);
-          int thumbY = scrollbarY + (int)((scrollbarHeight - thumbHeight) * scrollRatio);
-          canvas_main.fillRect(scrollbarX - 2, thumbY, 4, thumbHeight, tx_color_rgb565);
-        }
-        
-        canvas_main.drawString("[/]next [,]prev [S]search [ENTER]details [`]back", 0, canvas_h - 10);
-        pushAll();
-        
-        keyboard_changed = M5Cardputer.Keyboard.isChange();
-        if(keyboard_changed){Sound(10000, 100, sound);}
-        Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
-        
-        for (auto k : status.word) {
-        if (k == 's' || k == 'S') {
-          searchTerm = "";
-          searching = true;
-          lastSearchTime = millis();
-          debounceDelay();
-          break;
-        }
-        if (k == '`') {
-          menuID = 9;
-          return;
-        }
-        }
-        
-        if (status.word.size() > 0) {
-        for (auto k : status.word) {
-          if (k == '/') {
-          if ((displayIndex + 4) < totalEntries) {
-        displayIndex += 4;
-        selectedIndex = displayIndex;
-          }
-          debounceDelay();
-          }
-          if (k == ',') {
-          if (displayIndex > 0) {
-        displayIndex = (displayIndex >= 4) ? displayIndex - 4 : 0;
-        selectedIndex = displayIndex;
-          }
-          debounceDelay();
-          }
-          if (k == '.') {
-          if (selectedIndex < (totalEntries - 1)) {
-        selectedIndex++;
-        if (selectedIndex >= (displayIndex + 4)) displayIndex = selectedIndex - 3;
-          }
-          debounceDelay();
-          }
-          if (k == ';') {
-          if (selectedIndex > 0) {
-        selectedIndex--;
-        if (selectedIndex < displayIndex) displayIndex = selectedIndex;
-          }
-          debounceDelay();
-          }
-        }
-        }
-        
-        if (status.enter) {
-        int csvIdx = filteredIndices.empty() ? (selectedIndex + 2) : filteredIndices[selectedIndex];
-        String csvLine = readLineAtIndex(csvIdx);
-        auto fields = parseCSVLine(csvLine);
-        
-        if (fields.size() >= 9) {
-          String ssid = fields[1];
-          String bssid = fields[0];
-          String authMode = (fields.size() > 2) ? fields[2] : "N/A";
-          String channel = (fields.size() > 4) ? fields[4] : "N/A";
-          String rssi = (fields.size() > 5) ? fields[6] : "N/A";
-          String lat = (fields.size() > 6) ? fields[7] : "N/A";
-          String lon = (fields.size() > 7) ? fields[8] : "N/A";
+          drawTopCanvas();
+          drawBottomCanvas();
+          canvas_main.fillSprite(bg_color_rgb565);
+          canvas_main.setTextSize(1);
+          canvas_main.setTextColor(tx_color_rgb565);
+          canvas_main.setTextDatum(top_left);
           
-          debounceDelay();
-            drawTopCanvas();
-            drawBottomCanvas();
-            canvas_main.fillSprite(bg_color_rgb565);
-            canvas_main.setTextSize(2);
-            canvas_main.setTextColor(tx_color_rgb565);
-            canvas_main.setTextDatum(middle_center);
-            canvas_main.drawString(ssid, canvas_center_x, 15);
+          int totalEntries = filteredIndices.empty() ? (totalLines - 2) : filteredIndices.size();
+          int currentPage = (displayIndex / 4) + 1;
+          int totalPages = (totalEntries + 3) / 4;
+          canvas_main.setTextSize(2);
+          canvas_main.drawString("Wardriving db viewer", 1, 3);
+          canvas_main.setTextSize(1);
+          canvas_main.setTextDatum(middle_center);
+          canvas_main.drawString("Page " + String(currentPage) + "/" + String(totalPages) + " | Entries: " + String(totalEntries), canvas_center_x, canvas_h - 18);
+          canvas_main.setTextDatum(top_left);
+          // Draw table header
+          canvas_main.setTextSize(1);
+          int headerY = 22;
+          int col1X = 5;
+          int col2X = 120;
+          int scrollbarX = displayW - 8;
+          canvas_main.drawLine(col1X, headerY + 12, displayW - 15, headerY + 12, tx_color_rgb565);
+          canvas_main.drawString("SSID", col1X, headerY);
+          canvas_main.drawString("BSSID", col2X, headerY);
+          
+          // Draw entries
+          int rowHeight = 12;
+          int rowY = headerY + 16;
+          int visibleRows = 4;
+          
+          for (int i = 0; i < visibleRows && (displayIndex + i) < totalEntries; i++) {
+            int csvIdx = filteredIndices.empty() ? (displayIndex + i + 2) : filteredIndices[displayIndex + i];
+            String csvLine = readLineAtIndex(csvIdx);
+            auto fields = parseCSVLine(csvLine);
             
-            canvas_main.setTextSize(1);
-            canvas_main.setTextDatum(top_left);
-            canvas_main.drawString("BSSID: " + bssid, 5, 25);
-            canvas_main.drawString("Channel: " + channel, 5, 35);
-            canvas_main.drawString("RSSI: " + rssi + " dBm", 5, 45);
+            if (fields.size() < 6) continue;
             
-            if(fields.size() > 2) canvas_main.drawString("Auth: " + authMode, 5, 55);
-            if(fields.size() > 6) {
-            canvas_main.drawString("Lat: " + lat, 5, 65);
-            canvas_main.drawString("Lon: " + lon, 5, 75);
+            String ssid = fields[1];
+            String mac = fields[0];
+            
+            // Truncate SSID for display
+            if (ssid.length() > 18) ssid = ssid.substring(0, 15) + "...";
+            // Truncate MAC for display
+            if (mac.length() > 17) mac = mac.substring(0, 14) + "...";
+            
+            // Highlight selected row
+            if (selectedIndex == (displayIndex + i)) {
+              canvas_main.fillRect(col1X - 3, rowY - 2, displayW - 15, rowHeight, tx_color_rgb565);
+              canvas_main.setTextColor(bg_color_rgb565);
+              canvas_main.drawString(">", col1X - 5, rowY);
+              canvas_main.drawString(ssid, col1X, rowY);
+              canvas_main.drawString(mac, col2X, rowY);
+              canvas_main.setTextColor(tx_color_rgb565);
+            } else {
+              canvas_main.drawString(ssid, col1X, rowY);
+              canvas_main.drawString(mac, col2X, rowY);
             }
             
-            canvas_main.setTextSize(1);
-            canvas_main.setTextDatum(middle_center);
-            canvas_main.drawString("[ENTER] back to list", canvas_center_x, canvas_h - 10);
-            
-            pushAll();
-            
-            while(true) {
-            M5.update();
-            M5.update();
-            keyboard_changed = M5Cardputer.Keyboard.isChange();
-            if(keyboard_changed){Sound(10000, 100, sound);}
-            Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
-            if(status.enter) break;
-            for(auto k : status.word) {
-              if(k == '`') break;
+            rowY += rowHeight;
+          }
+          
+          // Draw scrollbar
+          int scrollbarY = headerY + 14;
+          int scrollbarHeight = visibleRows * rowHeight;
+          canvas_main.drawLine(scrollbarX, scrollbarY, scrollbarX, scrollbarY + scrollbarHeight, tx_color_rgb565);
+          
+          if (totalEntries > visibleRows) {
+            float scrollRatio = (float)displayIndex / (totalEntries - visibleRows);
+            int thumbHeight = max(5, (scrollbarHeight * visibleRows) / totalEntries);
+            int thumbY = scrollbarY + (int)((scrollbarHeight - thumbHeight) * scrollRatio);
+            canvas_main.fillRect(scrollbarX - 2, thumbY, 4, thumbHeight, tx_color_rgb565);
+          }
+          
+          canvas_main.setTextSize(1);
+          canvas_main.setTextDatum(middle_center);
+          canvas_main.drawString(getButtonHints(false), canvas_center_x, canvas_h - 10);
+          pushAll();
+          
+    #ifndef BUTTON_ONLY_INPUT
+          M5Cardputer.update();
+          keyboard_changed = M5Cardputer.Keyboard.isChange();
+          if(keyboard_changed){Sound(10000, 100, sound);}
+          Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
+          
+          for (auto k : status.word) {
+            if (k == 's' || k == 'S') {
+              searchTerm = "";
+              searching = true;
+              lastSearchTime = millis();
+              debounceDelay();
+              break;
             }
-            delay(50);
+            if (k == '`') {
+              menuID = 9;
+              return;
             }
+          }
+          
+          if (status.word.size() > 0) {
+            for (auto k : status.word) {
+              if (k == '/') {
+                if ((displayIndex + 4) < totalEntries) {
+                  displayIndex += 4;
+                  selectedIndex = displayIndex;
+                }
+                debounceDelay();
+              }
+              if (k == ',') {
+                if (displayIndex > 0) {
+                  displayIndex = (displayIndex >= 4) ? displayIndex - 4 : 0;
+                  selectedIndex = displayIndex;
+                }
+                debounceDelay();
+              }
+              if (k == '.') {
+                if (selectedIndex < (totalEntries - 1)) {
+    #else
+          inputManager::update();
+          
+          // Long press B to go back to menu
+          if (inputManager::isButtonBLongPressed()) {
+            menuID = 9;
+            return;
+          }
+          
+          // Short press B to go to next page
+          if (inputManager::isButtonBPressed()) {
+            searchTerm = "";
+            searching = true;
+            lastSearchTime = millis();
+            debounceDelay();
+          }
+          
+          // Short press A to navigate down one entry
+          if (inputManager::isButtonAPressed()) {
+            if (selectedIndex < (totalEntries - 1)) {
+    #endif
+              selectedIndex++;
+              if (selectedIndex >= (displayIndex + 4)) displayIndex = selectedIndex - 3;
+              }
+              debounceDelay();
+    #ifndef BUTTON_ONLY_INPUT
+              }
+              if (k == ';') {
+                if (selectedIndex > 0) {
+                  selectedIndex--;
+                  if (selectedIndex < displayIndex) displayIndex = selectedIndex;
+                }
+                debounceDelay();
+              }
+            }
+          }
+          
+          if (status.enter) {
+    #else
+          }
+          
+          // Long press A to view details of selected entry
+          if (inputManager::isButtonALongPressed()) {
+    #endif
+            int csvIdx = filteredIndices.empty() ? (selectedIndex + 2) : filteredIndices[selectedIndex];
+            String csvLine = readLineAtIndex(csvIdx);
+            auto fields = parseCSVLine(csvLine);
+            
+            if (fields.size() >= 9) {
+              String ssid = fields[1];
+              String bssid = fields[0];
+              String authMode = (fields.size() > 2) ? fields[2] : "N/A";
+              String channel = (fields.size() > 4) ? fields[4] : "N/A";
+              String rssi = (fields.size() > 5) ? fields[6] : "N/A";
+              String lat = (fields.size() > 6) ? fields[7] : "N/A";
+              String lon = (fields.size() > 7) ? fields[8] : "N/A";
+              
+              debounceDelay();
+              drawTopCanvas();
+              drawBottomCanvas();
+              canvas_main.fillSprite(bg_color_rgb565);
+              canvas_main.setTextSize(2);
+              canvas_main.setTextColor(tx_color_rgb565);
+              canvas_main.setTextDatum(middle_center);
+              canvas_main.drawString(ssid, canvas_center_x, 15);
+              
+              canvas_main.setTextSize(1);
+              canvas_main.setTextDatum(top_left);
+              canvas_main.drawString("BSSID: " + bssid, 5, 25);
+              canvas_main.drawString("Channel: " + channel, 5, 35);
+              canvas_main.drawString("RSSI: " + rssi + " dBm", 5, 45);
+              
+              if(fields.size() > 2) canvas_main.drawString("Auth: " + authMode, 5, 55);
+              if(fields.size() > 6) {
+                canvas_main.drawString("Lat: " + lat, 5, 65);
+                canvas_main.drawString("Lon: " + lon, 5, 75);
+              }
+              
+              canvas_main.setTextSize(1);
+              canvas_main.setTextDatum(middle_center);
+              #ifdef BUTTON_ONLY_INPUT
+                canvas_main.drawString("[A] back", canvas_center_x, canvas_h - 10);
+              #else
+                canvas_main.drawString("[ENTER] back to list", canvas_center_x, canvas_h - 10);
+              #endif
+              
+              pushAll();
+              
+              while(true) {
+                M5.update();
+                M5.update();
+    #ifndef BUTTON_ONLY_INPUT
+                M5Cardputer.update();
+                keyboard_changed = M5Cardputer.Keyboard.isChange();
+                if(keyboard_changed){Sound(10000, 100, sound);}
+                Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
+                if(status.enter) break;
+                for(auto k : status.word) {
+                  if(k == '`') break;
+                }
+    #else
+                inputManager::update();
+                if(inputManager::isButtonAPressed() || inputManager::isButtonBLongPressed()) break;
+    #endif
+                delay(50);
+              }
+            }
+            debounceDelay();
+          }
         }
-        debounceDelay();
-        }
-      }
       }
       menuID = 9;
       return;
@@ -3043,6 +3306,8 @@ void runApp(uint8_t appID){
           updatePortal();
           M5.update();
           M5.update();
+#ifndef BUTTON_ONLY_INPUT
+          M5Cardputer.update();
           Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
           if(!loginCaptured.equals("") && !passCaptured.equals("")){
             drawInfoBox("New victim!", loginCaptured, passCaptured, false, false);
@@ -3061,6 +3326,24 @@ void runApp(uint8_t appID){
             wifiChoice = "";
             break;
           }
+#else
+          inputManager::update();
+          if(!loginCaptured.equals("") && !passCaptured.equals("")){
+            drawInfoBox("New victim!", loginCaptured, passCaptured, false, false);
+          }
+          else{
+            drawInfoBox("Evil portal", "Evli portal active...", "Enter to exit", false, false);
+          }
+          if (inputManager::isButtonAPressed()) {
+            xSemaphoreTake(wifiMutex, portMAX_DELAY);
+            WiFi.eraseAP();
+            xSemaphoreGive(wifiMutex);
+            wifion();
+            apMode = false;
+            wifiChoice = "";
+            break;
+          }
+#endif
         }
       }
       if(tempChoice == 1){
@@ -3163,8 +3446,15 @@ void runApp(uint8_t appID){
           int clientLen;
           while(true){
             get_clients_list(clients, clientLen);
+            #ifndef BUTTON_ONLY_INPUT
+            M5Cardputer.update();
+            drawInfoBox("Searching...", "Found "+ String(clientLen)+ " clients", "SELECT for next step", false, false);
+            #else
             drawInfoBox("Searching...", "Found "+ String(clientLen)+ " clients", "ENTER for next step", false, false);
+            #endif
             updateM5();
+#ifndef BUTTON_ONLY_INPUT
+            M5Cardputer.update();
             Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
             if(status.enter){
               debounceDelay();
@@ -3173,6 +3463,16 @@ void runApp(uint8_t appID){
               xSemaphoreGive(wifiMutex);
               break;
             }
+#else
+            inputManager::update();
+            if(inputManager::isButtonAPressed()){
+              debounceDelay();
+              xSemaphoreTake(wifiMutex, portMAX_DELAY);
+              esp_wifi_set_promiscuous(false);
+              xSemaphoreGive(wifiMutex);
+              break;
+            }
+#endif
           }
           // Insert "Everyone" at the beginning by shifting the existing list down.
           // Iterate from clientLen-1 down to 0 so we don't overwrite entries while shifting.
@@ -3210,6 +3510,8 @@ void runApp(uint8_t appID){
               PPS = 0;
             }
             updateM5();
+#ifndef BUTTON_ONLY_INPUT
+            M5Cardputer.update();
             Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
             if(status.enter){
               break;
@@ -3218,6 +3520,16 @@ void runApp(uint8_t appID){
             if((clients[target] == "Everyone")?deauth_everyone(1, 10):send_deauth_packets(clients[target], 1, 10)){
               PPS++;
             }
+#else
+            inputManager::update();
+            if(inputManager::isButtonAPressed()){
+              break;
+            }
+
+            if((clients[target] == "Everyone")?deauth_everyone(1, 10):send_deauth_packets(clients[target], 1, 10)){
+              PPS++;
+            }
+#endif
             
           }
           
@@ -3314,10 +3626,14 @@ void runApp(uint8_t appID){
           uint8_t line;
           while(true){
             M5.update();
-            M5.update();  
+            M5.update();
+#ifndef BUTTON_ONLY_INPUT
+            M5Cardputer.update();
             keyboard_changed = M5Cardputer.Keyboard.isChange();
             if(keyboard_changed){Sound(10000, 100, sound);}
-            ;
+#else
+            inputManager::update();
+#endif
             drawTopCanvas();
             drawBottomCanvas();
             canvas_main.clear(bg_color_rgb565);
@@ -3348,6 +3664,8 @@ void runApp(uint8_t appID){
             }
             pushAll();
             line = 0;
+#ifndef BUTTON_ONLY_INPUT
+            M5Cardputer.update();
             Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
             for(auto i : status.word){
               if(i=='`'){
@@ -3361,6 +3679,19 @@ void runApp(uint8_t appID){
               return;
               }
             }
+#else
+            inputManager::update();
+            if(inputManager::isButtonBLongPressed()){
+              xSemaphoreTake(wifiMutex, portMAX_DELAY);
+              esp_wifi_set_promiscuous(false);
+              clearClients();
+              logMessage("User stopped mac sniffing");
+              wifion();
+              xSemaphoreGive(wifiMutex);
+              menuID = 2;
+              return;
+            }
+#endif
 
             if (millis() - lastSwitchTime > channelSwitchInterval && !answerrr) {
               chanelSwitch++;
@@ -3386,7 +3717,8 @@ void runApp(uint8_t appID){
           while(true){
             debounceDelay();
             M5.update();
-            M5.update();  
+#ifndef BUTTON_ONLY_INPUT
+            M5Cardputer.update();
             keyboard_changed = M5Cardputer.Keyboard.isChange();
             if(keyboard_changed){Sound(10000, 100, sound);}
             keyboard_changed = M5Cardputer.Keyboard.isChange();
@@ -3399,6 +3731,15 @@ void runApp(uint8_t appID){
                 return;
               }
             }
+#else
+            inputManager::update();
+            if(inputManager::isButtonBLongPressed()){
+              menuID = 2;
+              wifion();
+              SnifferEnd();
+              return;
+            }
+#endif
             drawTopCanvas();
             drawBottomCanvas();
             canvas_main.clear(bg_color_rgb565);
@@ -3788,7 +4129,7 @@ void runApp(uint8_t appID){
     }
     if(appID == 112){
       // Mood Font Tester: enumerate faces from /moods/faces.txt and display them using the custom mood font/size
-      File f = SD.open("/moods/faces.txt", FILE_READ);
+      File f = FSYS.open("/moods/faces.txt", FILE_READ);
       if(!f){
         drawInfoBox("Error", "faces.txt not found", "Ensure /moods/faces.txt exists", true, false);
         return;
@@ -3815,19 +4156,20 @@ void runApp(uint8_t appID){
         canvas_main.setColor(tx_color_rgb565);
         canvas_main.setTextDatum(middle_center);
         // load custom font used in drawMood for faces
-        if(SD.exists("/fonts/big.vlw")){
+        if(FSYS.exists("/fonts/big.vlw")){
           canvas_main.loadFont(SD, "/fonts/big.vlw");
         }
         canvas_main.setTextSize(0.35);
         canvas_main.drawString(faces[idx], canvas_center_x, canvas_h/2);
-        if(SD.exists("/fonts/big.vlw")) canvas_main.unloadFont();
+        if(FSYS.exists("/fonts/big.vlw")) canvas_main.unloadFont();
         // show index
         canvas_main.setTextDatum(top_left);
         canvas_main.setTextSize(1);
         canvas_main.drawString(String(idx+1) + "/" + String(faces.size()), 2, 2);
         pushAll();
         M5.update();
-        M5.update();
+#ifndef BUTTON_ONLY_INPUT
+        M5Cardputer.update();
         Keyboard_Class::KeysState ks = M5Cardputer.Keyboard.keysState();
         if(ks.fn){
           for(auto c : ks.word){ if(c == '`'){ debounceDelay(); return; } }
@@ -3837,6 +4179,22 @@ void runApp(uint8_t appID){
           else if(c == ';') { idx = (idx + faces.size() - 1) % faces.size(); drawInfoBox("", "Loading...", "", false, false);}
           else if(c == KEY_ENTER) { menuID = 99; debounceDelay(); return; }
         }
+#else
+        inputManager::update();
+        if(inputManager::isButtonBPressed()) {
+          idx = (idx + 1) % faces.size();
+          drawInfoBox("", "Loading...", "", false, false);
+        }
+        if(inputManager::isButtonAPressed()) {
+          menuID = 99;
+          debounceDelay();
+          return;
+        }
+        if(inputManager::isButtonBLongPressed()) {
+          debounceDelay();
+          return;
+        }
+#endif
         delay(80);
       }
     }
@@ -3959,12 +4317,7 @@ void runApp(uint8_t appID){
     }
     if(appID == 39){
       drawInfoBox("Info", "Reading SD card...", "Please wait", false, false);
-      if(!SD.begin(SD_CS, sdSPI, 1000000)) {
-        drawInfoBox("Error", "Cannot open SD card", "Check SD card!", true, true);
-        menuID = 5;
-        return;
-      }
-      File root = SD.open("/handshake");
+      File root = FSYS.open("/handshake");
       if (!root || !root.isDirectory()) {
         drawInfoBox("Error", "Cannot open \"/handshake\" folder.", "Check SD card!", true, true);
         menuID = 5;
@@ -4240,40 +4593,40 @@ void runApp(uint8_t appID){
       drawInfoBox("Factory Reset", "Deleting config data...", "", false, false);
       runApp(15);
       if (true) {
-        SD.remove(NEW_CONFIG_FILE);
-        SD.remove("/uploaded.json");
-        SD.remove("/cracked.json");
-        SD.remove(PERSONALITY_FILE);
-        SD.remove("/moods/faces.txt");
-        SD.remove("/moods/texts.txt");
-        SD.rmdir("/moods");
-        SD.rmdir("/temp");
+        FSYS.remove(NEW_CONFIG_FILE);
+        FSYS.remove("/uploaded.json");
+        FSYS.remove("/cracked.json");
+        FSYS.remove(PERSONALITY_FILE);
+        FSYS.remove("/moods/faces.txt");
+        FSYS.remove("/moods/texts.txt");
+        FSYS.rmdir("/moods");
+        FSYS.rmdir("/temp");
         //recursevely delete "fonts" "wardrive" "handshake" folders
-        SD.remove("/fonts/big.vlw");
-        SD.remove("/fonts/small.vlw");
-        SD.rmdir("/fonts");
-        File wardriveDir = SD.open("/wardrive");
+        FSYS.remove("/fonts/big.vlw");
+        FSYS.remove("/fonts/small.vlw");
+        FSYS.rmdir("/fonts");
+        File wardriveDir = FSYS.open("/wardrive");
         if (wardriveDir && wardriveDir.isDirectory()) {
           File wardriveFile = wardriveDir.openNextFile();
           while (wardriveFile) {
-            SD.remove(String(wardriveFile.name()).c_str());
+            FSYS.remove(String(wardriveFile.name()).c_str());
             wardriveFile = wardriveDir.openNextFile();
           }
           wardriveDir.close();
-          SD.rmdir("/wardrive");
+          FSYS.rmdir("/wardrive");
         }
-        File handshakeDir = SD.open("/handshake");
+        File handshakeDir = FSYS.open("/handshake");
         if (handshakeDir && handshakeDir.isDirectory()) {
           File handshakeFile = handshakeDir.openNextFile();
           while (handshakeFile) {
             logMessage("Deleting handshake file: /handshake/" + String(handshakeFile.name()));
             if (!handshakeFile.isDirectory()) {
-              SD.remove(String(handshakeFile.path()));
+              FSYS.remove(String(handshakeFile.path()));
             }
             handshakeFile = handshakeDir.openNextFile();
           }
           handshakeDir.close();
-          SD.rmdir("/handshake");
+          FSYS.rmdir("/handshake");
         }
 
 
@@ -4310,8 +4663,8 @@ void runApp(uint8_t appID){
       return;
     }    
     if(appID == 53){
-      if(SD.exists("/cracked.json")){
-        File crackedFile = SD.open("/cracked.json", FILE_READ);
+      if(FSYS.exists("/cracked.json")){
+        File crackedFile = FSYS.open("/cracked.json", FILE_READ);
         if (!crackedFile) {
           drawInfoBox("Error", "Failed to open cracked.json", "Check SD card!", true, false);
           menuID = 7;
@@ -4340,9 +4693,13 @@ void runApp(uint8_t appID){
           String detailInfo2 = "Bssid: " + entries[selection].bssid;
           drawInfoBox(entries[selection].ssid, detailInfo, detailInfo2, true , false);
           M5.update();
-          M5.update();
+#ifndef BUTTON_ONLY_INPUT
+          M5Cardputer.update();
           Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
           if(M5Cardputer.Keyboard.isChange()){Sound(10000, 100, sound);}
+#else
+          inputManager::update();
+#endif
         }
       }
       else{
@@ -4566,6 +4923,11 @@ void runApp(uint8_t appID){
       return;
     }
     if(appID == 59){
+      #ifdef M5STICKS3_ENV
+        drawInfoBox("Error", "GPIO0 toggle not supported on M5StickS3", "", true, false);
+        menuID = 6;
+        return;
+      #endif
       String menuu[] = {"Dim screen", "Toggle auto mode", "Back"};
       int8_t choice = drawMultiChoice("On tap action", menuu, 3, 6, 0);
       if(choice == 0){
@@ -4641,8 +5003,8 @@ int16_t getNumberfromUser(String tittle, String desc, uint16_t maxNumber){
     canvas_main.drawString(String(number), canvas_center_x, canvas_h / 2);
     pushAll();
     M5.update();
-    M5.update();
-    ;
+#ifndef BUTTON_ONLY_INPUT
+    M5Cardputer.update();
     keyboard_changed = M5Cardputer.Keyboard.isChange();
     if(keyboard_changed){Sound(10000, 100, sound);}
     Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
@@ -4675,6 +5037,27 @@ int16_t getNumberfromUser(String tittle, String desc, uint16_t maxNumber){
         return number;
       }
     }
+#else
+    inputManager::update();
+    if(inputManager::isButtonAPressed()) {
+      if(number > maxNumber){
+        drawInfoBox("Error", "Number can't be higher than " + String(maxNumber), "", true, false);
+        number = 0;
+        debounceDelay();
+      }
+      else{
+        appRunning = false;
+        logMessage("Number input returning: " + String(number));
+        return number;
+      }
+    }
+    if(inputManager::isButtonBPressed()) {
+      if(number > 0) {
+          number = number / 10;
+      }
+      debounceDelay();
+    }
+#endif
   }
 }
 
@@ -4702,8 +5085,8 @@ bool getBoolInput(String tittle, String desc, bool defaultValue){
     }
     pushAll();
     M5.update();
-    M5.update();
-    ;
+#ifndef BUTTON_ONLY_INPUT
+    M5Cardputer.update();
     keyboard_changed = M5Cardputer.Keyboard.isChange();
     if(keyboard_changed){Sound(10000, 100, sound);}
     Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
@@ -4725,6 +5108,22 @@ bool getBoolInput(String tittle, String desc, bool defaultValue){
       logMessage("Bool input returning: " + String(toReturn));
       return toReturn;
     }
+#else
+    inputManager::update();
+    if(inputManager::isButtonAPressed()) {
+      if(inputManager::isButtonBLongPressed()) {
+        appRunning = false;
+        debounceDelay();
+        return defaultValue;
+      }
+      appRunning = false;
+      logMessage("Bool input returning: " + String(toReturn));
+      return toReturn;
+    }
+    if(inputManager::isButtonBPressed()) {
+      toReturn = !toReturn;
+    }
+#endif
   }
 }
 
@@ -4876,10 +5275,6 @@ String userInput(const String &prompt, String desc, int maxLen,  const String &i
       int max_col = get_max_col();
       if (current_col >= max_col) {
         current_col = 0;
-        current_row++;
-        if (current_row > 4) {
-          current_row = 0;
-        }
       }
     }
     
@@ -4915,7 +5310,10 @@ String userInput(const String &prompt, String desc, int maxLen,  const String &i
     
     if (inputManager::isButtonBLongPressed()) {
       debounceDelay();
-      editing = false;
+      current_row++;
+      if (current_row > 4) {
+        current_row = 0;
+      }
     }
     
     #else
@@ -5112,9 +5510,8 @@ int drawMultiChoice(String tittle, String toDraw[], uint8_t menuSize , uint8_t p
     #else
     keyboard_changed = M5Cardputer.Keyboard.isChange();
     if(keyboard_changed){Sound(10000, 100, sound);}
-    #endif
-    
     Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
+    #endif
 
     canvas_main.clear(bg_color_rgb565);
     canvas_main.fillSprite(bg_color_rgb565);
@@ -5314,9 +5711,14 @@ int drawMultiChoiceLonger(String tittle, String toDraw[], uint8_t menuSize , uin
     drawBottomCanvas();
     M5.update();
     M5.update();  
+#ifndef BUTTON_ONLY_INPUT
+    M5Cardputer.update();
     keyboard_changed = M5Cardputer.Keyboard.isChange();
     if(keyboard_changed){Sound(10000, 100, sound);}
     Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
+#else
+    inputManager::update();
+#endif
 
     canvas_main.clear(bg_color_rgb565);
     canvas_main.fillSprite(bg_color_rgb565); //Clears main display
@@ -5340,7 +5742,8 @@ int drawMultiChoiceLonger(String tittle, String toDraw[], uint8_t menuSize , uin
     }
     pushAll();
 
-    
+#ifndef BUTTON_ONLY_INPUT
+    M5Cardputer.update();
     for(auto i : status.word){
       if(i=='`'){
         Sound(10000, 100, sound);
@@ -5349,6 +5752,15 @@ int drawMultiChoiceLonger(String tittle, String toDraw[], uint8_t menuSize , uin
         return -1;
       }
     }
+#else
+    inputManager::update();
+    if (inputManager::isButtonBLongPressed()) {
+      Sound(10000, 100, sound);
+      menuID = prevMenuID;
+      menu_current_opt = prevOpt;
+      return -1;
+    }
+#endif
 
     if (isNextPressed()) {
       if (menu_current_opt < menu_len - 1 ) {
@@ -5432,9 +5844,14 @@ String* makeList(String windowName, uint8_t appid, bool addln, uint8_t maxEntryL
         }
         drawTopCanvas();
         drawBottomCanvas();
+#ifndef BUTTON_ONLY_INPUT
+        M5Cardputer.update();
         Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
         keyboard_changed = M5Cardputer.Keyboard.isChange();
-        if(keyboard_changed){Sound(10000, 100, sound);}  
+        if(keyboard_changed){Sound(10000, 100, sound);}
+#else
+        inputManager::update();
+#endif
         M5.update();
         M5.update();
         if(isOkPressed()){break;}
@@ -5627,6 +6044,8 @@ void drawList(String toDraw[], uint8_t menu_size) {
   // ============================================================
   // input handling
   // ============================================================
+#ifndef BUTTON_ONLY_INPUT
+  M5Cardputer.update();
   auto &keys = M5Cardputer.Keyboard;
 
   if (keys.isKeyPressed(KEY_ENTER)) {
@@ -5647,6 +6066,18 @@ void drawList(String toDraw[], uint8_t menu_size) {
   if (keys.isKeyPressed('`')) {
     return;
   }
+#else
+  inputManager::update();
+  if (inputManager::isButtonBPressed()) {
+    menu_current_opt = (menu_current_opt + 1) % menu_len;
+    marqueeOffset = 0;
+    marqueeTick = millis();
+    debounceDelay();
+  }
+  if (inputManager::isButtonAPressed()) {
+    return;
+  }
+#endif
 }
 
 void drawMenuList(menu toDraw[], uint8_t menuIDPriv, uint8_t menu_size) {
@@ -5792,10 +6223,7 @@ void drawMenuList(menu toDraw[], uint8_t menuIDPriv, uint8_t menu_size) {
   // ============================================================
   #ifdef BUTTON_ONLY_INPUT
   inputManager::update();
-  if (toggleMenuBtnPressed()) {
-    debounceDelay();
-    return;
-  }
+  
   if (isOkPressed()) {
     debounceDelay();
     runApp(toDraw[menu_current_opt].command);
@@ -5803,10 +6231,13 @@ void drawMenuList(menu toDraw[], uint8_t menuIDPriv, uint8_t menu_size) {
     return;
   }
   if (isNextPressed()) {
+    if (toggleMenuBtnPressed()) {
+      return;
+    }
     menu_current_opt = (menu_current_opt + 1) % menu_len;
     marqueeOffset = 0;
     marqueeTick = millis();
-    debounceDelay();
+    
     return;
   }
   if (isPrevPressed()) {
@@ -5875,8 +6306,13 @@ void pushAll(){
   M5.Display.endWrite();
   if (displayMutex) xSemaphoreGive(displayMutex);
   M5.update();
+#ifndef BUTTON_ONLY_INPUT
+  M5Cardputer.update();
   keyboard_changed = M5Cardputer.Keyboard.isChange();
-  if(keyboard_changed){Sound(10000, 100, sound);}   
+  if(keyboard_changed){Sound(10000, 100, sound);}
+#else
+  inputManager::update();
+#endif
 }
 
 
@@ -5932,6 +6368,8 @@ void editWhitelist(){
         }
         drawTopCanvas();
         drawBottomCanvas();
+#ifndef BUTTON_ONLY_INPUT
+        M5Cardputer.update();
         Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
         keyboard_changed = M5Cardputer.Keyboard.isChange();
         if(keyboard_changed){Sound(10000, 100, sound);}  
@@ -5940,6 +6378,9 @@ void editWhitelist(){
             break;
           }
         }
+#else
+        inputManager::update();
+#endif
         M5.update();
         M5.update();
         if(isOkPressed()){break;}
@@ -6036,13 +6477,17 @@ String colorPickerUI(bool pickingText, String bg_color_toset) {
     if(pickingText) canvas_main.setTextColor(preview_color);
     canvas_main.drawString("Confirm", preview_x, preview_y + preview_h/2 - 6);
     canvas_main.setTextColor(tx_color_rgb565);
+    #ifdef BUTTON_ONLY_INPUT
+    canvas_main.drawString("A:up B:next ok long A:save long B: exit", preview_x, preview_y + preview_h/2 + 12);
+    #else
     canvas_main.drawString("Up/Down: value Left/Right: color OK set", preview_x, preview_y + preview_h/2 + 12);
-
+    #endif
     pushAll();
 
     // Handle input
     M5.update();
-    M5.update();
+#ifndef BUTTON_ONLY_INPUT
+    M5Cardputer.update();
     Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
     keyboard_changed = M5Cardputer.Keyboard.isChange();
     if(keyboard_changed){Sound(10000, 100, sound);}  
@@ -6078,10 +6523,34 @@ String colorPickerUI(bool pickingText, String bg_color_toset) {
       sprintf(hexStr, "#%02X%02X%02XFF", r, g, b);
       result = String(hexStr);
       done = true;
-      break;
+    }
+#else
+    inputManager::update();
+    
+    if (inputManager::isButtonBLongPressed()) {
+      return "exited";
+    }
+    
+    if (inputManager::isButtonBPressed()) {
+      selected = (selected + 1) % 3;
+    }
+    
+    if (inputManager::isButtonAPressed()) {
+      if (selected == 0) r = min(255, r + 10);
+      if (selected == 1) g = min(255, g + 10);
+      if (selected == 2) b = min(255, b + 10);
+    }
+
+    if (inputManager::isButtonALongPressed()) {
+      char hexStr[9];
+      sprintf(hexStr, "#%02X%02X%02XFF", r, g, b);
+      result = String(hexStr);
+      done = true;
+    }
+#endif
     }
     delay(80);
-  }
+  
   return result;
 }
 
@@ -6105,6 +6574,8 @@ void coordsPickerUI() {
     canvas_main.drawString("X:" + String(x) + " Y:" + String(y), 4, 4);
     pushAll();
     M5.update();
+#ifndef BUTTON_ONLY_INPUT
+    M5Cardputer.update();
     Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
     if (status.fn) {
       for (auto k : status.word) {
@@ -6122,6 +6593,21 @@ void coordsPickerUI() {
       drawInfoBox("Coords", "X:" + String(x) + " Y:" + String(y), "", true, false);
       return;
     }
+#else
+    inputManager::update();
+    if (inputManager::isButtonBLongPressed()) {
+      appRunning = false;
+      return;
+    }
+    if (inputManager::isButtonBPressed()) {
+      x = min((int)canvas_main.width() - 1, x + step);
+    }
+    if (inputManager::isButtonAPressed()) {
+      appRunning = false;
+      drawInfoBox("Coords", "X:" + String(x) + " Y:" + String(y), "", true, false);
+      return;
+    }
+#endif
     delay(50);
   }
 }
@@ -6148,6 +6634,8 @@ int brightnessPicker(){
     canvas_main.setColor(bg_color_rgb565);
     pushAll();
     M5.update();
+#ifndef BUTTON_ONLY_INPUT
+    M5Cardputer.update();
     Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
     keyboard_changed = M5Cardputer.Keyboard.isChange();
     if(keyboard_changed){Sound(10000, 100, sound);}  
@@ -6178,12 +6666,31 @@ int brightnessPicker(){
       debounceDelay();
       return brightness;
     }
+#else
+    inputManager::update();
+    if (inputManager::isButtonBPressed()) {
+      if(brightness < 245) brightness += 10;
+      else brightness = 10;
+    }
+    if (inputManager::isButtonAPressed()) {
+      debounceDelay();
+      return brightness;
+    }
+#endif
     M5.Display.setBrightness(brightness);
   }
 }
 
 void debounceDelay(){
+#ifndef BUTTON_ONLY_INPUT
+  M5Cardputer.update();
   while(M5Cardputer.Keyboard.isPressed() != 0){
+    M5Cardputer.update();
+#else
+  return;
+  while(false){
+    
+#endif
     M5.update();
     delay(10);
   }
@@ -6214,12 +6721,23 @@ void drawSysInfo(){
   debounceDelay();
   while(true){
     M5.update();
-    M5.update();
+#ifndef BUTTON_ONLY_INPUT
+    M5Cardputer.update();
+#endif
     if(isOkPressed()) break;
+#ifndef BUTTON_ONLY_INPUT
+    M5Cardputer.update();
     if(M5Cardputer.Keyboard.isKeyPressed('`')) {
       debounceDelay();
       return;
     }
+#else
+    if (inputManager::isButtonAPressed() || inputManager::isButtonBPressed()) {
+      debounceDelay();
+      return;
+    }
+    inputManager::update();
+#endif
     delay(100);
   }
 }
@@ -6307,27 +6825,19 @@ void drawLittleFSManager() {
   canvas_main.setTextColor(tx_color_rgb565);
   canvas_main.setTextSize(2);
   canvas_main.setTextDatum(middle_center);
-  canvas_main.drawString("LittleFS Manager", canvas_center_x, 6);
+  canvas_main.drawString("LittleFS Manager", canvas_center_x, 10);
   canvas_main.setTextSize(1);
   canvas_main.setTextDatum(top_left);
 
   String info = storageManager::getDetailedStorageInfo();
-  int y = 30;
-  int line = 0;
-  // crude line split
-  int start = 0;
-  while (start < info.length()) {
-    String part = info.substring(start, min(start + 32, (int)info.length()));
-    canvas_main.drawString(part, 6, y + (line * 12));
-    start += 32; line++;
-  }
+  canvas_main.setCursor(2, 30);
+  canvas_main.println(info);
 
   canvas_main.setTextDatum(middle_center);
-  canvas_main.drawString("A: Back    B: Format (hold B to confirm)", canvas_center_x, canvas_h - 12);
+  canvas_main.drawString("A: Back B: Format (hold B to confirm)", canvas_center_x, canvas_h - 12);
   pushAll();
 
   while (true) {
-    M5.update();
     M5.update();
 #ifdef BUTTON_ONLY_INPUT
     inputManager::update();
@@ -6500,7 +7010,7 @@ void drawStorageInfo() {
     // Title
     canvas_main.setTextSize(2);
     canvas_main.setTextDatum(middle_center);
-    canvas_main.drawString("Storage", canvas_center_x, 6);
+    canvas_main.drawString("Storage", canvas_center_x, 10);
     canvas_main.setTextSize(1);
     canvas_main.setTextDatum(top_left);
     
@@ -6510,7 +7020,7 @@ void drawStorageInfo() {
     
     int y = 30;
     int bar_height = 10;
-    int bar_y = y + 12;
+    int bar_y = y + 25;
     int bar_width = 200;
     
     // LittleFS section
@@ -6534,16 +7044,16 @@ void drawStorageInfo() {
     // If SD card is being used
     int y = 30;
     int bar_height = 10;
-    int bar_y = y + 12;
+    int bar_y = y + 25;
     int bar_width = 200;
     
     canvas_main.drawString("SD Card:", 6, y);
     
-    uint64_t card_size = SD.cardSize();
+    uint64_t card_size = FSYS.cardSize();
     uint64_t used_size = 0;
     
     // Calculate used space (rough estimate)
-    File root = SD.open("/");
+    File root = FSYS.open("/");
     if (root) {
       // Simple dir traversal for used space
       File file = root.openNextFile();
@@ -6572,17 +7082,14 @@ void drawStorageInfo() {
     
     #endif
     
-    #ifdef USE_LITTLEFS
-    // USB Mass Storage option
-    canvas_main.drawString("USB Mode:", 6, y);
-    canvas_main.drawString("Enable to copy files", 6, y + 10);
-    canvas_main.drawString("via USB drive", 6, y + 20);
-    #endif
-    
     // Instructions
     canvas_main.setTextSize(1);
     canvas_main.setTextDatum(middle_center);
+    #ifdef BUTTON_ONLY_INPUT
     canvas_main.drawString("A: Back", canvas_center_x, canvas_main.height() - 12);
+    #else
+    canvas_main.drawString("Enter or ` to go back", canvas_center_x, canvas_main.height() - 12);
+    #endif
     
     pushAll();
     

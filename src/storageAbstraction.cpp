@@ -1,5 +1,7 @@
+#include "settings.h"
 #include "storageAbstraction.h"
 #include "logger.h"
+
 
 namespace StorageManager {
   
@@ -15,7 +17,7 @@ namespace StorageManager {
     logMessage("LittleFS initialized");
     return true;
     #else
-    if (!SD.begin()) {
+    if (!FSYS.begin()) {
       logMessage("SD mount failed");
       return false;
     }
@@ -35,10 +37,10 @@ namespace StorageManager {
       info.percentUsed = (float)info.usedBytes / info.totalBytes * 100.0f;
     }
     #else
-    uint64_t cardSize = SD.cardSize();
+    uint64_t cardSize = FSYS.cardSize();
     info.totalBytes = cardSize;
     
-    File root = SD.open("/");
+    File root = FSYS.open("/");
     uint64_t usedBytes = calculateDirSize(root);
     root.close();
     

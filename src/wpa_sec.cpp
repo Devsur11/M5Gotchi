@@ -1,13 +1,13 @@
+#include "settings.h"
 #include <WiFi.h>
 #include <HTTPClient.h>
 #include <FS.h>
-#include <SD.h>
+#include "SD.h"
 #include <ArduinoJson.h>
 #include "Arduino.h"
 #include "logger.h"
 #include <vector>
 #include <WiFi.h>
-#include "settings.h"
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <cstring>
@@ -126,12 +126,12 @@ struct CrackedEntry {
 std::vector<CrackedEntry> getCrackedEntries() {
     std::vector<CrackedEntry> entries;
 
-    if (!SD.exists("/cracked.json")) {
+    if (!FSYS.exists("/cracked.json")) {
         logMessage("No cracked.json found on SD card.");
         return entries; // empty
     }
 
-    File file = SD.open("/cracked.json", FILE_READ);
+    File file = FSYS.open("/cracked.json", FILE_READ);
     if (!file) {
         logMessage("Failed to open cracked.json for reading.");
         return entries;
@@ -177,7 +177,7 @@ bool isAlreadyUploaded(const char* fileName, JsonDocument &doc) {
 
 // Helper: save uploaded.json back to SD (pretty)
 void saveUploadedList(JsonDocument &doc) {
-    File jsonFile = SD.open("/uploaded.json", FILE_WRITE);
+    File jsonFile = FSYS.open("/uploaded.json", FILE_WRITE);
     if (!jsonFile) {
         logMessage("Failed to open /uploaded.json for writing");
         return;
@@ -190,8 +190,8 @@ void saveUploadedList(JsonDocument &doc) {
 // Append single filename to /uploaded.json safely (no duplicate)
 static void appendToUploadedList(const char* fileName) {
     DynamicJsonDocument doc(2048);
-    if (SD.exists("/uploaded.json")) {
-        File upf = SD.open("/uploaded.json", FILE_READ);
+    if (FSYS.exists("/uploaded.json")) {
+        File upf = FSYS.open("/uploaded.json", FILE_READ);
         if (upf) {
             DeserializationError err = deserializeJson(doc, upf);
             upf.close();
@@ -218,12 +218,12 @@ static void appendToUploadedList(const char* fileName) {
 
 // Upload single PCAP to wpa-sec via HTTPS (raw request)
 bool uploadToWpaSec(const char* apiKey, const char* pcapPath, const char* fileName, uint32_t timeoutMs = 30000) {
-    if (!SD.exists(pcapPath)) {
+    if (!FSYS.exists(pcapPath)) {
         logMessage("File not found: " + String(pcapPath));
         return false;
     }
 
-    File f = SD.open(pcapPath, FILE_READ);
+    File f = FSYS.open(pcapPath, FILE_READ);
     if (!f) {
         logMessage("Failed to open " + String(pcapPath));
         return false;
@@ -375,8 +375,8 @@ String decodeChunkedBody(const String &chunked) {
 static void parseAndSavePotfileBody(const String &bodyRaw) {
     // Load or init cracked.json
     DynamicJsonDocument crackedDoc(8 * 1024);
-    if (SD.exists("/cracked.json")) {
-        File cf = SD.open("/cracked.json", FILE_READ);
+    if (FSYS.exists("/cracked.json")) {
+        File cf = FSYS.open("/cracked.json", FILE_READ);
         if (cf) {
             DeserializationError err = deserializeJson(crackedDoc, cf);
             cf.close();
@@ -456,7 +456,7 @@ static void parseAndSavePotfileBody(const String &bodyRaw) {
     }
 
     // write cracked.json back (pretty)
-    File out = SD.open("/cracked.json", FILE_WRITE);
+    File out = FSYS.open("/cracked.json", FILE_WRITE);
     if (!out) {
         logMessage("Failed to open /cracked.json for writing");
         return;
@@ -470,9 +470,9 @@ static void parseAndSavePotfileBody(const String &bodyRaw) {
 void processWpaSec(const char* apiKey) {
     // Load uploaded.json (list of filenames)
     DynamicJsonDocument uploadedDoc(2048);
-    if (SD.exists("/uploaded.json")) {
+    if (FSYS.exists("/uploaded.json")) {
         logMessage("Loading /uploaded.json");
-        File upf = SD.open("/uploaded.json", FILE_READ);
+        File upf = FSYS.open("/uploaded.json", FILE_READ);
         if (upf) {
             DeserializationError err = deserializeJson(uploadedDoc, upf);
             upf.close();
@@ -491,7 +491,7 @@ void processWpaSec(const char* apiKey) {
 
     // Scan handshake folder: collect paths to upload while keeping uploadedDoc in scope
     std::vector<String> toUpload;
-    File dir = SD.open("/handshake");
+    File dir = FSYS.open("/handshake");
     if (!dir || !dir.isDirectory()) {
         logMessage("No /handshake folder");
     } else {

@@ -1,10 +1,12 @@
+#include "settings.h"
 #include "ArduinoJson.h"
+#ifndef BUTTON_ONLY_INPUT
 #include "M5Cardputer.h"
+#endif
 #include "M5Unified.h"
 #include "esp_wifi.h"
 #include "esp_wifi_types.h"
 #include "logger.h"
-#include "settings.h"
 #include <vector>
 
 #ifndef PWNGRID_H

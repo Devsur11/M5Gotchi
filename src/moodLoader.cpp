@@ -1,8 +1,10 @@
+#include "settings.h"
 #include "moodLoader.h"
 #include <JPEGDEC.h>
-#include <SD.h>
+#include "SD.h"
 #include <map>
 #include "logger.h"
+
 
 // image size: 240/40 px otherwise it will be oerrided!!!
 
@@ -17,7 +19,7 @@ static String lastPath;
 
 void *jpegOpenFile(const char *filename, int32_t *size) {
     logMessage("jpegOpenFile called for: " + lastPath);
-    jpegFile = SD.open(lastPath.c_str(), FILE_READ);
+    jpegFile = FSYS.open(lastPath.c_str(), FILE_READ);
     if (!jpegFile) {
         logMessage("jpegOpenFile: FAILED to open " + lastPath);
         return nullptr;
@@ -64,7 +66,7 @@ int jpegRenderCallback(JPEGDRAW *pDraw) {
 
 // --- Preload moods ---
 void preloadMoods() {
-    File dir = SD.open("/moods");
+    File dir = FSYS.open("/moods");
     if (!dir) {
         logMessage("Failed to open /moods directory");
         return;

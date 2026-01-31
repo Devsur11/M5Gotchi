@@ -1,9 +1,10 @@
+#include "settings.h"
 #include <esp_wifi.h>
 #include <esp_timer.h>
 #include <Arduino.h>
-#include <SD.h>
+#include "SD.h"
 #include "logger.h"
-#include "settings.h"
+
 
 static uint8_t targetBSSID[6];
 static bool targetSet = false;
@@ -39,8 +40,8 @@ static void writePMKID(const uint8_t *bssid, const uint8_t *pmkid) {
              bssid[0], bssid[1], bssid[2],
              bssid[3], bssid[4], bssid[5]);
 
-    if (!SD.exists("/pmkid")) SD.mkdir("/pmkid");
-    File f = SD.open(path, FILE_APPEND);
+    if (!FSYS.exists("/pmkid")) FSYS.mkdir("/pmkid");
+    File f = FSYS.open(path, FILE_APPEND);
     if (f) {
         f.println(pmkidValue);
         f.close();

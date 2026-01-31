@@ -1,11 +1,13 @@
+#include "settings.h"
+#include "ui.h"
 #include <WiFi.h>
 #include <HTTPClient.h>
-#include <SD.h>
+#include "SD.h"
 #include <FS.h>
 #include "fontDownloader.h"
-#include "M5GFX.h"
+#ifndef BUTTON_ONLY_INPUT
 #include "M5Cardputer.h"
-#include "ui.h"
+#endif
 
 const char* GITHUB_URL1 = "https://devsur11.github.io/M5Gotchi/fonts/big.vlw";
 const char* GITHUB_URL2 = "https://devsur11.github.io/M5Gotchi/fonts/small.vlw";
@@ -14,7 +16,7 @@ const char* VLW_EXTENSION = ".vlw";
 extern const char github_root_cert_pem_start[] asm("_binary_certs_github_root_cert_pem_start");
 
 bool fileExists(const char* path) {
-    File file = SD.open(path);
+    File file = FSYS.open(path);
     bool exists = file;
     if (file) file.close();
     return exists;
@@ -36,7 +38,7 @@ bool downloadFile(const char* url, const char* localPath) {
         return false;
     }
 
-    File file = SD.open(localPath, FILE_WRITE);
+    File file = FSYS.open(localPath, FILE_WRITE);
     if (!file) {
         fLogMessage("Failed to create file: %s\n", localPath);
         http.end();
@@ -75,13 +77,13 @@ bool downloadFile(const char* url, const char* localPath) {
 }
 
 void downloadFonts() {
-    if (!SD.begin()) {
+    if (!FSYS.begin()) {
         logMessage("SD card initialization failed");
         return;
     }
 
-    if (!SD.exists(FONTS_FOLDER)) {
-        SD.mkdir(FONTS_FOLDER);
+    if (!FSYS.exists(FONTS_FOLDER)) {
+        FSYS.mkdir(FONTS_FOLDER);
         logMessage("Created fonts folder");
     }
 

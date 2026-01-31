@@ -1,12 +1,21 @@
 #pragma once
 #include <Arduino.h>
+#include <FS.h>
+#include <LittleFS.h>
+#include <SD.h>
 #include <SPI.h>
+
 #include "logger.h"
 #include "WiFi.h"
 #include <vector>
 #include "pwngrid.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/semphr.h"
+
+#ifdef USE_LITTLEFS
+  // We use the fully qualified instance name
+  #define FSYS ::LittleFS 
+#else
+  #define FSYS ::SD
+#endif
 
 SemaphoreHandle_t wifiMutex = NULL;
 
@@ -28,15 +37,18 @@ bool wifion(){
     }
     return true;
 }
-
 #ifndef CURRENT_VERSION
 #define CURRENT_VERSION "dev"
 #endif
 
+#define NORMAL_JSON_URL UPDATE_URL
 #define ADDRES_BOOK_FILE "/pwngrid/contacts.conf"
 #define KEYS_FILE "/pwngrid/keys"
-#define NORMAL_JSON_URL "https://devsur11.github.io/M5Gotchi/firmware/firmware.json"
-#define LITE_JSON_URL   "https://devsur11.github.io/M5Gotchi/firmware/lite.json"
+#ifndef M5STICKS3_ENV
+#define UPDATE_URL "https://devsur11.github.io/M5Gotchi/firmware/firmware.json"
+#else
+#define UPDATE_URL "https://devsur11.github.io/M5Gotchi/firmware/m5sticks3.json"
+#endif
 #define TEMP_DIR        "/temp"
 #define TEMP_JSON_PATH  TEMP_DIR "/update.json"
 #define TEMP_BIN_PATH   TEMP_DIR "/update.bin"
@@ -46,10 +58,18 @@ bool wifion(){
 #define UNIT_FP_MAX   64
 #define SERIAL_LOGS
 //#define BYPASS_SD_CHECK
-#define SD_CS    5  // G12
-#define SD_MOSI  4  // G14
-#define SD_SCK   6  // G40
-#define SD_MISO  7  // G39
+#ifndef M5STICKS3_ENV
+#define SD_CS    12  // G12
+#define SD_MOSI  14  // G14
+#define SD_SCK   40  // G40
+#define SD_MISO  39  // G39
+
+#else
+#define SD_CS    43  // G10           //STILL EXPERIMENTALL!!
+#define SD_MOSI  7   // G7            //STILL EXPERIMENTALL!!
+#define SD_SCK   6   // G9            //STILL EXPERIMENTALL!!
+#define SD_MISO  4   // G8            //STILL EXPERIMENTALL!!
+#endif
 #define LORA_RST  3 // G3
 #define MAX_PKT_SIZE 3000
 #define ROW_SIZE 40

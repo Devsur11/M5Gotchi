@@ -5,9 +5,11 @@
 #include "githubUpdater.h"
 #include <FS.h>
 #include <ArduinoJson.h>
-#include <SD.h>
+#include "SD.h"
 #include <M5GFX.h>
+#ifndef BUTTON_ONLY_INPUT
 #include "M5Cardputer.h"
+#endif
 #include "ui.h"
 
 static int ota_progress = 0;
@@ -59,8 +61,8 @@ esp_err_t ota_http_event_handler(esp_http_client_event_t *evt) {
 
 
 static bool ensure_temp_dir() {
-  if (!SD.exists(TEMP_DIR)) {
-    if (!SD.mkdir(TEMP_DIR)) {
+  if (!FSYS.exists(TEMP_DIR)) {
+    if (!FSYS.mkdir(TEMP_DIR)) {
       logMessage("Failed to create temp directory on SD card");
       return false;
     }
@@ -86,7 +88,7 @@ static bool download_file(const char* url, const char* dest_path) {
   }
   int status = esp_http_client_fetch_headers(client);
   logMessage(String("HTTP status: ") + esp_http_client_get_status_code(client));
-  File f = SD.open(dest_path, FILE_WRITE, true);
+  File f = FSYS.open(dest_path, FILE_WRITE, true);
   if (!f) {
     logMessage("Failed to open file for writing");
     esp_http_client_cleanup(client);
@@ -111,14 +113,14 @@ static bool download_file(const char* url, const char* dest_path) {
   f.flush();
   f.close();
   logMessage(String("Downloaded ") + total + " bytes to " + dest_path);
-  logMessage(String("Actual file size on disk: ") + String(SD.open(dest_path).size()));
+  logMessage(String("Actual file size on disk: ") + String(FSYS.open(dest_path).size()));
   logMessage(String("Downloaded ") + total + " bytes to " + dest_path);
   esp_http_client_cleanup(client);
   return true;
 }
 
 static bool parse_json_version_and_file(const char* json_path, char* out_version, size_t version_len, char* out_file, size_t file_len) {
-  File f = SD.open(json_path, FILE_READ);
+  File f = FSYS.open(json_path, FILE_READ);
   if (!f) {
     logMessage("Failed to open JSON file for parsing");
     return false;
@@ -154,13 +156,20 @@ static bool parse_json_version_and_file(const char* json_path, char* out_version
 }
 
 bool check_for_new_firmware_version(bool lite) {
-  if (!SD.begin(SD_CS, sdSPI, 1000000)) {
-    logMessage("Failed to mount SD card");
+  #ifdef USE_LITTLEFS
+  if (!FSYS.begin()) {
+    logMessage("LittleFS init failed");
     return false;
   }
+  #else
+  if (!FSYS.begin(SD_CS, sdSPI, 1000000)) {
+    logMessage("SD card init failed");
+    return false;
+  }
+  #endif
   if (!ensure_temp_dir()) return false;
 
-  const char* json_url = lite ? LITE_JSON_URL : NORMAL_JSON_URL;
+  const char* json_url = NORMAL_JSON_URL;
   logMessage(String("Downloading JSON: ") + json_url);
   if (!download_file(json_url, TEMP_JSON_PATH)) {
     logMessage("Failed to download JSON file");
@@ -170,21 +179,21 @@ bool check_for_new_firmware_version(bool lite) {
   char remote_version[32] = {0};
   char bin_url[256] = {0};
   if (!parse_json_version_and_file(TEMP_JSON_PATH, remote_version, sizeof(remote_version), bin_url, sizeof(bin_url))) {
-    SD.remove(TEMP_JSON_PATH);
+    FSYS.remove(TEMP_JSON_PATH);
     return false;
   }
 
   logMessage(String("Remote version: ") + remote_version + ", Current: " + CURRENT_VERSION);
 
   bool update_needed = strcmp(CURRENT_VERSION, remote_version) < 0;
-  SD.remove(TEMP_JSON_PATH);
+  FSYS.remove(TEMP_JSON_PATH);
   return update_needed;
 }
 
 bool ota_update_from_url(bool lite) {
   if (!ensure_temp_dir()) return false;
 
-  const char* json_url = lite ? LITE_JSON_URL : NORMAL_JSON_URL;
+  const char* json_url = NORMAL_JSON_URL;
   logMessage(String("Downloading JSON: ") + json_url);
   if (!download_file(json_url, TEMP_JSON_PATH)) {
     logMessage("Failed to download JSON file");
@@ -194,23 +203,23 @@ bool ota_update_from_url(bool lite) {
   char remote_version[32] = {0};
   char bin_url[256] = {0};
   if (!parse_json_version_and_file(TEMP_JSON_PATH, remote_version, sizeof(remote_version), bin_url, sizeof(bin_url))) {
-    SD.remove(TEMP_JSON_PATH);
+    FSYS.remove(TEMP_JSON_PATH);
     return false;
   }
 
   if (strcmp(CURRENT_VERSION, remote_version) >= 0) {
     logMessage("No update needed");
-    SD.remove(TEMP_JSON_PATH);
+    FSYS.remove(TEMP_JSON_PATH);
     return false;
   }
 
   logMessage(String("Downloading firmware bin: ") + bin_url);
   if (!download_file(bin_url, TEMP_BIN_PATH)) {
     logMessage("Failed to download firmware bin");
-    SD.remove(TEMP_JSON_PATH);
+    FSYS.remove(TEMP_JSON_PATH);
     return false;
   }
-  SD.remove(TEMP_JSON_PATH);
+  FSYS.remove(TEMP_JSON_PATH);
 
   esp_http_client_config_t config = {
     .url = bin_url,
@@ -225,7 +234,7 @@ bool ota_update_from_url(bool lite) {
   draw_progress_bar(0);
 
   esp_err_t ret = esp_https_ota(&config);
-  SD.remove(TEMP_BIN_PATH);
+  FSYS.remove(TEMP_BIN_PATH);
 
   if (ret == ESP_OK) {
     logMessage("OTA update successful, restarting...");

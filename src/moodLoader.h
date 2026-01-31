@@ -1,7 +1,7 @@
 #pragma once
 #include <M5Unified.h>
 #include <map>
-#include <SD.h>
+#include "SD.h"
 #include <JPEGDEC.h>
 
 struct MoodImage {

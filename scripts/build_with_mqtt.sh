@@ -26,18 +26,21 @@ read -p "Enter MQTT host: " MQTT_HOST
 read -p "Enter MQTT port [1883]: " MQTT_PORT
 MQTT_PORT=${MQTT_PORT:-1883}
 
-# Validate input
-if [ -z "$MQTT_USERNAME" ] || [ -z "$MQTT_PASSWORD" ] || [ -z "$MQTT_HOST" ]; then
-    echo "Error: All fields except port are required"
-    exit 1
+
+# Ask about coredump logging
+read -p "Compile with coredump logging? (y/n): " COREDUMP_CHOICE
+if [[ "$COREDUMP_CHOICE" =~ ^[Yy]$ ]]; then
+    COREDUMP_FLAG="-DENABLE_COREDUMP_LOGGING"
+else
+    COREDUMP_FLAG=""
 fi
 
 # Export credentials as build flags
-export PLATFORMIO_BUILD_FLAGS="$PLATFORMIO_BUILD_FLAGS -DMQTT_USERNAME='\"$MQTT_USERNAME\"' -DMQTT_PASSWORD='\"$MQTT_PASSWORD\"' -DMQTT_HOST='\"$MQTT_HOST\"' -DMQTT_PORT=$MQTT_PORT -DENABLE_COREDUMP_LOGGING -DCURRENT_VERSION='\"$VERSION\"'"
+export PLATFORMIO_BUILD_FLAGS="$PLATFORMIO_BUILD_FLAGS -DMQTT_USERNAME='\"$MQTT_USERNAME\"' -DMQTT_PASSWORD='\"$MQTT_PASSWORD\"' -DMQTT_HOST='\"$MQTT_HOST\"' -DMQTT_PORT=$MQTT_PORT -DCURRENT_VERSION='\"$VERSION\"' $COREDUMP_FLAG"
 
 # Determine environments to build: if no argument provided, build all known envs
 if [ -z "$1" ]; then
-    ENVS=("Cardputer-dev" "Cardputer-full")
+    ENVS=("Cardputer-dev" "Cardputer-full" "m5sticks3")
 else
     ENVS=("$1")
 fi
@@ -63,6 +66,7 @@ done
 
 mkdir -p firmware
 
+# Process Cardputer-full
 FULL_BIN_PATH=$(find .pio/build/Cardputer-full/ -type f -name "firmware.bin" | head -n 1)
 if [ ! -f "$FULL_BIN_PATH" ]; then
     echo "❌ Full firmware.bin not found!"
@@ -71,19 +75,35 @@ fi
 cp "$FULL_BIN_PATH" firmware/firmware.bin
 echo "✅ Full firmware copied to firmware/firmware.bin"
 
-# Step 7: Create firmware.json with full URL
-DATE=$(date +%F)
 cat <<EOF > firmware/firmware.json
 {
   "version": "$VERSION",
   "file": "$REPO_URL/firmware.bin",
-  "date": "$DATE",
+  "date": "$(date +%F)",
   "notes": "Full version"
 }
 EOF
 
+# Process M5StickS3
+M5STICKS3_BIN_PATH=$(find .pio/build/m5sticks3/ -type f -name "firmware.bin" | head -n 1)
+if [ ! -f "$M5STICKS3_BIN_PATH" ]; then
+    echo "❌ M5StickS3 firmware.bin not found!"
+    exit 1
+fi
+cp "$M5STICKS3_BIN_PATH" firmware/m5sticks3.bin
+echo "✅ M5StickS3 firmware copied to firmware/m5sticks3.bin"
 
-esptool.py --chip esp32s3 merge_bin -o full.bin   --flash_mode dio   --flash_freq 80m   --flash_size 8MB   0x0000 .pio/build/Cardputer-full/bootloader.bin   0x8000 .pio/build/Cardputer-full/partitions.bin   0xE000 ../../Documents/boot_app0.bin   0x10000 .pio/build/Cardputer-full/firmware.bin
+cat <<EOF > firmware/m5sticks3.json
+{
+  "version": "$VERSION",
+  "file": "$REPO_URL/m5sticks3.bin",
+  "date": "$(date +%F)",
+  "notes": "M5StickS3 version"
+}
+EOF
+
+esptool.py --chip esp32s3 merge_bin -o cardputer.bin --flash_mode dio --flash_freq 80m --flash_size 8MB 0x0000 .pio/build/Cardputer-full/bootloader.bin 0x8000 .pio/build/Cardputer-full/partitions.bin 0xE000 ../../Documents/boot_app0.bin 0x10000 .pio/build/Cardputer-full/firmware.bin
+esptool.py --chip esp32s3 merge_bin -o m5stick.bin --flash_mode dio --flash_freq 80m --flash_size 8MB 0x0000 .pio/build/m5sticks3/bootloader.bin 0x8000 .pio/build/m5sticks3/partitions.bin 0xE000 ../../Documents/boot_app0.bin 0x10000 .pio/build/m5sticks3/firmware.bin
 
 echo "✅ Metadata files with full download URLs created"
 

@@ -1,8 +1,8 @@
+#include "settings.h"
 #include "networkKit.h"
 #include "EapolSniffer.h"
 #include <map>
 #include "src.h"
-#include "settings.h"
 #include "pwnagothi.h"
 #include "ui.h"
 
@@ -176,10 +176,17 @@ bool SnifferBegin(int userChannel, bool skipSDCardCheck /*ONLY For debugging pur
 
   currentChannel = autoChannelSwitch ? 1 : userChannel;
   if(!skipSDCardCheck) {
-    if (!SD.begin(SD_CS, sdSPI, 1000000)) {
+    #ifdef USE_LITTLEFS
+    if (!FSYS.begin()) {
+      logMessage("LittleFS init failed");
+      return false;
+    }
+    #else
+    if (!FSYS.begin(SD_CS, sdSPI, 1000000)) {
       logMessage("SD card init failed");
       return false;
     }
+    #endif
     // ... SD test logic ...
   } else {
     logMessage("Skipping SD card check for debugging purposes.");
@@ -275,11 +282,11 @@ void SnifferLoop() {
             snprintf(filename, sizeof(filename), "/handshake/%s_%s_ID_%i.pcap",
                      bssidStr, apName, random(999));
 
-            if (!SD.exists("/handshake")) {
-                SD.mkdir("/handshake");
+            if (!FSYS.exists("/handshake")) {
+                FSYS.mkdir("/handshake");
             }
 
-            file = SD.open(filename, FILE_WRITE, true);
+            file = FSYS.open(filename, FILE_WRITE, true);
             if (!file) {
                 logMessage("[ERROR] fopen failed: " + String(filename));
                 free(packet->data);
