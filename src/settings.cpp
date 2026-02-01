@@ -40,6 +40,7 @@ bool checkUpdatesAtNetworkStart = true;
 uint8_t gpsTx;
 uint8_t gpsRx;
 bool useCustomGPSPins = false;
+uint32_t gpsBaudRate = 115200;
 bool getLocationAfterPwn = false;
 bool auto_mode_and_wardrive = false;
 uint lastSessionDeauths = 0;
@@ -440,6 +441,9 @@ bool initVars() {
         if(config["useCustomGPSPins"].is<bool>()) useCustomGPSPins = config["useCustomGPSPins"].as<bool>();
         else configChanged = true;
 
+        if(config["gpsBaudRate"].is<uint32_t>()) gpsBaudRate = config["gpsBaudRate"].as<uint32_t>();
+        else configChanged = true;
+
         if(config["getLocationAfterPwn"].is<bool>()) getLocationAfterPwn = config["getLocationAfterPwn"].as<bool>();
         else configChanged = true;
 
@@ -526,6 +530,7 @@ bool initVars() {
     config["gpsTx"] = gpsTx;
     config["gpsRx"] = gpsRx;
     config["useCustomGPSPins"] = useCustomGPSPins;
+    config["gpsBaudRate"] = gpsBaudRate;
     config["getLocationAfterPwn"] = getLocationAfterPwn;
     config["lastSessionDeauths"] = lastSessionDeauths;
     config["lastSessionCaptures"] = lastSessionCaptures;

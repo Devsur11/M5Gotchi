@@ -157,6 +157,7 @@ extern bool skip_file_manager_checks_in_dev;
 extern uint8_t gpsTx;
 extern uint8_t gpsRx;
 extern bool useCustomGPSPins;
+extern uint32_t gpsBaudRate;
 extern bool getLocationAfterPwn;
 extern bool checkUpdatesAtNetworkStart;
 extern bool auto_mode_and_wardrive;

@@ -12,7 +12,7 @@
 
 static const int GPS_RX_PIN = 15; // AT6H TX -> ESP RX
 static const int GPS_TX_PIN = 13; // AT6H RX <- ESP TX
-static const int GPS_BAUD = 115200;
+static const int GPS_BAUD_DEFAULT = 115200;
 int tot_observed_networks = 0;
 
 // Session filename state
@@ -190,10 +190,10 @@ void setWardriveFilename(const String& path) {
 void startWardriveSession(unsigned long gpsTimeoutMs) {
     // attempt quick GPS read to get ISO timestamp
     if(!useCustomGPSPins){
-        Serial2.begin(GPS_BAUD, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
+        Serial2.begin(gpsBaudRate, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
     }
     else{
-        Serial2.begin(GPS_BAUD, SERIAL_8N1, gpsRx, gpsTx);
+        Serial2.begin(gpsBaudRate, SERIAL_8N1, gpsRx, gpsTx);
     }
     GpsFix bestFix;
     unsigned long start = millis();
@@ -428,7 +428,7 @@ wardriveStatus wardrive(const std::vector<wifiSpeedScan>& networks, unsigned lon
     // if (firstSeenMap.empty()) loadFirstSeenMap();
 
     // Initialize GPS serial (Serial2)
-    Serial2.begin(GPS_BAUD, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
+    Serial2.begin(gpsBaudRate, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
 
     GpsFix bestFix;
     unsigned long start = millis();
