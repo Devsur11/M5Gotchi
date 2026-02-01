@@ -419,14 +419,39 @@ bool isEapolFrame(const uint8_t *data, uint16_t len) {
 }
 
 uint8_t getEAPOLOrder(uint8_t *buf) {
-    uint16_t key_info = (buf[39] << 8) | buf[40];  // always big-endian
-
+    if (buf == nullptr) return 0;
+    
+    // Parse the frame control to get header length
+    uint16_t fc = buf[0] | (buf[1] << 8);
+    int hdrlen = ieee80211_hdrlen(fc);
+    
+    // Check if we have enough data for LLC+SNAP+EAPOL header
+    // Need: hdrlen (MAC header) + 8 (LLC/SNAP) + 5 (EAPOL header) + 5 (Key frame) minimum
+    if (hdrlen < 24 || hdrlen + 18 > 4096) return 0;
+    
+    // Get LLC/SNAP header
+    const uint8_t *llc = buf + hdrlen;
+    if (!(llc[0] == 0xAA && llc[1] == 0xAA && llc[2] == 0x03 &&
+          llc[3] == 0x00 && llc[4] == 0x00 && llc[5] == 0x00 &&
+          llc[6] == 0x88 && llc[7] == 0x8E)) {
+        return 0; // Not EAPOL
+    }
+    
+    // EAPOL header starts after LLC/SNAP
+    const uint8_t *eapol = llc + 8;
+    // EAPOL: version(1) + type(1) + length(2) + key_descriptor_version(1)
+    // Key info is at offset 1-2 after key_descriptor_version
+    if (eapol[1] != 3) return 0; // Not a key frame (type 3)
+    
+    // Key info field is at eapol[5] and eapol[6] (big-endian)
+    uint16_t key_info = (eapol[5] << 8) | eapol[6];
+    
     bool mic     = key_info & (1 << 8);
     bool ack     = key_info & (1 << 7);
     bool install = key_info & (1 << 6);
     bool secure  = key_info & (1 << 9);
 
-    if (!mic && ack && !install) {
+    if (!mic && ack && !install && !secure) {
         logMessage("EAPOL Message 1 detected");
         return 1; // Message 1
     }
@@ -434,7 +459,8 @@ uint8_t getEAPOLOrder(uint8_t *buf) {
         logMessage("EAPOL Message 2 detected");
         return 2; // Message 2
     }
-    if (mic && ack && install) {
+    if (mic && ack && install && !secure) {
+        
         logMessage("EAPOL Message 3 detected");
         return 3; // Message 3
     }
@@ -443,7 +469,7 @@ uint8_t getEAPOLOrder(uint8_t *buf) {
         return 4; // Message 4
     }
 
-    logMessage("Unknown EAPOL message type");
+    fLogMessage("Unknown EAPOL message type, key_info=0x%04X", key_info);
     return 0; // Unknown
 }
 

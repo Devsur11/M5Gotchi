@@ -196,6 +196,7 @@ menu settings_menu[] = {
   {"WiFi Connect", 43},                   // Connect to WiFi
   {"Saved Networks", 32},                 // Manage saved networks
   {"GPS Pins", 30},                       // GPS GPIO pins
+  {"GPS Baud Rate", 37},                  // GPS Baud Rate
   {"GPS Logging", 31},                    // Log GPS data after handshake
   {"Pwngrid Broadcast", 60},              // Advertise Pwngrid presence
 
@@ -629,6 +630,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
     char val_4_5[55]; // check_inbox_at_startup
     char val_5[45];   // WiFi Connect
     char val_6[70];   // GPS Pins
+    char val_6_5[70]; // GPS Baud Rate
     char val_7[70];   // GPS Logging
     char val_8[42];   // Key Sounds
     char val_9[50];   // Pwngrid Broadcast
@@ -664,6 +666,10 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
     snprintf(val_6, sizeof(val_6),
             "GPS Pins: %s",
             !useCustomGPSPins ? "Default" : "Custom");
+
+    snprintf(val_6_5, sizeof(val_6_5),
+            "GPS Baud: %lu",
+            gpsBaudRate);
 
     snprintf(val_7, sizeof(val_7),
             "GPS Logging: %s",
@@ -705,6 +711,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
         { val_5, 43 },   // WiFi Connect
         { "Saved Networks", 32 },  // Manage saved networks
         { val_6, 30 },   // GPS Pins
+        { val_6_5, 37 }, // GPS Baud Rate
         { val_7, 31 },   // GPS Logging
         { val_9, 60 },   // Pwngrid Broadcast
         { val_13, 122 }, // Sync pwned on boot
@@ -3544,8 +3551,12 @@ void runApp(uint8_t appID){
       return;
     }
     if(appID == 61){
+      if(!dev_mode){
+        drawInfoBox("ERROR", "Experimental app!", "Enable dev mode to use", true, false);
+        menuID = 2;
+        return;
+      }
       // PMKID Grabber app - uses wifiChoice if available
-      drawHintBox("This is VERY experimental and may not work at all so expect no value from this function. This is only intended for devs for testing", 17);
       if(wifiChoice.equals("")){
         drawInfoBox("Error", "No wifi selected", "Use 'Select Networks' first", true, false);
         menuID = 2;
@@ -3593,7 +3604,15 @@ void runApp(uint8_t appID){
 
       if (drawQuestionBox("Proceed?", "Grab PMKID from:", wifiChoice)) {
         drawInfoBox("PMKID", "Starting grabber...", "Please wait", false, false);
-        bool ok = GrabPMKIDForAP(bssidPtr, ch, 30000); // 30s timeout
+        attackSetup();
+        bool ok;
+        while(true){
+          attackLoop();
+          bool ok = runPMKIDAttack(bssidPtr, ch);
+          if(ok) break;
+        }
+         // 30s timeout
+        
         if (ok) {
           drawInfoBox("Success", "PMKID captured", "", true, false);
         } else {
@@ -3952,6 +3971,25 @@ void runApp(uint8_t appID){
       getLocationAfterPwn = (choice == 1);
       if(saveSettings()){
         drawInfoBox("Saved", "Setting updated", "", true, false);
+      }
+      menuID = 6;
+      return;
+    }
+    if(appID == 37){
+      // GPS Baud Rate
+      String menu[] = {"9600", "19200", "38400", "57600", "115200"};
+      uint32_t baudRates[] = {9600, 19200, 38400, 57600, 115200};
+      int initial = 4; // Default to 115200
+      for(int i = 0; i < 5; i++){
+        if(baudRates[i] == gpsBaudRate){
+          initial = i;
+          break;
+        }
+      }
+      int choice = drawMultiChoice("GPS Baud Rate", menu, 5, 6, initial);
+      gpsBaudRate = baudRates[choice];
+      if(saveSettings()){
+        drawInfoBox("Saved", "GPS Baud Rate: " + String(gpsBaudRate), "", true, false);
       }
       menuID = 6;
       return;
@@ -4983,11 +5021,96 @@ void runApp(uint8_t appID){
     return;
   }
 }
-
 int16_t getNumberfromUser(String tittle, String desc, uint16_t maxNumber){
   uint16_t number = 0;
   appRunning = true;
   debounceDelay();
+  
+  #ifdef BUTTON_ONLY_INPUT
+  // Button-only number input: use a simple digit selector
+  uint8_t selected_digit = 0;
+  bool selecting = true;
+  
+  while (selecting) {
+    drawTopCanvas();
+    drawBottomCanvas();
+    canvas_main.clear(bg_color_rgb565);
+    canvas_main.setTextSize(1.5);
+    canvas_main.setTextColor(tx_color_rgb565);
+    canvas_main.setCursor(5, 10);
+    canvas_main.println(tittle + ":");
+    canvas_main.setTextDatum(middle_center);
+    canvas_main.setTextSize(1);
+    
+    // Display current number
+    canvas_main.setTextSize(2);
+    canvas_main.drawString(String(number), canvas_center_x, canvas_h / 3);
+    
+    // Draw digit selector (0-9)
+    canvas_main.setTextSize(1.5);
+    int digit_y = canvas_h / 2 + 10;
+    
+    for (int i = 0; i < 10; i++) {
+      int x_pos = canvas_center_x - 40 + (i % 5) * 20;
+      int y_pos = digit_y + (i / 5) * 20;
+      
+      if (i == selected_digit) {
+        canvas_main.drawRect(x_pos - 8, y_pos - 8, 16, 16, tx_color_rgb565);
+        canvas_main.fillRect(x_pos - 8, y_pos - 8, 16, 16, tx_color_rgb565);
+        canvas_main.setTextColor(bg_color_rgb565);
+      } else {
+        canvas_main.setTextColor(tx_color_rgb565);
+      }
+      canvas_main.setTextDatum(middle_center);
+      canvas_main.drawString(String(i), x_pos, y_pos);
+      canvas_main.setTextColor(tx_color_rgb565);
+    }
+    
+    // Draw instructions
+    canvas_main.setTextSize(1);
+    canvas_main.setTextDatum(middle_center);
+    canvas_main.drawString("B:cycle A:add A long:done B long:del", canvas_center_x, canvas_h - 12);
+    
+    pushAll();
+    M5.update();
+    
+    inputManager::update();
+    
+    // Button B: cycle through digits
+    if (inputManager::isButtonBPressed()) {
+      selected_digit = (selected_digit + 1) % 10;
+      debounceDelay();
+    }
+    
+    // Button A: add selected digit to number
+    if (inputManager::isButtonAPressed()) {
+      if (number * 10 + selected_digit <= maxNumber) {
+        number = number * 10 + selected_digit;
+      }
+      debounceDelay();
+    }
+    
+    // Button A long press: confirm and exit
+    if (inputManager::isButtonALongPressed()) {
+      appRunning = false;
+      logMessage("Number input returning: " + String(number));
+      selecting = false;
+      debounceDelay();
+    }
+    
+    // Button B long press: backspace (remove last digit)
+    if (inputManager::isButtonBLongPressed()) {
+      if (number > 0) {
+        number = number / 10;
+      }
+      debounceDelay();
+    }
+  }
+  
+  return number;
+  
+  #else
+  // Keyboard input version (original behavior)
   while (true){
     drawTopCanvas();
     drawBottomCanvas();
@@ -5003,7 +5126,7 @@ int16_t getNumberfromUser(String tittle, String desc, uint16_t maxNumber){
     canvas_main.drawString(String(number), canvas_center_x, canvas_h / 2);
     pushAll();
     M5.update();
-#ifndef BUTTON_ONLY_INPUT
+    
     M5Cardputer.update();
     keyboard_changed = M5Cardputer.Keyboard.isChange();
     if(keyboard_changed){Sound(10000, 100, sound);}
@@ -5037,28 +5160,8 @@ int16_t getNumberfromUser(String tittle, String desc, uint16_t maxNumber){
         return number;
       }
     }
-#else
-    inputManager::update();
-    if(inputManager::isButtonAPressed()) {
-      if(number > maxNumber){
-        drawInfoBox("Error", "Number can't be higher than " + String(maxNumber), "", true, false);
-        number = 0;
-        debounceDelay();
-      }
-      else{
-        appRunning = false;
-        logMessage("Number input returning: " + String(number));
-        return number;
-      }
-    }
-    if(inputManager::isButtonBPressed()) {
-      if(number > 0) {
-          number = number / 10;
-      }
-      debounceDelay();
-    }
-#endif
   }
+  #endif
 }
 
 bool getBoolInput(String tittle, String desc, bool defaultValue){

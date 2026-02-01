@@ -818,6 +818,7 @@ void sdmanager::runFileManager() {
           }
           
           // Draw action selection boxes
+          #ifdef BUTTON_ONLY_INPUT
           int boxY = 35;
           int boxH = 18;
           for (int i = 0; i < 4; i++) {
@@ -832,11 +833,15 @@ void sdmanager::runFileManager() {
             canvas_main.setTextSize(1.2);
             canvas_main.drawString(actions[i], canvas_main.width() / 2, boxY + (i * boxH) + 9);
           }
-          
+          #endif
           canvas_main.setTextDatum(top_left);
           canvas_main.setTextSize(1);
           canvas_main.setTextColor(tx_color_rgb565);
+          #ifdef BUTTON_ONLY_INPUT
           canvas_main.drawString("A:select  B:back", 3, canvas_main.height() - 12);
+          #else
+          canvas_main.drawString("v:view  e:edit  d:del  `:back", 3, canvas_main.height() - 12);
+          #endif
           
           pushAll();
           
