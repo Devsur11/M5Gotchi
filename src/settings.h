@@ -177,3 +177,4 @@ extern bool add_new_units_to_friends;
 extern bool check_inbox_at_startup;
 extern String originalMacAddress;
 extern bool configChanged;
+extern uint8_t menu_display_mode;  // 0=list, 1=grid

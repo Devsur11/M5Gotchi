@@ -293,6 +293,7 @@ bool savePersonality(){
 #include "WiFi.h"
 
 bool configChanged = false;
+uint8_t menu_display_mode = 0;  // 0=list, 1=grid
 
 bool initVars() {
     #ifdef USE_LITTLEFS
@@ -392,6 +393,9 @@ bool initVars() {
         else configChanged = true;
 
         if(config["sync_pwned_on_boot"].is<bool>()) sync_pwned_on_boot = config["sync_pwned_on_boot"].as<bool>();
+        else configChanged = true;
+
+        if(config["menu_display_mode"].is<uint8_t>()) menu_display_mode = config["menu_display_mode"].as<uint8_t>();
         else configChanged = true;
 
         if(config["sd_logging"].is<bool>()) sd_logging = config["sd_logging"].as<bool>();
@@ -614,6 +618,7 @@ bool saveSettings(){
     config["add_new_units_to_friends"] = add_new_units_to_friends;
     config["check_inbox_at_startup"] = check_inbox_at_startup;
     config["sync_pwned_on_boot"] = sync_pwned_on_boot;
+    config["menu_display_mode"] = menu_display_mode;
 
     logMessage("JSON data creation successful, proceeding to save");
     FConf = FSYS.open(NEW_CONFIG_FILE, FILE_WRITE, false);

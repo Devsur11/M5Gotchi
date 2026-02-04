@@ -202,6 +202,7 @@ menu settings_menu[] = {
 
   // Interface / Display
   {"Theme", 50},                          // UI Theme
+  {"Menu Display Mode", 89},              // List or Grid mode for main menu
   {"Brightness", 41},                     // Display brightness
   {"Key Sounds", 42},                     // Keyboard Sound
   {"Text Faces", 90},                     // Edit text faces
@@ -718,6 +719,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
 
         // Interface / Display
         { "Theme", 50 },       // UI Theme
+        { "Menu Display Mode", 89 }, // List or Grid mode for main menu
         { "Brightness", 41 },  // Display brightness
         { "Sounds" , 42 },         // Key Sounds
         { "Text Faces", 90 },  // Edit text faces
@@ -749,9 +751,9 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
         { "Back", 255 }
     };
     #ifdef USE_LITTLEFS
-    drawMenuList( new_settings_menu , 6, 31);
+    drawMenuList( new_settings_menu , 6, 33);
     #else
-    drawMenuList( new_settings_menu , 6, 29);
+    drawMenuList( new_settings_menu , 6, 30);
     #endif
     prevMID = 6;
   }  
@@ -1914,7 +1916,7 @@ void runApp(uint8_t appID){
     }
     if(appID == 6){
       debounceDelay();
-      drawMenuList(settings_menu,6,26);
+      drawMenuList(settings_menu,6,27);
     }
     if(appID == 7){
       if(hostname == "M5Gotchi"){
@@ -4622,6 +4624,24 @@ void runApp(uint8_t appID){
     if(appID == 50){
       themeMenu();
     }
+    if(appID == 89){
+      // Toggle menu display mode (list or grid)
+      String menu[] = {"List", "Grid", "Back"};
+      debounceDelay();
+      uint8_t choice = drawMultiChoice("Menu Display Mode", menu, 3, 6, menu_display_mode);
+      if(choice == 0){ 
+        menu_display_mode = 0; 
+        if(saveSettings()) drawInfoBox("Saved","Menu display: List", "", true, false); 
+        else drawInfoBox("ERROR","Save failed","", true, false);
+      } 
+      else if(choice == 1){ 
+        menu_display_mode = 1; 
+        if(saveSettings()) drawInfoBox("Saved","Menu display: Grid", "", true, false); 
+        else drawInfoBox("ERROR","Save failed","", true, false);
+      } 
+      menuID = 6; 
+      return;
+    }
     if(appID == 51){
       bool confirm = drawQuestionBox("Factory Reset", "Delete all config data?", "", "Press 'y' to confirm, 'n' to cancel");
       if (!confirm) {
@@ -6184,6 +6204,12 @@ void drawList(String toDraw[], uint8_t menu_size) {
 }
 
 void drawMenuList(menu toDraw[], uint8_t menuIDPriv, uint8_t menu_size) {
+  // Check if grid mode is enabled for main menu (menuID == 1)
+  if (menu_display_mode == 1 && menuIDPriv == 1) {
+    drawMenuListGrid(toDraw, menuIDPriv, menu_size);
+    return;
+  }
+  
   menuID = menuIDPriv;
   menu_len = menu_size;
 
@@ -6897,6 +6923,7 @@ void drawStats(){
       return;
     }
     #else
+    M5Cardputer.update();
     Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
     if (true) {
       for (auto k : status.word) {
@@ -7222,3 +7249,258 @@ void drawStorageInfo() {
     delay(100);
   }
 }
+
+// Get bitmap icon data for menu item
+const uint8_t* getMenuIconBitmap(uint8_t menuIndex) {
+  // For the main menu (menuID=1), return appropriate bitmap icons
+  if (menuID == 1) {
+    switch (menuIndex) {
+      case 0: return ICON_MANUAL_CONTROL_BITMAP;   // Manual Control
+      case 1: return ICON_AUTO_MODE_BITMAP;        // Auto Mode
+      case 2: return ICON_WPA_SEC_BITMAP;          // WPA-SEC
+      case 3: return ICON_PWNGRID_BITMAP;          // Pwngrid
+      case 4: return ICON_WARDRIVING_BITMAP;       // Wardriving
+      case 5: return ICON_FILES_BITMAP;            // Files
+      case 6: return ICON_STATISTICS_BITMAP;       // Statistics
+      case 7: return ICON_SETTINGS_BITMAP;         // Settings
+      case 8: return ICON_WEB_MANAGER_BITMAP;      // Web file manager
+      case 9: return ICON_BACK_BITMAP;             // Back
+      default: return nullptr;
+    }
+  }
+  return nullptr;
+}
+
+// Draw a 32x32 bitmap scaled to 80x29 at specified location
+void drawBitmap32(int x, int y, const uint8_t* bitmap, uint16_t color, M5Canvas &canvas) {
+  if (!bitmap) return;
+  
+  const int targetW = 80;
+  const int targetH = 29;
+  const int sourceW = 32;
+  const int sourceH = 32;
+  
+  // Scale factors
+  float scaleX = (float)targetW / sourceW;
+  float scaleY = (float)targetH / sourceH;
+  
+  for (int row = 0; row < sourceH; row++) {
+    uint32_t byte1 = bitmap[row * 4];
+    uint32_t byte2 = bitmap[row * 4 + 1];
+    uint32_t byte3 = bitmap[row * 4 + 2];
+    uint32_t byte4 = bitmap[row * 4 + 3];
+    uint32_t bits = (byte1 << 24) | (byte2 << 16) | (byte3 << 8) | byte4;
+    
+    for (int col = 0; col < sourceW; col++) {
+      if (bits & (0x80000000 >> col)) {
+        // Calculate scaled position and size
+        int scaledX = x + (int)(col * scaleX);
+        int scaledY = y + (int)(row * scaleY);
+        int scaledW = (int)((col + 1) * scaleX) - (int)(col * scaleX);
+        int scaledH = (int)((row + 1) * scaleY) - (int)(row * scaleY);
+        
+        // Draw filled rectangle for this pixel
+        canvas.fillRect(scaledX, scaledY, scaledW, scaledH, color);
+      }
+    }
+  }
+}
+
+// Grid-based menu display with bitmap icons and pagination
+void drawMenuListGrid(menu toDraw[], uint8_t menuIDPriv, uint8_t menu_size) {
+  menuID = menuIDPriv;
+  menu_len = menu_size;
+
+  M5.update();
+
+  // Grid parameters
+  int cols = 3;  // 3 columns
+  int rows = 3;  // 3 rows (9 items per page)
+  int itemsPerPage = cols * rows;  // 9 items per page
+  
+  // Calculate total pages
+  int totalPages = (menu_size + itemsPerPage - 1) / itemsPerPage;
+  
+  // Determine current page
+  static int currentPage = 0;
+  int startIndex = currentPage * itemsPerPage;
+  int endIndex = startIndex + itemsPerPage;
+  if (endIndex > menu_size) endIndex = menu_size;
+  
+  // Ensure menu_current_opt is within valid range
+  if (menu_current_opt >= menu_size) menu_current_opt = menu_size - 1;
+  
+  // If menu_current_opt is not on current page, adjust page
+  if (menu_current_opt < startIndex || menu_current_opt >= endIndex) {
+    currentPage = menu_current_opt / itemsPerPage;
+    startIndex = currentPage * itemsPerPage;
+    endIndex = startIndex + itemsPerPage;
+    if (endIndex > menu_size) endIndex = menu_size;
+  }
+
+  canvas_main.fillSprite(bg_color_rgb565);
+  canvas_main.setTextColor(tx_color_rgb565);
+  canvas_main.setTextSize(1);
+  canvas_main.setTextDatum(top_left);
+
+  int maxW = canvas_main.width();
+  int maxH = canvas_main.height();
+  
+  // Reserve space for page indicator at bottom
+  int contentHeight = maxH - 20;  // Leave space at bottom for page info
+  int cellH = contentHeight / rows;
+  int cellW = maxW / cols;
+
+  // Navigation
+  static uint32_t lastNavTime = 0;
+  uint32_t navDelay = 150; // millisecond delay between navigation
+  
+  #ifdef BUTTON_ONLY_INPUT
+  inputManager::update();
+  // Button navigation would go here
+  if (inputManager::isButtonBPressed()) {
+    menu_current_opt = (menu_current_opt + 1) % menu_size;
+    lastNavTime = millis();
+  }
+  if (inputManager::isButtonAPressed()) {
+    debounceDelay();
+    currentPage = 0;  // Reset page for next menu
+    runApp(toDraw[menu_current_opt].command);
+    return;
+  }
+  if (inputManager::isButtonBLongPressed()) {
+    debounceDelay();
+    if (menuID == 1) {
+      // Back to mood screen and reset pagination
+      menuID = 0;
+      menu_current_opt = 0;
+      menu_current_page = 1;
+      currentPage = 0;  // Reset page
+    }
+    return;
+  }
+  #else
+  M5Cardputer.update();
+  Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
+  uint32_t currentTime = millis();
+  
+  // Handle arrow keys for grid navigation
+  if (currentTime - lastNavTime > navDelay) {
+    bool navChanged = false;
+    
+    // Check for navigation keys (;=up, .=down, ,=left, /=right)
+    for (auto k : status.word) {
+      if (k == ';') {  // UP
+        int newOpt = menu_current_opt - cols;
+        if (newOpt >= startIndex) {
+          menu_current_opt = newOpt;
+          navChanged = true;
+        } else if (currentPage > 0) {
+          // Move to previous page, same column
+          currentPage--;
+          startIndex = currentPage * itemsPerPage;
+          endIndex = startIndex + itemsPerPage;
+          if (endIndex > menu_size) endIndex = menu_size;
+          menu_current_opt = endIndex - cols + (menu_current_opt % cols);
+          if (menu_current_opt >= menu_size) menu_current_opt = menu_size - 1;
+          navChanged = true;
+        }
+      }
+      if (k == '.') {  // DOWN
+        int newOpt = menu_current_opt + cols;
+        if (newOpt < endIndex) {
+          menu_current_opt = newOpt;
+          navChanged = true;
+        } else if (currentPage < totalPages - 1) {
+          // Move to next page, same column
+          currentPage++;
+          startIndex = currentPage * itemsPerPage;
+          endIndex = startIndex + itemsPerPage;
+          if (endIndex > menu_size) endIndex = menu_size;
+          int col = menu_current_opt % cols;
+          menu_current_opt = startIndex + col;
+          if (menu_current_opt >= endIndex) menu_current_opt = endIndex - 1;
+          navChanged = true;
+        }
+      }
+      if (k == ',') {  // LEFT
+        if (menu_current_opt % cols > 0) {
+          menu_current_opt--;
+          navChanged = true;
+        }
+      }
+      if (k == '/') {  // RIGHT
+        if ((menu_current_opt % cols) < (cols - 1) && menu_current_opt < endIndex - 1) {
+          menu_current_opt++;
+          navChanged = true;
+        }
+      }
+    }
+    
+    if (navChanged) {
+      lastNavTime = currentTime;
+    }
+  }
+  
+  // Handle selection
+  if (status.enter) {
+    debounceDelay();
+    currentPage = 0;  // Reset page for next menu
+    runApp(toDraw[menu_current_opt].command);
+    return;
+  }
+  
+  // Handle escape/back
+  if (status.fn) {
+    for (auto k : status.word) {
+      if (k == '`') {
+        debounceDelay();
+        if (menuID == 1) {
+          // Back to mood screen and reset pagination
+          menuID = 0;
+          menu_current_opt = 0;
+          menu_current_page = 1;
+          currentPage = 0;  // Reset page
+        }
+        return;
+      }
+    }
+  }
+  #endif
+
+  // Draw grid cells with icons only (no text)
+  for (int i = startIndex; i < endIndex; i++) {
+    int localIndex = i - startIndex;
+    int row = localIndex / cols;
+    int col = localIndex % cols;
+    int x = col * cellW;
+    int y = row * cellH;
+    
+    bool isSelected = (i == menu_current_opt);
+    
+    // Draw cell background
+    if (isSelected) {
+      canvas_main.fillRect(x + 2, y + 2, cellW - 4, cellH - 4, tx_color_rgb565);
+    } else {
+      canvas_main.drawRect(x + 2, y + 2, cellW - 4, cellH - 4, tx_color_rgb565);
+    }
+    
+    // Draw bitmap icon at exact size (80x29) at cell start position
+    const uint8_t* bitmapData = getMenuIconBitmap(i);
+    canvas_main.drawBitmap(x + (cellW - 80) / 2, y + (cellH - 29) / 2, bitmapData, 80, 29, 
+                            isSelected ? bg_color_rgb565 : tx_color_rgb565);
+    // if (bitmapData) {
+    //   drawBitmap32(x, y, bitmapData, isSelected ? bg_color_rgb565 : tx_color_rgb565, canvas_main);
+    // }
+  }
+
+  // Draw page indicator at bottom
+  canvas_main.setTextSize(1);
+  canvas_main.setTextColor(tx_color_rgb565);
+  canvas_main.setTextDatum(top_center);
+  String pageInfo = "Page " + String(currentPage + 1) + "/" + String(totalPages);
+  canvas_main.drawString(pageInfo, maxW / 2, maxH - 16);
+
+  pushAll();
+}
+

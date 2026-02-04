@@ -670,10 +670,11 @@ void setup() {
   if (part_spiffs && part_spiffs->address == 0x670000 && app1_size == 0x330000 && part_coredump && !part_vfs && part_app0->size == 0x330000) {
     logMessage("Generic install detected!");
     if(newVersionAvailable) {
-      drawHintBox("A new firmware version is available!\nPlease update via the menu\nPlease note tha bugs from older version will not be reviewed!", 3);
+      drawInfoBox("New Update", "New update available in settings to install.", "Check it out!", true, false);
     }
     logMessage("No feature limitations applied.");
     drawHintBox("Welcome to M5Gotchi!\nSet your device name in setting and explore!\nEnjoy your stay! (Regardless of your choice this will only be shown once)", 13);
+    
     if(!bitRead(hintsDisplayed, 13)){
       drawInfoBox("", "", "", false, false);
       //now lets disable entirely hint 13 regardless of user choice
@@ -685,7 +686,7 @@ void setup() {
   else if (part_spiffs && part_spiffs->address == 0x610000 && app1_size == 0x300000 && !part_coredump && !part_vfs && part_app0->size == 0x300000) {
     logMessage("Sticks3 generic install detected!");
     if(newVersionAvailable) {
-      drawHintBox("A new firmware version is available!\nPlease update via the menu\nPlease note tha bugs from older version will not be reviewed!", 3);
+      drawInfoBox("New Update", "New update available in settings to install.", "Check it out!", true, false);
     }
     logMessage("No feature limitations applied.");
     drawHintBox("Welcome to M5Gotchi!\nSet your device name in setting and explore!\nEnjoy your stay! (Regardless of your choice this will only be shown once)", 13);
@@ -705,7 +706,7 @@ void setup() {
     logMessage("Custom install detected, removing update functionality to prevent bricking!");
     drawHintBox("For the best experience please use M5Burner to install this firmware.", 1);
     if(newVersionAvailable) {
-      drawHintBox("A new firmware version is available!\nPlease update via the menu\nPlease note tha bugs from older version will not be reviewed!", 3);
+      drawInfoBox("New Update", "New update available in settings to install.", "Check it out!", true, false);
     }
     limitFeatures = true;
   }
