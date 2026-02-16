@@ -1,19 +1,15 @@
 #include "settings.h"
 #include "ui.h"
-#include <WiFi.h>
-#include <HTTPClient.h>
-#include "SD.h"
 #include <FS.h>
 #include "fontDownloader.h"
-#ifndef BUTTON_ONLY_INPUT
-#include "M5Cardputer.h"
-#endif
 
-const char* GITHUB_URL1 = "https://devsur11.github.io/M5Gotchi/fonts/big.vlw";
-const char* GITHUB_URL2 = "https://devsur11.github.io/M5Gotchi/fonts/small.vlw";
 const char* FONTS_FOLDER = "/fonts";
-const char* VLW_EXTENSION = ".vlw";
-extern const char github_root_cert_pem_start[] asm("_binary_certs_github_root_cert_pem_start");
+
+// Embedded font files from platformio.ini board_build.embed_files
+extern const uint8_t big_vlw_start[] asm("_binary_fonts_big_vlw_start");
+extern const uint8_t big_vlw_end[] asm("_binary_fonts_big_vlw_end");
+extern const uint8_t small_vlw_start[] asm("_binary_fonts_small_vlw_start");
+extern const uint8_t small_vlw_end[] asm("_binary_fonts_small_vlw_end");
 
 bool fileExists(const char* path) {
     File file = FSYS.open(path);
@@ -22,57 +18,32 @@ bool fileExists(const char* path) {
     return exists;
 }
 
-bool downloadFile(const char* url, const char* localPath) {
-    if (fileExists(localPath)) {
-        fLogMessage("File already exists: %s\n", localPath);
+bool copyEmbeddedFont(const uint8_t* fontStart, const uint8_t* fontEnd, const char* fontName) {
+    String fontPath = String(FONTS_FOLDER) + "/" + String(fontName);
+    
+    if (fileExists(fontPath.c_str())) {
+        fLogMessage("Font already exists: %s\n", fontPath.c_str());
         return true;
     }
 
-    HTTPClient http;
-    http.begin(url, github_root_cert_pem_start);
-    int httpCode = http.GET();
-
-    if (httpCode != HTTP_CODE_OK) {
-        fLogMessage("Failed to download from %s (code: %d)\n", url, httpCode);
-        http.end();
-        return false;
-    }
-
-    File file = FSYS.open(localPath, FILE_WRITE);
+    File file = FSYS.open(fontPath.c_str(), FILE_WRITE);
     if (!file) {
-        fLogMessage("Failed to create file: %s\n", localPath);
-        http.end();
+        fLogMessage("Failed to create font file: %s\n", fontPath.c_str());
         return false;
     }
 
-    WiFiClient* stream = http.getStreamPtr();
-    uint8_t buf[1024];
-    size_t total = 0;
-    size_t contentLength = http.getSize();
-
-    while (http.connected() && (contentLength <= 0 || total < contentLength)) {
-        size_t available = stream->available();
-        if (available) {
-            int readBytes = stream->readBytes(buf, min(available, sizeof(buf)));
-            file.write(buf, readBytes);
-            total += readBytes;
-            
-            // Display progress overlay
-            if (contentLength > 0) {
-                int progress = (total * 100) / contentLength;
-                M5.Display.fillRect(0, 0, M5.Display.width(), 40, bg_color_rgb565);
-                M5.Display.setTextColor(tx_color_rgb565);
-                M5.Display.drawString("Downloading...", 10, 10);
-                M5.Display.drawString(String(progress) + "%", M5.Display.width() - 50, 10);
-                M5.Display.fillRect(10, 25, (M5.Display.width() - 20) * progress / 100, 10, tx_color_rgb565);
-            }
-        }
-        delay(1);
-    }
+    size_t fontSize = fontEnd - fontStart;
+    size_t written = file.write(fontStart, fontSize);
     file.close();
-    http.end();
 
-    fLogMessage("Downloaded: %s (%u bytes)\n", localPath, total);
+    if (written != fontSize) {
+        fLogMessage("Failed to write complete font file: %s (wrote %u of %u bytes)\n", 
+                    fontPath.c_str(), written, fontSize);
+        FSYS.remove(fontPath.c_str());
+        return false;
+    }
+
+    fLogMessage("Copied font: %s (%u bytes)\n", fontPath.c_str(), fontSize);
     return true;
 }
 
@@ -87,8 +58,9 @@ void downloadFonts() {
         logMessage("Created fonts folder");
     }
 
-    downloadFile(GITHUB_URL1, (String(FONTS_FOLDER) + String("/big") + VLW_EXTENSION).c_str());
-    downloadFile(GITHUB_URL2, (String(FONTS_FOLDER) + "/small" + VLW_EXTENSION).c_str());
+    // Copy embedded fonts to SD card
+    copyEmbeddedFont(big_vlw_start, big_vlw_end, "big.vlw");
+    copyEmbeddedFont(small_vlw_start, small_vlw_end, "small.vlw");
 
-    logMessage("Font download complete");
+    logMessage("Font transfer complete");
 }

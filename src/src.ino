@@ -755,31 +755,33 @@ void Sound(int frequency, int duration, bool sound){
 }}
 
 void fontSetup(){
-  if(FSYS.exists("/fonts/big.vlw") && FSYS.exists("/fonts/small.vlw")){
-    logMessage("Fonts folder already exists, skipping download");
-    return;
-  }
-  //lets check if wifi is connected
-  if(WiFi.status() != WL_CONNECTED){
-    logMessage("WiFi not connected, cannot download fonts");
-    if(drawQuestionBox("Setup fonts?", "Fonts not present, install them now? WiFi is not connected, connect now?", "", "This will take a few seconds")){
-      logMessage("User opted to connect to WiFi for font download");
-      drawInfoBox("WiFi Setup", "Please connect to WiFi to download fonts.", "", false, false);
-      runApp(43); //WiFi setup app
-      setToMainMenu();
-    }
-  }
-  if(WiFi.status() != WL_CONNECTED){
-    logMessage("WiFi still not connected, aborting font download");
-    drawInfoBox("Font Download", "WiFi not connected, cannot download fonts.", "", false, true);
-    return;
-  }
-  //now lets check if fonts folder exists, if not create it
-  if(!FSYS.exists("fonts")){
-    if(drawQuestionBox("Setup fonts?", "Fonts not present, install them now? If not installed, moods will not display correctly.", "", "This will take a few seconds")){
-      drawInfoBox("Downloading...", "Downloading fonts, please wait...", "", false, false);
-      downloadFonts();
-      drawInfoBox("Download complete", "Fonts downloaded successfully.", "", false, false);
-    }
-  }
+  downloadFonts();
+  return;
+  // if(FSYS.exists("/fonts/big.vlw") && FSYS.exists("/fonts/small.vlw")){
+  //   logMessage("Fonts folder already exists, skipping download");
+  //   return;
+  // }
+  // //lets check if wifi is connected
+  // if(WiFi.status() != WL_CONNECTED){
+  //   logMessage("WiFi not connected, cannot download fonts");
+  //   if(drawQuestionBox("Setup fonts?", "Fonts not present, install them now? WiFi is not connected, connect now?", "", "This will take a few seconds")){
+  //     logMessage("User opted to connect to WiFi for font download");
+  //     drawInfoBox("WiFi Setup", "Please connect to WiFi to download fonts.", "", false, false);
+  //     runApp(43); //WiFi setup app
+  //     setToMainMenu();
+  //   }
+  // }
+  // if(WiFi.status() != WL_CONNECTED){
+  //   logMessage("WiFi still not connected, aborting font download");
+  //   drawInfoBox("Font Download", "WiFi not connected, cannot download fonts.", "", false, true);
+  //   return;
+  // }
+  // //now lets check if fonts folder exists, if not create it
+  // if(!FSYS.exists("fonts")){
+  //   if(drawQuestionBox("Setup fonts?", "Fonts not present, install them now? If not installed, moods will not display correctly.", "", "This will take a few seconds")){
+  //     drawInfoBox("Downloading...", "Downloading fonts, please wait...", "", false, false);
+  //     downloadFonts();
+  //     drawInfoBox("Download complete", "Fonts downloaded successfully.", "", false, false);
+  //   }
+  // }
 }

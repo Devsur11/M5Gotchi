@@ -279,6 +279,13 @@ void attackLoop() {
         for(int i=0; i<16; i++) sprintf(hexPMKID+i*2, "%02X", capturedPMKID[i]);
         hexPMKID[32] = 0;
         
+        if(FSYS.exists("/pmkid")) {
+            logMessage("PMKID directory exists.");
+        } else {
+            logMessage("PMKID directory does not exist. Creating...");
+            FSYS.mkdir("/pmkid");
+        }
+
         char filename[64];
         snprintf(filename, sizeof(filename), "/pmkid/%02X%02X%02X%02X%02X%02X.txt", 
             capturedBSSID[0], capturedBSSID[1], capturedBSSID[2], 

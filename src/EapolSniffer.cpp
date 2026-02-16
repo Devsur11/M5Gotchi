@@ -60,9 +60,6 @@ std::map<String, APFileContext> apFiles;
 bool targetAPSet = false;
 uint8_t targetBSSID[6];
 
-// PMKID globals
-volatile bool pmkidFound = false;
-String pmkidLastValue = "";
 void IRAM_ATTR wifi_sniffer_cb(void *buf, wifi_promiscuous_pkt_type_t type) {
     if (type != WIFI_PKT_MGMT && type != WIFI_PKT_DATA && type != WIFI_PKT_CTRL) {
         return;
@@ -165,7 +162,8 @@ void clearTargetAP() {
     apTargetedName = "";
     targetAPSet = false;
 }
-bool SnifferBegin(int userChannel, bool skipSDCardCheck /*ONLY For debugging purposses*/) {
+
+bool SnifferBegin(int userChannel, bool skipSDCardCheck) {
   autoChannelSwitch = (userChannel == 0);
   
   // Cleanup beacon if exists
@@ -175,24 +173,7 @@ bool SnifferBegin(int userChannel, bool skipSDCardCheck /*ONLY For debugging pur
   }
 
   currentChannel = autoChannelSwitch ? 1 : userChannel;
-  if(!skipSDCardCheck) {
-    #ifdef USE_LITTLEFS
-    if (!FSYS.begin()) {
-      logMessage("LittleFS init failed");
-      return false;
-    }
-    #else
-    if (!FSYS.begin(SD_CS, sdSPI, 1000000)) {
-      logMessage("SD card init failed");
-      return false;
-    }
-    #endif
-    // ... SD test logic ...
-  } else {
-    logMessage("Skipping SD card check for debugging purposes.");
-  }
 
-  // MEMORY LEAK FIX: Prevent creating new queue over old handle
   if (packetQueue != NULL) {
       // Drain and delete old queue if it exists
       CapturedPacket *p = NULL;
@@ -211,17 +192,11 @@ bool SnifferBegin(int userChannel, bool skipSDCardCheck /*ONLY For debugging pur
   
   delay(100);
   xSemaphoreTake(wifiMutex, portMAX_DELAY);
-  // ... rest of mutex/wifi logic ...
-  trigger(1);
   esp_wifi_set_promiscuous(false);
-  trigger(2);
   esp_wifi_set_channel(currentChannel, WIFI_SECOND_CHAN_NONE);
-  trigger(3);
   esp_wifi_set_promiscuous_rx_cb(&wifi_sniffer_cb);
-  trigger(4);
   esp_wifi_set_promiscuous(true);
   xSemaphoreGive(wifiMutex);
-  logMessage("MUTEX ID2 exited");
 
   logMessage("Sniffer started on channel " + String(currentChannel));
   return true;
