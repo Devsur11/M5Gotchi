@@ -610,7 +610,11 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
   }
   
   if (menuID == 1) {
+    #ifdef M5STICKS3_ENV
     drawMenuList(main_menu, 1, 10);
+    #else
+    drawMenuList(main_menu, 1, 9);
+    #endif
     prevMID = 1;
   } 
   else if (menuID == 2){
@@ -791,7 +795,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
   {
     //redraw only in 5 seconds intervals
     unsigned long currentTime = millis();
-    if ((currentTime - lastRedrawTime >= 10000 )|| needsUiRedraw || pwnagothiMode) {
+    if ((currentTime - lastRedrawTime >= 5000 )|| needsUiRedraw || pwnagothiMode) {
       if(prevMID){
         drawInfoBox("", "Refreshing data...", "", false, false);
         prevMID=0;
@@ -2127,7 +2131,7 @@ void runApp(uint8_t appID){
         runApp(43);
         if(WiFi.status() != WL_CONNECTED){
           drawInfoBox("ERROR!", "No network connection", "Operation abort!", true, false);
-          menuID = 6;
+          menuID = 1;
           return;
         }
       }
@@ -2158,7 +2162,8 @@ void runApp(uint8_t appID){
           drawInfoBox("Error", "Failed to enable. ", "", true, false);
         }
       }
-      menuID = 6;
+      menuID = 1;
+      return;
     }
     if(appID == 14){
       if(!pwnagothiMode){
@@ -2692,7 +2697,6 @@ void runApp(uint8_t appID){
       return;
     }
     if(appID == 18){
-      drawInfoBox("Insert cap!", "Instert lora cap now", "then press enter.", true, false);
       logMessage("Starting wardriver!");
       canvas_main.clear(bg_color_rgb565);
       canvas_main.setTextSize(1.5);

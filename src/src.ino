@@ -477,7 +477,11 @@ void setup() {
     #ifndef BYPASS_SD_CHECK
     initColorSettings();
     initUi();
-    drawInfoBox("ERROR!", "SD card is needed to work.", "Insert it and restart", false, true);
+    #ifdef USE_LITTLEFS
+    drawInfoBox("ERROR!", "Storage mount failed.", "Please reinstall fw with spifs.", false, true);
+    #else
+    drawInfoBox("ERROR!", "Storage mount failed.", "Check SD card.", false, true);
+    #endif
     while(true){delay(10);}
     #endif
   }
