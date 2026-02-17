@@ -307,6 +307,7 @@ String findIncomingFingerprint(const std::vector<message> &messages);
 void drawHintBox(const String &text, uint8_t hintID);
 void drawStats();
 void drawSysInfo();
+void drawAttackMode();
 void drawLittleFSManager();
 void drawStorageInfo();
 void drawStorageInfo();

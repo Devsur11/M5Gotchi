@@ -12,6 +12,7 @@
 #include "SD.h"
 #include <WiFi.h>
 #include "pwnagothi.h"
+#include "newPwnagotchi.h"
 #include "EapolSniffer.h"
 #include "PMKIDGrabber.h"
 #include "mood.h"
@@ -176,6 +177,7 @@ menu wpasec_setup_menu[] = {
 // menuID 5
 menu pwngotchi_menu[] = {
   {"Enable Auto Mode", 36},      // Switch to auto mode
+  {"Debug Mode", 92},           // Pwnagotchi attack system
   {"Auto + Wardriving", 14},     // Auto mode + wardriving
   {"Whitelist", 38},             // Whitelist editor
   {"Handshakes", 39},            // Handshakes file list
@@ -556,6 +558,14 @@ bool crackedFileExist;
 File toUpload;
 
 void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
+  // Process pending file write requests from pwnagotchi task (SD card I/O)
+  FileWriteRequest* writeReq = nullptr;
+  if (fileWriteQueue && xQueueReceive(fileWriteQueue, &writeReq, 0) == pdTRUE) {
+    if (writeReq) {
+      handleFileWrite(writeReq);
+    }
+  }
+  
   //handle button changing pwnagotchi state:
   if(triggerPwnagothi && buttonDirty){
     if(pwnagotchiModeFromButton && !pwnagothiMode){
@@ -622,7 +632,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
     prevMID = 2;
   }
   else if (menuID == 5){
-    drawMenuList( pwngotchi_menu , 5, 6);
+    drawMenuList( pwngotchi_menu , 5, 7);
     prevMID = 5;
   }
   else if (menuID == 6){
@@ -1912,6 +1922,12 @@ void runApp(uint8_t appID){
       debounceDelay();
       runTextsEditor();
       menuID = 6;
+    }
+    if(appID == 92){
+      // Pwnagotchi Attack Mode
+      debounceDelay();
+      drawAttackMode();
+      menuID = 5;
     }
     if(appID == 5){
       drawHintBox("HS - handshakes\n P - peers (other pwnagotchis) met \n D - deauth amount\n T - time\n E - epochs (pwn loops)", 6);
@@ -5327,12 +5343,13 @@ String userInput(const String &prompt, String desc, int maxLen,  const String &i
       canvas_main.setTextColor(tx_color_rgb565);
       // Truncate if too long
       String display = result;
-      if (display.length() > 28) {
+      if (display.length() > 40) {
         display = "..." + display.substring(display.length() - 25);
       }
       canvas_main.print(display);
     }
     
+    #ifdef BUTTON_ONLY_INPUT
     // Draw layout indicator
     canvas_main.setTextSize(1);
     canvas_main.setTextColor(tx_color_rgb565);
@@ -5386,6 +5403,7 @@ String userInput(const String &prompt, String desc, int maxLen,  const String &i
       canvas_main.setTextSize(1);
       canvas_main.drawString(special_keys_arr[i], x, y);
     }
+    #endif
     
     pushAll();
     
@@ -6871,6 +6889,187 @@ void drawSysInfo(){
     }
     inputManager::update();
 #endif
+    delay(100);
+  }
+}
+
+void drawAttackMode(){
+  
+  
+  // Main control loop
+  while(true){
+    canvas_main.fillSprite(bg_color_rgb565);
+    canvas_main.setTextColor(tx_color_rgb565);
+    canvas_main.setTextSize(2);
+    canvas_main.setTextDatum(top_left);
+    canvas_main.setCursor(5, 5);
+    canvas_main.println("Pwnagotchi Attack");
+    canvas_main.setTextSize(1);
+    canvas_main.println("");
+    
+    // Display attack status
+    extern std::vector<String> pwnedAPs;
+    extern std::vector<String> failedClients;
+    auto whitelist = parseWhitelist();
+    
+    canvas_main.drawString("Status: Pwned: " + String(pwnedAPs.size()) + " Failed: " + String(failedClients.size()), 5, 25);
+    for(uint8_t i = 0; i < g_wifiRTResults.size() && i < 5; i++){
+      if(ap.ssid == g_wifiRTResults[i].ssid){
+        canvas_main.setTextColor(RGBToRGB565(0, 255, 255)); // cyan for currently attacking
+      }
+      if(std::find(pwnedAPs.begin(), pwnedAPs.end(), g_wifiRTResults[i].ssid) != pwnedAPs.end()){
+        canvas_main.setTextColor(RGBToRGB565(0, 255, 0)); // green for pwned
+      }
+      else if(std::find(failedClients.begin(), failedClients.end(), g_wifiRTResults[i].ssid) != failedClients.end()){
+        canvas_main.setTextColor(RGBToRGB565(255, 0, 0)); // red for failed
+      }
+      //check is ssid is whitelisted
+      if(std::find(whitelist.begin(), whitelist.end(), g_wifiRTResults[i].ssid) != whitelist.end()){
+        canvas_main.setTextColor(RGBToRGB565(255, 255, 0)); // yellow for whitelisted
+      }
+      if(g_wifiRTResults[i].ssid.length() > 20){
+        canvas_main.drawString(g_wifiRTResults[i].ssid.substring(0, 17) + "... Ch:" + String(g_wifiRTResults[i].channel), 5, 40 + (i * 10));
+      }
+      else{
+        canvas_main.drawString(g_wifiRTResults[i].ssid + " Ch:" + String(g_wifiRTResults[i].channel), 5, 40 + (i * 10));
+      }
+    }
+    canvas_main.setTextColor(tx_color_rgb565);
+
+
+    canvas_main.drawString("[MENU] - Controls | [ESC] - Exit", 5, 85);
+    canvas_main.drawString("[H] - Help", 5, 95);
+    pushAll();
+    M5.update();
+    
+    #ifdef BUTTON_ONLY_INPUT
+    inputManager::update();
+    if (inputManager::isButtonAPressed()) {
+      debounceDelay();
+      String choice[] = {"Start Attack", "Stop Attack", "View Results", "Exit"};
+      uint8_t answer = drawMultiChoice("Attack Mode", choice, 4, 5, 0);
+      
+      if (answer == 0) {
+        // Start attack
+        drawInfoBox("Starting", "Initializing attack system...", "Please wait...", false, false);
+        if (n_pwnagotchi::begin()) {
+          drawInfoBox("Success", "Attack system started", "Scanning networks...", true, false);
+        } else {
+          drawInfoBox("Error", "Failed to start", "Check logs", true, false);
+        }
+        // Redraw the main display
+        canvas_main.fillSprite(bg_color_rgb565);
+        canvas_main.setTextColor(tx_color_rgb565);
+        canvas_main.setTextSize(2);
+        canvas_main.setCursor(5, 5);
+        canvas_main.println("Pwnagotchi Attack");
+        canvas_main.setTextSize(1);
+        canvas_main.println("");
+        canvas_main.drawString("Status:", 5, 25);
+        canvas_main.drawString("Pwned: " + String(pwnedAPs.size()), 5, 35);
+        canvas_main.drawString("Failed: " + String(failedClients.size()), 5, 45);
+        canvas_main.drawString("RUNNING - Press MENU for controls", 5, 55);
+        pushAll();
+      } 
+      else if (answer == 1) {
+        // Stop attack
+        drawInfoBox("Stopping", "Stopping attack system...", "Please wait...", false, false);
+        if (n_pwnagotchi::end()) {
+          drawInfoBox("Success", "Attack system stopped", "Results saved", true, false);
+        } else {
+          drawInfoBox("Error", "Failed to stop", "Check logs", true, false);
+        }
+        menuID = 5;
+        return;
+      }
+      else if (answer == 2) {
+        // Show results
+        drawInfoBox("Results", "Pwned: " + String(pwnedAPs.size()) + " | Failed: " + String(failedClients.size()), "Press key to continue", true, false);
+        // Redraw after dialog
+        canvas_main.fillSprite(bg_color_rgb565);
+        canvas_main.setTextColor(tx_color_rgb565);
+        canvas_main.setTextSize(2);
+        canvas_main.setCursor(5, 5);
+        canvas_main.println("Pwnagotchi Attack");
+        canvas_main.setTextSize(1);
+        canvas_main.println("");
+        canvas_main.drawString("Status:", 5, 25);
+        canvas_main.drawString("Pwned: " + String(pwnedAPs.size()), 5, 35);
+        canvas_main.drawString("Failed: " + String(failedClients.size()), 5, 45);
+        pushAll();
+      }
+      else {
+        menuID = 5;
+        return;
+      }
+    }
+    if (inputManager::isButtonBPressed()) {
+      debounceDelay();
+      menuID = 5;
+      return;
+    }
+    #else
+    M5Cardputer.update();
+    Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
+    
+    // Check for menu button
+    for (auto k : status.word) {
+      if (k == 'm' || k == 'M') {
+        debounceDelay();
+        String choice[] = {"Start Attack", "Stop Attack", "View Results", "Exit"};
+        uint8_t answer = drawMultiChoice("Attack Mode", choice, 4, 5, 0);
+        
+        if (answer == 0) {
+          // Start attack
+          drawInfoBox("Starting", "Initializing attack system...", "Please wait...", false, false);
+          if (n_pwnagotchi::begin()) {
+            while(pwnagotchiTaskHandle != nullptr && eTaskGetState(pwnagotchiTaskHandle) != eDeleted){
+              updateUi(true, true);
+            }
+            menuID = 0;
+            return;
+          } else {
+            drawInfoBox("Error", "Failed to start", "Check logs", true, false);
+          }
+        } 
+        else if (answer == 1) {
+          // Stop attack
+          drawInfoBox("Stopping", "Stopping attack system...", "Please wait...", false, false);
+          if (n_pwnagotchi::end()) {
+            drawInfoBox("Success", "Attack system stopped", "Results saved", true, false);
+          } else {
+            drawInfoBox("Error", "Failed to stop", "Check logs", true, false);
+          }
+        }
+        else if (answer == 2) {
+          // Show results
+          drawInfoBox("Results", "Pwned: " + String(pwnedAPs.size()) + " | Failed: " + String(failedClients.size()), "Press key to continue", true, false);
+        }
+        else {
+          menuID = 5;
+          return;
+        }
+      }
+      else if (k == 'h' || k == 'H') {
+        drawHintBox("Press [M] for menu. Networks are scanned continuously, deauth attacks are launched automatically, and handshakes are captured and saved.", 21);
+      }
+    }
+    
+    // Check for escape key or menu toggle
+    if(M5Cardputer.Keyboard.isKeyPressed('`')) {
+      debounceDelay();
+      menuID = 5;
+      return;
+    }
+    #endif
+
+    FileWriteRequest* writeReq = nullptr;
+    if (fileWriteQueue && xQueueReceive(fileWriteQueue, &writeReq, 0) == pdTRUE) {
+      if (writeReq) {
+        handleFileWrite(writeReq);
+      }
+    }
+    
     delay(100);
   }
 }

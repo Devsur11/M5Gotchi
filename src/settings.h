@@ -11,7 +11,6 @@
 #include "pwngrid.h"
 
 #ifdef USE_LITTLEFS
-  // We use the fully qualified instance name
   #define FSYS ::LittleFS 
 #else
   #define FSYS ::SD
