@@ -563,6 +563,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
   if (fileWriteQueue && xQueueReceive(fileWriteQueue, &writeReq, 0) == pdTRUE) {
     if (writeReq) {
       handleFileWrite(writeReq);
+      saveSettings();
     }
   }
   
@@ -6916,7 +6917,7 @@ void drawAttackMode(){
     for(uint8_t i = 0; i < g_wifiRTResults.size() && i < 5; i++){
       
       if(std::find(pwnedAPs.begin(), pwnedAPs.end(), g_wifiRTResults[i].ssid) != pwnedAPs.end()){
-        canvas_main.setTextColor(RGBToRGB565(0, 255, 0)); // green for pwned
+        canvas_main.setTextColor(RGBToRGB565(0, 0, 255)); // blue for pwned
       }
       else if(std::find(failedClients.begin(), failedClients.end(), g_wifiRTResults[i].ssid) != failedClients.end()){
         canvas_main.setTextColor(RGBToRGB565(255, 0, 0)); // red for failed
@@ -7024,11 +7025,6 @@ void drawAttackMode(){
           // Start attack
           drawInfoBox("Starting", "Initializing attack system...", "Please wait...", false, false);
           if (n_pwnagotchi::begin()) {
-            while(pwnagotchiTaskHandle != nullptr && eTaskGetState(pwnagotchiTaskHandle) != eDeleted){
-              updateUi(true, true);
-            }
-            menuID = 0;
-            return;
           } else {
             drawInfoBox("Error", "Failed to start", "Check logs", true, false);
           }
@@ -7046,10 +7042,8 @@ void drawAttackMode(){
           // Show results
           drawInfoBox("Results", "Pwned: " + String(pwnedAPs.size()) + " | Failed: " + String(failedClients.size()), "Press key to continue", true, false);
         }
-        else {
-          menuID = 5;
-          return;
-        }
+
+        updateUi(true, false);
       }
       else if (k == 'h' || k == 'H') {
         drawHintBox("Press [M] for menu. Networks are scanned continuously, deauth attacks are launched automatically, and handshakes are captured and saved.", 21);
@@ -7068,7 +7062,9 @@ void drawAttackMode(){
     if (fileWriteQueue && xQueueReceive(fileWriteQueue, &writeReq, 0) == pdTRUE) {
       if (writeReq) {
         handleFileWrite(writeReq);
+        saveSettings();
       }
+      
     }
     
     delay(100);

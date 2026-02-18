@@ -8,7 +8,7 @@
 #include "PMKIDGrabber.h"
 
 // --- Settings & Globals ---
-#define ATTACK_TIMEOUT   8000
+#define ATTACK_TIMEOUT   3000
 
 // -- Target Info --
 static uint8_t targetBSSID[6];
@@ -435,10 +435,6 @@ bool runPMKIDAttack(const uint8_t *apBSSID, int channel) {
     hasNewPMKID = false;
     return true;
 }
-
-// ==========================================
-// SETUP & LOOP (kept for API compatibility)
-// ==========================================
 
 void attackSetup() {}
 
