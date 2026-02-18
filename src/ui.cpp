@@ -139,7 +139,8 @@ static const char * const broken_ssids[]{
 // menuID 1
 menu main_menu[] = {
     {"Manual Control", 1},        // Manual mode
-    {"Auto Mode", 4},             // Auto mode
+    {"Auto Mode", 4},             // Auto mode (original pwnagotchi)
+    {"N_Auto Mode", 2},         // New pwnagotchi auto mode
     {"WPA-SEC", 55},              // WPA-SEC companion
     {"Pwngrid", 7},               // Pwngrid companion
     {"Wardriving", 8},            // Wardriving companion
@@ -177,11 +178,24 @@ menu wpasec_setup_menu[] = {
 // menuID 5
 menu pwngotchi_menu[] = {
   {"Enable Auto Mode", 36},      // Switch to auto mode
-  {"Debug Mode", 92},           // Pwnagotchi attack system
   {"Auto + Wardriving", 14},     // Auto mode + wardriving
   {"Whitelist", 38},             // Whitelist editor
   {"Handshakes", 39},            // Handshakes file list
   {"Personality", 57},           // Personality editor
+  {"Back", 255}
+};
+
+//menuID 10
+menu n_pwnagotchi_menu[] = {
+  {"N_AUTO Mode", 125},           // Pwnagotchi attack system
+  {"Debug views", 92},                 // Show debug info on screen
+  {"N_AUTO Personality", 124},    // New pwnagotchi personality editor
+  {"Back", 255}
+};
+
+menu n_auto_running_menu[] = {
+  {"Switch to manual mode", 126},     // Stop N_AUTO mode
+  {"Debug views", 92},                 // Show debug info on screen
   {"Back", 255}
 };
 
@@ -598,6 +612,22 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
 #endif       
   if (toggleMenuBtnPressed()) {
     debounceDelay();
+    if(pwnagotchiTaskHandle != nullptr){
+      if(menuID == 10){
+        menuID = 0;
+        menu_current_opt = 0;
+        menu_current_page = 1;
+        needsUiRedraw = true;
+        return;
+      }
+      else{
+        menuID = 10;
+        menu_current_opt = 0;
+        menu_current_page = 1;
+        needsUiRedraw = true;
+        return;
+      }
+    }
     if(pwnagothiMode){
       return;
     }
@@ -793,6 +823,10 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
     }
     prevMID = 9;
   }
+  else if (menuID == 10){
+    drawMenuList((pwnagotchiTaskHandle == nullptr)?n_pwnagotchi_menu:n_auto_running_menu, 10, 3);
+    prevMID = 10;
+  }
   else if (menuID == 99) {
     if(dev_mode){
       drawMenuList(devtools_menu, 99, 13);
@@ -956,7 +990,15 @@ void drawBottomCanvas() {
     wifion();
   }
   canvas_bot.setTextDatum(top_right);
-  canvas_bot.drawString(String((pwnagothiMode) ? "AUTO" : "MANU") + " " + wifiStatus, display_w, 5);
+  String modeStatus;
+  if (pwnagotchiTaskHandle != nullptr) {
+    modeStatus = "N_AUTO";
+  } else if (pwnagothiMode) {
+    modeStatus = "AUTO";
+  } else {
+    modeStatus = "MANU";
+  }
+  canvas_bot.drawString(modeStatus + " " + wifiStatus, display_w, 5);
   canvas_bot.drawLine(0, 0, display_w, 0);
   if (displayMutex) xSemaphoreGive(displayMutex);
 }
@@ -1909,7 +1951,10 @@ void runApp(uint8_t appID){
       debounceDelay();
       drawMenuList( wifi_menu , 2, 6);
     }
-    if(appID == 2){}
+    if(appID == 2){
+      debounceDelay();
+      drawMenuList(n_pwnagotchi_menu, 10, 3);
+    }
     if(appID == 3){
       drawSysInfo();
       menuID = 6;
@@ -5058,6 +5103,114 @@ void runApp(uint8_t appID){
       #else
         drawInfoBox("Error", "Core dump logging is disabled", "Recompile with ENABLE_COREDUMP_LOGGING", true, false);
       #endif
+    }
+    if(appID == 124){
+      // New Pwnagotchi Personality Editor
+      if(initNewPersonality()){
+        debounceDelay();
+      }
+      else{
+        drawInfoBox("Error", "Can't load personality", "Check SD card!", true, false);
+        menuID = 5;
+        return;
+      }
+      while (true) {
+        String personality_options[] = {
+          "EAPOL Timeout" + String(" (ms): ") + String(n_pwnagotchi_personality.eapol_timeout),
+          "Deauth Packets Count" + String(" : ") + String(n_pwnagotchi_personality.deauth_packets_count),
+          "Deauth Packet Interval" + String(" (ms): ") + String(n_pwnagotchi_personality.deauth_packet_interval),
+          "PMKID Attack Timeout" + String(" (ms): ") + String(n_pwnagotchi_personality.pmkid_attack_timeout),
+          "Delay Between Attacks" + String(" (ms): ") + String(n_pwnagotchi_personality.delay_between_attacks),
+          "RSSI Threshold" + String(" (dBm): ") + String(n_pwnagotchi_personality.rssi_threshold),
+          "Sound on Handshake" + String(n_pwnagotchi_personality.sound_on_handshake ? " (y)" : " (n)"),
+          "Sound on PMKID" + String(n_pwnagotchi_personality.sound_on_pmkid ? " (y)" : " (n)"),
+          "Enable Wardriving" + String(n_pwnagotchi_personality.enable_wardriving ? " (y)" : " (n)"),
+          "GPS Timeout" + String(" (ms): ") + String(n_pwnagotchi_personality.gps_timeout_ms),
+          "Enable PMKID Attack" + String(n_pwnagotchi_personality.enable_pmkid_attack ? " (y)" : " (n)"),
+          "Back"
+        };
+      
+        int8_t choice = drawMultiChoice("New Pwnagotchi Personality", personality_options, 12, 6, 4);
+        if(choice == 11 || choice == -1){
+          saveNewPersonality();
+          menuID = 5;
+          return;
+        }
+        else if(choice >= 6){
+          bool valueToSet = getBoolInput(personality_options[choice], "Press t or f, then ENTER", false);
+          logMessage("Value to set: " + String(valueToSet ? "true" : "false") + " to " + personality_options[choice]);
+          switch (choice) {
+            case 6:
+              n_pwnagotchi_personality.sound_on_handshake = valueToSet;
+              break;
+            case 7:
+              n_pwnagotchi_personality.sound_on_pmkid = valueToSet;
+              break;
+            case 8:
+              n_pwnagotchi_personality.enable_wardriving = valueToSet;
+              break;
+            case 10:
+              n_pwnagotchi_personality.enable_pmkid_attack = valueToSet;
+              break;
+            default:
+              break;
+          }
+          saveNewPersonality();
+        }
+        else{
+          int16_t valueToSet = getNumberfromUser(personality_options[choice], "Enter new value", 60000);
+          logMessage("Value to set: " + String(valueToSet) + " to " + personality_options[choice]);
+          if(valueToSet == -1){
+            continue;
+          }
+          switch (choice) {
+            case 0:
+              n_pwnagotchi_personality.eapol_timeout = valueToSet;
+              break;
+            case 1:
+              n_pwnagotchi_personality.deauth_packets_count = valueToSet;
+              break;
+            case 2:
+              n_pwnagotchi_personality.deauth_packet_interval = valueToSet;
+              break;
+            case 3:
+              n_pwnagotchi_personality.pmkid_attack_timeout = valueToSet;
+              break;
+            case 4:
+              n_pwnagotchi_personality.delay_between_attacks = valueToSet;
+              break;
+            case 5:
+              // RSSI threshold can be negative, handle specially
+              if(valueToSet == 0) valueToSet = -75; // default if 0
+              if(valueToSet > 0) valueToSet = -valueToSet; // make negative
+              n_pwnagotchi_personality.rssi_threshold = valueToSet;
+              break;
+            case 9:
+              n_pwnagotchi_personality.gps_timeout_ms = valueToSet;
+              break;
+            default:
+              break;
+          }
+          saveNewPersonality();
+        }
+      }
+      
+      menuID = 5;
+      return;
+    }
+    else if (appID == 125){
+      if(n_pwnagotchi::begin()){
+        drawInfoBox("Pwnagotchi started", "Pwnagotchi is now running.", "Press enter to continue", true, false);
+      }
+      else{
+        drawInfoBox("Error", "Failed to start Pwnagotchi", "Check logs!", true, false);
+      }
+      menuID = 0;
+    }
+    else if (appID == 126){
+      n_pwnagotchi::end();
+      drawInfoBox("Pwnagotchi stopped", "Pwnagotchi has been stopped.", "Press enter to continue", true, false);
+      menuID = 0;
     }
     return;
   }

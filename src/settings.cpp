@@ -110,6 +110,20 @@ personality pwnagotchi = {
     5000    // gps_fix_timeout
 };
 
+n_personality n_pwnagotchi_personality = {
+    15000,   // eapol_timeout (ms) - time to wait for handshake
+    50,     // deauth_packets_count - number of deauth packets to send
+    50,     // deauth_packet_interval (ms) - delay between packets
+    2000,   // pmkid_attack_timeout (ms) - time to wait for PMKID response
+    1000,    // delay_between_attacks (ms) - delay before attacking next AP
+    true,    // sound_on_handshake - beep when handshake captured
+    true,    // sound_on_pmkid - beep when PMKID captured
+    -75,     // rssi_threshold (dBm) - minimum RSSI to attack (-100 to 0)
+    false,   // enable_wardriving - enable GPS logging during attacks
+    5000,    // gps_timeout_ms - timeout for GPS fix
+    true     // enable_pmkid_attack - enable PMKID attack
+};
+
 bool initPersonality(){
     #ifdef USE_LITTLEFS
     if (!FSYS.begin()) {
@@ -286,6 +300,136 @@ bool savePersonality(){
         return true;
     } else {
         logMessage("Failed to open personality file for writing");
+        return false;
+    }
+}
+
+bool initNewPersonality(){
+    #ifdef USE_LITTLEFS
+    if (!FSYS.begin()) {
+        logMessage("LittleFS init failed");
+        return false;
+    }
+    #else
+    if (!FSYS.begin(SD_CS, sdSPI, 1000000)) {
+        logMessage("SD card init failed");
+        return false;
+    }
+    #endif
+    bool personalityChanged = false;
+    JsonDocument personalityDoc;
+    
+    if(FSYS.exists(NEW_PERSONALITY_FILE)) {
+        logMessage("New personality file found, loading data");
+        File file = FSYS.open(NEW_PERSONALITY_FILE, FILE_READ);
+        if (!file) {
+            logMessage("Failed to open new personality file");
+            return false;
+        }
+
+        DeserializationError error = deserializeJson(personalityDoc, file);
+        file.close();
+
+        if (error) {
+            logMessage("deserializeJson() failed: ");
+            logMessage(error.c_str());
+            return false;
+        }
+
+        // Load each option, fallback to default if missing
+        if (personalityDoc["eapol_timeout"].is<uint16_t>()) n_pwnagotchi_personality.eapol_timeout = personalityDoc["eapol_timeout"];
+        else personalityChanged = true;
+
+        if (personalityDoc["deauth_packets_count"].is<uint16_t>()) n_pwnagotchi_personality.deauth_packets_count = personalityDoc["deauth_packets_count"];
+        else personalityChanged = true;
+
+        if (personalityDoc["deauth_packet_interval"].is<uint16_t>()) n_pwnagotchi_personality.deauth_packet_interval = personalityDoc["deauth_packet_interval"];
+        else personalityChanged = true;
+
+        if (personalityDoc["pmkid_attack_timeout"].is<uint16_t>()) n_pwnagotchi_personality.pmkid_attack_timeout = personalityDoc["pmkid_attack_timeout"];
+        else personalityChanged = true;
+
+        if (personalityDoc["delay_between_attacks"].is<uint16_t>()) n_pwnagotchi_personality.delay_between_attacks = personalityDoc["delay_between_attacks"];
+        else personalityChanged = true;
+
+        if (personalityDoc["sound_on_handshake"].is<bool>()) n_pwnagotchi_personality.sound_on_handshake = personalityDoc["sound_on_handshake"];
+        else personalityChanged = true;
+
+        if (personalityDoc["sound_on_pmkid"].is<bool>()) n_pwnagotchi_personality.sound_on_pmkid = personalityDoc["sound_on_pmkid"];
+        else personalityChanged = true;
+
+        if (personalityDoc["rssi_threshold"].is<int>()) n_pwnagotchi_personality.rssi_threshold = personalityDoc["rssi_threshold"];
+        else personalityChanged = true;
+
+        if (personalityDoc["enable_wardriving"].is<bool>()) n_pwnagotchi_personality.enable_wardriving = personalityDoc["enable_wardriving"];
+        else personalityChanged = true;
+
+        if (personalityDoc["gps_timeout_ms"].is<uint16_t>()) n_pwnagotchi_personality.gps_timeout_ms = personalityDoc["gps_timeout_ms"];
+        else personalityChanged = true;
+
+        if (personalityDoc["enable_pmkid_attack"].is<bool>()) n_pwnagotchi_personality.enable_pmkid_attack = personalityDoc["enable_pmkid_attack"];
+        else personalityChanged = true;
+    }
+    else {
+        logMessage("No new personality file found, creating with default values");
+        personalityChanged = true;
+    }
+
+    // Always update config with all required keys
+    personalityDoc["eapol_timeout"] = n_pwnagotchi_personality.eapol_timeout;
+    personalityDoc["deauth_packets_count"] = n_pwnagotchi_personality.deauth_packets_count;
+    personalityDoc["deauth_packet_interval"] = n_pwnagotchi_personality.deauth_packet_interval;
+    personalityDoc["pmkid_attack_timeout"] = n_pwnagotchi_personality.pmkid_attack_timeout;
+    personalityDoc["delay_between_attacks"] = n_pwnagotchi_personality.delay_between_attacks;
+    personalityDoc["sound_on_handshake"] = n_pwnagotchi_personality.sound_on_handshake;
+    personalityDoc["sound_on_pmkid"] = n_pwnagotchi_personality.sound_on_pmkid;
+    personalityDoc["rssi_threshold"] = n_pwnagotchi_personality.rssi_threshold;
+    personalityDoc["enable_wardriving"] = n_pwnagotchi_personality.enable_wardriving;
+    personalityDoc["gps_timeout_ms"] = n_pwnagotchi_personality.gps_timeout_ms;
+    personalityDoc["enable_pmkid_attack"] = n_pwnagotchi_personality.enable_pmkid_attack;
+    
+    if (personalityChanged) {
+        logMessage("New personality updated with missing/default values, saving...");
+        FConf = FSYS.open(NEW_PERSONALITY_FILE, FILE_WRITE, true);
+        if (FConf) {
+            String output;
+            serializeJsonPretty(personalityDoc, output);
+            FConf.print(output);
+            FConf.close();
+            logMessage("New personality saved successfully");
+        } else {
+            logMessage("Failed to open new personality file for writing");
+            return false;
+        }
+    }
+    return true;
+}
+
+bool saveNewPersonality(){
+    JsonDocument personalityDoc;
+    personalityDoc["eapol_timeout"] = n_pwnagotchi_personality.eapol_timeout;
+    personalityDoc["deauth_packets_count"] = n_pwnagotchi_personality.deauth_packets_count;
+    personalityDoc["deauth_packet_interval"] = n_pwnagotchi_personality.deauth_packet_interval;
+    personalityDoc["pmkid_attack_timeout"] = n_pwnagotchi_personality.pmkid_attack_timeout;
+    personalityDoc["delay_between_attacks"] = n_pwnagotchi_personality.delay_between_attacks;
+    personalityDoc["sound_on_handshake"] = n_pwnagotchi_personality.sound_on_handshake;
+    personalityDoc["sound_on_pmkid"] = n_pwnagotchi_personality.sound_on_pmkid;
+    personalityDoc["rssi_threshold"] = n_pwnagotchi_personality.rssi_threshold;
+    personalityDoc["enable_wardriving"] = n_pwnagotchi_personality.enable_wardriving;
+    personalityDoc["gps_timeout_ms"] = n_pwnagotchi_personality.gps_timeout_ms;
+    personalityDoc["enable_pmkid_attack"] = n_pwnagotchi_personality.enable_pmkid_attack;
+
+    logMessage("New personality JSON data creation successful, proceeding to save");
+    FConf = FSYS.open(NEW_PERSONALITY_FILE, FILE_WRITE, false);
+    if (FConf) {
+        String output;
+        serializeJsonPretty(personalityDoc, output);
+        FConf.print(output);
+        FConf.close();
+        logMessage("New personality saved successfully");
+        return true;
+    } else {
+        logMessage("Failed to open new personality file for writing");
         return false;
     }
 }

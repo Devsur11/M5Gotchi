@@ -8,12 +8,17 @@
 #include "wardrive.h"
 #include "logger.h"
 #include "crypto.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 
 
 static const int GPS_RX_PIN = 15; // AT6H TX -> ESP RX
 static const int GPS_TX_PIN = 13; // AT6H RX <- ESP TX
 static const int GPS_BAUD_DEFAULT = 115200;
 int tot_observed_networks = 0;
+
+// Mutex for thread-safe wardrive operations
+static SemaphoreHandle_t wardriveMutex = nullptr;
 
 // Session filename state
 static String currentWardrivePath = "/wardriving/first_seen.csv";
@@ -419,7 +424,27 @@ bool uploadToWigle(const String& encodedToken, const char* csvPath, int* outHttp
 // - timeoutMs: how long to wait for a valid GPS fix (reads Serial2)
 // Returns wardriveStatus as before (keeps same struct contents)
 wardriveStatus wardrive(const std::vector<wifiSpeedScan>& networks, unsigned long timeoutMs) {
-    if (networks.empty()) return {false, false, 0.0, 0.0, 0.0, 0.0, String(), 0, 0};
+    // Initialize mutex if not already done
+    if (wardriveMutex == nullptr) {
+        wardriveMutex = xSemaphoreCreateMutex();
+    }
+    
+    // Take mutex to serialize wardrive operations
+    if (wardriveMutex == nullptr) {
+        fLogMessage("wardrive: mutex creation failed");
+        return {false, false, 0.0, 0.0, 0.0, 0.0, String(), 0, 0};
+    }
+    
+    if (xSemaphoreTake(wardriveMutex, portMAX_DELAY) != pdTRUE) {
+        fLogMessage("wardrive: failed to acquire mutex");
+        return {false, false, 0.0, 0.0, 0.0, 0.0, String(), 0, 0};
+    }
+
+    // Mutex is now held - enclosed logic:
+    if (networks.empty()) {
+        xSemaphoreGive(wardriveMutex);
+        return {false, false, 0.0, 0.0, 0.0, 0.0, String(), 0, 0};
+    }
 
     // ensure SD dir is there
     ensureWardrivingDir();
@@ -473,6 +498,7 @@ wardriveStatus wardrive(const std::vector<wifiSpeedScan>& networks, unsigned lon
     File f = FSYS.open(currentWardrivePath.c_str(), FILE_APPEND);
     if (!f) {
         fLogMessage("Cannot open wardrive file: %s", currentWardrivePath.c_str());
+        xSemaphoreGive(wardriveMutex);
         return {false, bestFix.valid, bestFix.lat, bestFix.lon, bestFix.hdop, bestFix.alt, bestFix.timeIso, 0, 0};
     }
 
@@ -556,5 +582,9 @@ wardriveStatus wardrive(const std::vector<wifiSpeedScan>& networks, unsigned lon
 
     f.close();
     tot_observed_networks += written;
+    
+    // Release mutex before returning
+    xSemaphoreGive(wardriveMutex);
+    
     return {written > 0, bestFix.valid, bestFix.lat, bestFix.lon, bestFix.hdop, bestFix.alt, bestFix.timeIso, tot_observed_networks, (uint8_t)written};
 }

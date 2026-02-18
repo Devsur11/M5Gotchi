@@ -1,9 +1,11 @@
 namespace n_pwnagotchi{
     bool begin();
+    bool beginWardriving(uint32_t gpsTimeoutMs = 5000);
     bool end();
 }
 void attackTask(void* parameter);
 void task(void* parameter);
+void wardrivingTask(void* parameter);
 
 // File write queue management for SD operations
 struct FileWriteRequest;
@@ -20,3 +22,4 @@ struct wifiRTResults{
 extern std::vector<wifiRTResults> g_wifiRTResults;
 extern wifiRTResults ap; //network being currently attacked
 extern TaskHandle_t pwnagotchiTaskHandle;
+extern TaskHandle_t wardrivingTaskHandle;

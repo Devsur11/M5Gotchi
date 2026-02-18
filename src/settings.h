@@ -55,6 +55,7 @@ bool wifion(){
 #define TEMP_BIN_PATH   TEMP_DIR "/update.bin"
 #define NEW_CONFIG_FILE "/m5gothi.conf"
 #define PERSONALITY_FILE "/personality.conf"
+#define NEW_PERSONALITY_FILE "/new_personality.conf"
 #define UNIT_NAME_MAX 32
 #define UNIT_FP_MAX   64
 #define SERIAL_LOGS
@@ -103,6 +104,20 @@ struct personality{
     uint16_t gps_fix_timeout;
 };
 
+struct n_personality{
+    uint16_t eapol_timeout;
+    uint16_t deauth_packets_count;
+    uint16_t deauth_packet_interval;
+    uint16_t pmkid_attack_timeout;
+    uint16_t delay_between_attacks;
+    bool sound_on_handshake;
+    bool sound_on_pmkid;
+    int8_t rssi_threshold;  // Minimum RSSI to attack (-100 to 0 dBm)
+    bool enable_wardriving;
+    uint16_t gps_timeout_ms;
+    bool enable_pmkid_attack;  // Enable/disable PMKID attack
+};
+
 typedef struct {
   char name[UNIT_NAME_MAX];
   char fingerprint[UNIT_FP_MAX];
@@ -112,6 +127,8 @@ bool initVars();
 bool saveSettings();
 bool initPersonality();
 bool savePersonality();
+bool initNewPersonality();
+bool saveNewPersonality();
 
 extern String hostname;
 extern bool sound;
@@ -141,6 +158,7 @@ extern String tx_color;
 extern bool skip_eapol_check;
 extern String wpa_sec_api_key;
 extern personality pwnagotchi;
+extern n_personality n_pwnagotchi_personality;
 extern bool sd_logging;
 extern bool toogle_pwnagothi_with_gpio0;
 extern bool lite_mode_wpa_sec_sync_on_startup;

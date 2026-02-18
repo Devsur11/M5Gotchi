@@ -10,23 +10,45 @@
 #endif
 #include "Arduino.h"
 #include "SD.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
 
 // In-memory circular buffer for overlay logs with timestamps
 struct OverlayEntry { uint32_t ts; String txt; };
 static std::deque<OverlayEntry> overlayLogs;
+static SemaphoreHandle_t logMutex = nullptr;
 static bool overlayEnabled = false;
 static const size_t MAX_OVERLAY_LOGS = 8;
 
 void loggerSetOverlayEnabled(bool enabled) {
+    if (logMutex == nullptr) {
+        logMutex = xSemaphoreCreateMutex();
+    }
+    if (logMutex) xSemaphoreTake(logMutex, portMAX_DELAY);
     overlayEnabled = enabled;
+    if (logMutex) xSemaphoreGive(logMutex);
 }
 
 bool loggerIsOverlayEnabled() {
-    return overlayEnabled;
+    if (logMutex == nullptr) {
+        logMutex = xSemaphoreCreateMutex();
+    }
+    if (logMutex) xSemaphoreTake(logMutex, portMAX_DELAY);
+    bool result = overlayEnabled;
+    if (logMutex) xSemaphoreGive(logMutex);
+    return result;
 }
 
 void drawOverlayLogs() {
-    if (!overlayEnabled) return;
+    if (logMutex == nullptr) {
+        logMutex = xSemaphoreCreateMutex();
+    }
+    if (logMutex) xSemaphoreTake(logMutex, portMAX_DELAY);
+    
+    if (!overlayEnabled) {
+        if (logMutex) xSemaphoreGive(logMutex);
+        return;
+    }
 
     const int startX = 5;
     const int startY = 20;
@@ -48,6 +70,8 @@ void drawOverlayLogs() {
         M5.Display.fillRect(startX, startY,lineNum * lineHeight, 256, TFT_BLACK);
         M5.Display.print(it->txt);
     }
+    
+    if (logMutex) xSemaphoreGive(logMutex);
 }
 
 void loggerTask() {
@@ -62,6 +86,11 @@ void loggerTask() {
 }
 
 void loggerGetLines(std::vector<String> &out, int maxLines) {
+    if (logMutex == nullptr) {
+        logMutex = xSemaphoreCreateMutex();
+    }
+    if (logMutex) xSemaphoreTake(logMutex, portMAX_DELAY);
+    
     out.clear();
     uint32_t now_ms = millis();
     // remove expired entries (>5s)
@@ -75,16 +104,26 @@ void loggerGetLines(std::vector<String> &out, int maxLines) {
         count++;
     }
     std::reverse(out.begin(), out.end());
+    
+    if (logMutex) xSemaphoreGive(logMutex);
 }
 
 void logMessage(String message) {
     printf("[%lu][I][logger.cpp] %s\n", millis(), message.c_str());
+    
+    if (logMutex == nullptr) {
+        logMutex = xSemaphoreCreateMutex();
+    }
+    if (logMutex) xSemaphoreTake(logMutex, portMAX_DELAY);
+    
     if (overlayEnabled) {
         // keep timestamps minimal for overlay
         OverlayEntry e{millis(), String(millis()) + ": " + message};
         overlayLogs.push_back(e);
         while (overlayLogs.size() > MAX_OVERLAY_LOGS) overlayLogs.pop_front();        
     }
+    
+    if (logMutex) xSemaphoreGive(logMutex);
     loggerTask();
 }
 

