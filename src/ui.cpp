@@ -6911,12 +6911,10 @@ void drawAttackMode(){
     extern std::vector<String> pwnedAPs;
     extern std::vector<String> failedClients;
     auto whitelist = parseWhitelist();
-    
+
     canvas_main.drawString("Status: Pwned: " + String(pwnedAPs.size()) + " Failed: " + String(failedClients.size()), 5, 25);
     for(uint8_t i = 0; i < g_wifiRTResults.size() && i < 5; i++){
-      if(ap.ssid == g_wifiRTResults[i].ssid){
-        canvas_main.setTextColor(RGBToRGB565(0, 255, 255)); // cyan for currently attacking
-      }
+      
       if(std::find(pwnedAPs.begin(), pwnedAPs.end(), g_wifiRTResults[i].ssid) != pwnedAPs.end()){
         canvas_main.setTextColor(RGBToRGB565(0, 255, 0)); // green for pwned
       }
@@ -6927,7 +6925,10 @@ void drawAttackMode(){
       if(std::find(whitelist.begin(), whitelist.end(), g_wifiRTResults[i].ssid) != whitelist.end()){
         canvas_main.setTextColor(RGBToRGB565(255, 255, 0)); // yellow for whitelisted
       }
-      if(g_wifiRTResults[i].ssid.length() > 20){
+      if(ap.ssid == g_wifiRTResults[i].ssid){
+        canvas_main.setTextColor(RGBToRGB565(0, 255, 255)); // cyan for currently attacking
+      }
+      if(g_wifiRTResults[i].ssid.length() > 38){
         canvas_main.drawString(g_wifiRTResults[i].ssid.substring(0, 17) + "... Ch:" + String(g_wifiRTResults[i].channel), 5, 40 + (i * 10));
       }
       else{

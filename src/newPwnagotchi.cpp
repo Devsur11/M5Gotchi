@@ -10,6 +10,7 @@
 std::vector<wifiRTResults> g_wifiRTResults;
 wifiRTResults ap; //network being currently attacked
 SemaphoreHandle_t wifiResultsMutex = nullptr; // Thread-safe access to g_wifiRTResults
+const int networkTimeout = 10000; // Time in ms to consider a network "expired" if not seen again
 
 //for eapol sniffer
 struct CapturedPacket{
@@ -76,7 +77,9 @@ bool networkStillExists(const String& ssid, int channel) {
     bool found = false;
     for (const auto& entry : g_wifiRTResults) {
         if (entry.ssid == ssid && entry.channel == channel) {
-            found = true;
+            if (millis() - entry.lastSeen <= networkTimeout) { // Check if seen within last 5 seconds
+                found = true;
+            }
             break;
         }
     }
@@ -292,6 +295,7 @@ void wifiRTScanCallback(void* buf, wifi_promiscuous_pkt_type_t type){
         }
     }
     else if (type == WIFI_PKT_DATA) {
+        if(ap.ssid.length() == 0) return; // not targeting any AP yet
         if (!beaconDetected || beaconFrame == nullptr) return;
 
         uint16_t fc = payload[0] | (payload[1] << 8);
@@ -430,7 +434,7 @@ bool n_pwnagotchi::end() {
         vQueueDelete(packetQueue);
         packetQueue = NULL;
         logMessage("Packet queue cleaned up.");
-    }    
+    }
     // Clean up file write queue
     if (fileWriteQueue != nullptr) {
         FileWriteRequest *req = NULL;
@@ -644,6 +648,14 @@ void attackTask(void* parameter){
             return; // already pwned
         }
     }
+
+    //check if network was previously attempted and failed to capture clients (using String comparison)
+    for (const auto& failed : failedClients) {
+        if (failed == ap.ssid) {
+            logMessage("Skipping " + ap.ssid + " - previously attempted with no client captures.");
+            return; // previously attempted with no client captures
+        }
+    }
     
     // Verify network still exists before attempting attack
     if (!networkStillExists(ap.ssid, ap.channel)) {
@@ -660,6 +672,18 @@ void attackTask(void* parameter){
         // Add to pwned list if not already there
         if (std::find(pwnedAPs.begin(), pwnedAPs.end(), ap.ssid) == pwnedAPs.end()) {
             pwnedAPs.push_back(ap.ssid);
+        }
+        pwned_ap++;
+        sessionCaptures++;
+        saveSettings();
+        if(pwnagotchi.sound_on_events){
+            delay(100);
+            M5.Speaker.tone(1500, 100);
+            delay(100);
+            M5.Speaker.tone(2000, 100);
+            delay(100);
+            M5.Speaker.tone(2500, 150);
+            delay(150);
         }
         return; // skip to next AP after successful attack
     } else {
@@ -740,7 +764,7 @@ void attackTask(void* parameter){
             }
         }
         esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
-        delay(100); // Reduced from 1000ms to check more frequently and detect completion sooner
+        delay(70); // Reduced from 1000ms to check more frequently and detect completion sooner
     }
     
     if(isHandshakeComplete()){
@@ -813,7 +837,18 @@ void attackTask(void* parameter){
             targetAPSet = false;
             return;
         }
-        
+        pwned_ap++;
+        sessionCaptures++;
+        if(pwnagotchi.sound_on_events){
+            delay(100);
+            M5.Speaker.tone(1500, 100);
+            delay(100);
+            M5.Speaker.tone(2000, 100);
+            delay(100);
+            M5.Speaker.tone(2500, 150);
+            delay(150);
+        }
+        saveSettings(); 
         logMessage("File write request successfully queued");
     } else {
         logMessage("Failed to capture EAPOL handshake for AP: " + ap.ssid + " (timeout or network disappeared)");
