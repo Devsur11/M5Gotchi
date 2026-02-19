@@ -133,6 +133,9 @@ bool saveNewPersonality();
 extern String hostname;
 extern bool sound;
 extern int brightness;
+extern bool autoDimEnabled;
+extern uint16_t autoDimTimeout;
+extern uint8_t autoDimMinBrightness;
 extern uint16_t pwned_ap;
 extern SPIClass sdSPI;
 struct SavedNetwork {

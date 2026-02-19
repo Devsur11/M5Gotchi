@@ -220,6 +220,7 @@ menu settings_menu[] = {
   {"Theme", 50},                          // UI Theme
   {"Menu Display Mode", 89},              // List or Grid mode for main menu
   {"Brightness", 41},                     // Display brightness
+  {"Auto-Dim Display", 127},              // Auto-dim display when idle
   {"Key Sounds", 42},                     // Keyboard Sound
   {"Text Faces", 90},                     // Edit text faces
 
@@ -360,6 +361,47 @@ volatile bool refresherRunning = false;
 TaskHandle_t pwngridInboxTaskHandle = nullptr;
 volatile bool killInboxTask = false;
 bool crackedList;
+unsigned long lastUserInteractionTime = 0;
+
+void updateLastInteractionTime() {
+  lastUserInteractionTime = millis();
+}
+
+void autoDimTask(void *param) {
+  while (true) {
+    if (autoDimEnabled) {
+      unsigned long currentTime = millis();
+      unsigned long idleTime = currentTime - lastUserInteractionTime;
+      #ifndef BUTTON_ONLY_INPUT
+      if (M5Cardputer.Keyboard.isPressed()) {
+        updateLastInteractionTime();
+      }
+      #else
+      // If using button-only input, we rely on the button task to call updateLastInteractionTime() when the button is pressed, so we don't need to check for button presses here.
+      #endif
+      if (idleTime >= autoDimTimeout) {
+        // Gradually dim to minimum brightness
+        uint8_t targetBrightness = autoDimMinBrightness;
+        uint8_t currentBrightness = M5.Display.getBrightness();
+        
+        // Smoothly transition to minimum brightness (not instant)
+        if (currentBrightness > targetBrightness) {
+          uint8_t newBrightness = (currentBrightness > targetBrightness + 5) ? currentBrightness - 5 : targetBrightness;
+          M5.Display.setBrightness(newBrightness);
+        }
+      } else {
+        // When user is active, restore brightness if dimmed
+        if (M5.Display.getBrightness() < brightness) {
+          uint8_t currentBrightness = M5.Display.getBrightness();
+          uint8_t newBrightness = (currentBrightness < brightness - 5) ? currentBrightness + 5 : brightness;
+          M5.Display.setBrightness(newBrightness);
+        }
+      }
+    }
+    vTaskDelay(pdMS_TO_TICKS(25));
+  }
+  vTaskDelete(nullptr);
+}
 
 void pwngridInboxTask(void *param) {
   while (!killInboxTask) {
@@ -522,6 +564,21 @@ void initUi() {
   canvas_top.createSprite(display_w, canvas_top_h);
   canvas_bot.createSprite(display_w, canvas_bot_h);
   canvas_main.createSprite(display_w, canvas_h);
+  
+  // Initialize auto-dim task and tracking
+  lastUserInteractionTime = millis();
+  if (autoDimEnabled) {
+    xTaskCreatePinnedToCore(
+      autoDimTask,
+      "autoDim",
+      2048,
+      NULL,
+      3,
+      NULL,
+      0
+    );
+  }
+  
   logMessage("UI initialized");
   // enable logger overlay if configured
   loggerSetOverlayEnabled(serial_overlay);
@@ -684,6 +741,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
     char val_11[50];  // SD Logging
     char val_12[45];  // Skip EAPOL Check
     char val_13[50];  // Sync Pwnd on Boot
+    char val_14[50];  // Auto-Dim Display
 
     snprintf(val_1, sizeof(val_1),
             "Auto Mode on Boot: %s",
@@ -745,6 +803,10 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
             "Sync pwned on Boot: %s",
             sync_pwned_on_boot ? "ON" : "OFF");
 
+    snprintf(val_14, sizeof(val_14),
+            "Auto-Dim Display: %s",
+            autoDimEnabled ? "ON" : "OFF");
+
     menu new_settings_menu[] = {
         // Startup / Boot behavior
         { val_1, 48 },   // Auto Mode on Boot
@@ -766,6 +828,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
         { "Theme", 50 },       // UI Theme
         { "Menu Display Mode", 89 }, // List or Grid mode for main menu
         { "Brightness", 41 },  // Display brightness
+        { val_14, 127 },     // Auto-Dim Display
         { "Sounds" , 42 },         // Key Sounds
         { "Text Faces", 90 },  // Edit text faces
 
@@ -796,9 +859,9 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
         { "Back", 255 }
     };
     #ifdef USE_LITTLEFS
-    drawMenuList( new_settings_menu , 6, 33);
+    drawMenuList( new_settings_menu , 6, 34);
     #else
-    drawMenuList( new_settings_menu , 6, 30);
+    drawMenuList( new_settings_menu , 6, 31);
     #endif
     prevMID = 6;
   }  
@@ -4505,6 +4568,66 @@ void runApp(uint8_t appID){
       else if(choice == 1){ sync_pwned_on_boot = false; if(saveSettings()) drawInfoBox("Saved","Will not sync pwned on boot", "", true, false); else drawInfoBox("ERROR","Save failed","", true, false);} 
       menuID = 6; return;
     }
+    if(appID == 127){
+      // Auto-Dim Display settings
+      while(true){
+        String opt0 = String("Auto-Dim: ") + (autoDimEnabled ? "ON" : "OFF");
+        String opt1 = String("Timeout: ") + String(autoDimTimeout / 1000) + "s";
+        String opt2 = String("Min Brightness: ") + String(autoDimMinBrightness);
+        String menu[] = { opt0, opt1, opt2, "Back" };
+        debounceDelay();
+        int8_t choice = drawMultiChoice("Auto-Dim Settings", menu, 4, 6, 3);
+        if(choice == -1 || choice == 3) break;
+        
+        if(choice == 0){
+          autoDimEnabled = !autoDimEnabled;
+          if(saveSettings()){
+            drawInfoBox("Saved", autoDimEnabled ? "Auto-Dim enabled" : "Auto-Dim disabled", "", true, false);
+            // Restart auto-dim task if needed
+            if(autoDimEnabled && !pwnagothiMode) {
+              xTaskCreatePinnedToCore(
+                autoDimTask,
+                "autoDim",
+                2048,
+                NULL,
+                3,
+                NULL,
+                0
+              );
+            }
+          } else {
+            drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);
+          }
+        }
+        else if(choice == 1){
+          String timeoutStr = userInput("New timeout (seconds)", "Set auto-dim timeout:", 5);
+          if(timeoutStr != ""){
+            uint16_t newTimeout = timeoutStr.toInt();
+            if(newTimeout >= 10 && newTimeout <= 600){
+              autoDimTimeout = newTimeout * 1000;  // Convert to milliseconds
+              if(saveSettings()) drawInfoBox("Saved", "Timeout updated to " + String(newTimeout) + "s", "", true, false);
+              else drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);
+            } else {
+              drawInfoBox("Invalid", "Timeout must be 10-600 seconds", "", true, false);
+            }
+          }
+        }
+        else if(choice == 2){
+          String brightnessStr = userInput("New min brightness (10-100)", "Set minimum brightness:", 3);
+          if(brightnessStr != ""){
+            uint8_t newMinBrightness = brightnessStr.toInt();
+            if(newMinBrightness >= 10 && newMinBrightness <= 100){
+              autoDimMinBrightness = newMinBrightness;
+              if(saveSettings()) drawInfoBox("Saved", "Min brightness set to " + String(newMinBrightness), "", true, false);
+              else drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);
+            } else {
+              drawInfoBox("Invalid", "Brightness must be 10-100", "", true, false);
+            }
+          }
+        }
+      }
+      menuID = 6; return;
+    }
     if(appID == 43){
       if((WiFi.status() == WL_CONNECTED)){
         WiFi.disconnect();
@@ -6984,24 +7107,6 @@ int brightnessPicker(){
 #endif
     M5.Display.setBrightness(brightness);
   }
-}
-
-void debounceDelay(){
-#ifndef BUTTON_ONLY_INPUT
-  M5Cardputer.update();
-  while(M5Cardputer.Keyboard.isPressed() != 0){
-    M5Cardputer.update();
-#else
-  return;
-  while(false){
-    
-#endif
-    M5.update();
-    delay(10);
-  }
-  M5.update();
-  delay(40);
-  M5.update();
 }
 
 void drawSysInfo(){

@@ -1,6 +1,7 @@
 #include "inputManager.h"
 #include "M5Unified.h"
 #include "logger.h"
+#include "ui.h"
 
 namespace inputManager {
     
@@ -28,6 +29,7 @@ void update() {
     // Button A handling
     bool btnA_pressed = M5.BtnA.isPressed();
     if (btnA_pressed && !buttonA.isCurrentlyPressed) {
+        updateLastInteractionTime();
         // Button just pressed
         buttonA.isCurrentlyPressed = true;
         buttonA.pressStartTime = millis();
@@ -35,6 +37,7 @@ void update() {
         buttonA.wasPressed = false;
         Serial.println("BtnA pressed");
     } else if (btnA_pressed && buttonA.isCurrentlyPressed) {
+        updateLastInteractionTime();
         // Button held - check for long press
         if (!buttonA.longPressDetected && (millis() - buttonA.pressStartTime >= LONG_PRESS_THRESHOLD)) {
             buttonA.longPressDetected = true;
@@ -42,6 +45,7 @@ void update() {
             Serial.println("BtnA long press detected");
         }
     } else if (!btnA_pressed && buttonA.isCurrentlyPressed) {
+        updateLastInteractionTime();
         // Button just released
         buttonA.isCurrentlyPressed = false;
         if (!buttonA.longPressDetected) {
@@ -54,6 +58,7 @@ void update() {
     // Button B handling
     bool btnB_pressed = M5.BtnB.isPressed();
     if (btnB_pressed && !buttonB.isCurrentlyPressed) {
+        updateLastInteractionTime();
         // Button just pressed
         buttonB.isCurrentlyPressed = true;
         buttonB.pressStartTime = millis();
@@ -61,6 +66,7 @@ void update() {
         buttonB.wasPressed = false;
         Serial.println("BtnB pressed");
     } else if (btnB_pressed && buttonB.isCurrentlyPressed) {
+        updateLastInteractionTime();
         // Button held - check for long press
         if (!buttonB.longPressDetected && (millis() - buttonB.pressStartTime >= LONG_PRESS_THRESHOLD)) {
             buttonB.longPressDetected = true;
@@ -68,6 +74,7 @@ void update() {
             Serial.println("BtnB long press detected");
         }
     } else if (!btnB_pressed && buttonB.isCurrentlyPressed) {
+        updateLastInteractionTime();
         // Button just released
         buttonB.isCurrentlyPressed = false;
         if (!buttonB.longPressDetected) {

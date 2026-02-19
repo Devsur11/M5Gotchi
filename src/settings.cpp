@@ -9,6 +9,9 @@
 String hostname = "M5Gotchi";
 bool sound = false;
 int brightness = 150;
+bool autoDimEnabled = true;
+uint16_t autoDimTimeout = 60000;  // 60 seconds
+uint8_t autoDimMinBrightness = 10;
 uint16_t pwned_ap;
 SPIClass sdSPI;
 String savedApSSID;
@@ -492,6 +495,15 @@ bool initVars() {
         if (config["brightness"].is<int>()) brightness = config["brightness"];
         else configChanged = true;
 
+        if (config["autoDimEnabled"].is<bool>()) autoDimEnabled = config["autoDimEnabled"];
+        else configChanged = true;
+
+        if (config["autoDimTimeout"].is<uint16_t>()) autoDimTimeout = config["autoDimTimeout"];
+        else configChanged = true;
+
+        if (config["autoDimMinBrightness"].is<uint8_t>()) autoDimMinBrightness = config["autoDimMinBrightness"];
+        else configChanged = true;
+
         if (config["pwned_ap"].is<uint16_t>()) pwned_ap = config["pwned_ap"];
         else configChanged = true;
 
@@ -643,6 +655,9 @@ bool initVars() {
     config["Hostname"] = hostname;
     config["sound"] = sound;
     config["brightness"] = brightness;
+    config["autoDimEnabled"] = autoDimEnabled;
+    config["autoDimTimeout"] = autoDimTimeout;
+    config["autoDimMinBrightness"] = autoDimMinBrightness;
     config["pwned_ap"] = pwned_ap;
     config["savedApSSID"] = savedApSSID;
     config["savedAPPass"] = savedAPPass;
@@ -717,6 +732,9 @@ bool saveSettings(){
     config["Hostname"] = hostname;
     config["sound"] = sound;
     config["brightness"] = brightness;
+    config["autoDimEnabled"] = autoDimEnabled;
+    config["autoDimTimeout"] = autoDimTimeout;
+    config["autoDimMinBrightness"] = autoDimMinBrightness;
     config["pwned_ap"] = pwned_ap;
     config["savedApSSID"] = savedApSSID;
     config["savedAPPass"] = savedAPPass;
@@ -853,31 +871,65 @@ bool setSavedNetworkConnectOnStart(size_t idx, bool enabled){
 }
 
 void attemptConnectSavedNetworks(){
+    // Scan for available networks first
+    logMessage("Scanning for available networks...");
+    int networksFound = WiFi.scanNetworks();
+    logMessage("Found " + String(networksFound) + " networks");
+    
     if(savedNetworks.size() == 0){
         // fallback to legacy single saved values
         if(savedApSSID.length() > 0){
-            WiFi.begin(savedApSSID.c_str(), savedAPPass.c_str());
-            unsigned long start = millis();
-            while(millis() - start < 10000 && WiFi.status() != WL_CONNECTED) delay(500);
+            for(int i = 0; i < networksFound; i++){
+                if(WiFi.SSID(i) == savedApSSID){
+                    logMessage("Connecting to " + savedApSSID);
+                    WiFi.begin(savedApSSID.c_str(), savedAPPass.c_str());
+                    unsigned long start = millis();
+                    while(millis() - start < 10000 && WiFi.status() != WL_CONNECTED) delay(500);
+                }
+            }
         }
         return;
     }
 
-    // try connectOnStart flagged networks first
+    // Try connectOnStart flagged networks
     for(auto &n : savedNetworks){
         if(n.connectOnStart){
+            // Check if this network was found in scan
+            bool found = false;
+            for(int i = 0; i < networksFound; i++){
+                if(WiFi.SSID(i) == n.ssid){
+                    found = true;
+                    break;
+                }
+            }
+            
+            if(found){
+                logMessage("Connecting to " + n.ssid);
+                WiFi.begin(n.ssid.c_str(), n.pass.c_str());
+                unsigned long start = millis();
+                while(millis() - start < 10000 && WiFi.status() != WL_CONNECTED) delay(500);
+                if(WiFi.status() == WL_CONNECTED) return;
+            }
+        }
+    }
+    
+    // Try other saved networks
+    for(auto &n : savedNetworks){
+        bool found = false;
+        for(int i = 0; i < networksFound; i++){
+            if(WiFi.SSID(i) == n.ssid){
+                found = true;
+                break;
+            }
+        }
+        
+        if(found){
+            logMessage("Connecting to " + n.ssid);
             WiFi.begin(n.ssid.c_str(), n.pass.c_str());
             unsigned long start = millis();
             while(millis() - start < 10000 && WiFi.status() != WL_CONNECTED) delay(500);
             if(WiFi.status() == WL_CONNECTED) return;
         }
-    }
-    // try other networks
-    for(auto &n : savedNetworks){
-        WiFi.begin(n.ssid.c_str(), n.pass.c_str());
-        unsigned long start = millis();
-        while(millis() - start < 10000 && WiFi.status() != WL_CONNECTED) delay(500);
-        if(WiFi.status() == WL_CONNECTED) return;
     }
     
     WiFi.mode(WIFI_MODE_NULL);

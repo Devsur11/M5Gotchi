@@ -297,7 +297,25 @@ int16_t getNumberfromUser(String tittle, String desc, uint16_t maxNumber);
 bool getBoolInput(String tittle, String desc, bool defaultValue);
 int drawMultiChoiceLonger(String tittle, String toDraw[], uint8_t menuSize , uint8_t prevMenuID, uint8_t prevOpt);
 void IRAM_ATTR handleInterrupt();
-void debounceDelay();
+void updateLastInteractionTime();
+void debounceDelay(){
+  updateLastInteractionTime();
+#ifndef BUTTON_ONLY_INPUT
+  M5Cardputer.update();
+  while(M5Cardputer.Keyboard.isPressed() != 0){
+    M5Cardputer.update();
+#else
+  return;
+  while(false){
+    
+#endif
+    M5.update();
+    delay(10);
+  }
+  M5.update();
+  delay(40);
+  M5.update();
+}
 void esp_will_beg_for_its_life();
 void pwngridMessenger();
 bool registerNewMessage(message newMess);

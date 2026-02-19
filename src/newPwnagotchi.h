@@ -1,6 +1,6 @@
 namespace n_pwnagotchi{
     bool begin();
-    bool beginWardriving(uint32_t gpsTimeoutMs = 5000);
+    bool beginWardriving();
     bool end();
 }
 void attackTask(void* parameter);
