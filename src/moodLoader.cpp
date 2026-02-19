@@ -66,7 +66,7 @@ int jpegRenderCallback(JPEGDRAW *pDraw) {
 
 // --- Preload moods ---
 void preloadMoods() {
-    File dir = FSYS.open("/moods");
+    File dir = FSYS.open("/M5Gotchi/moods");
     if (!dir) {
         logMessage("Failed to open /moods directory");
         return;
@@ -78,7 +78,7 @@ void preloadMoods() {
             continue;
         }
 
-        String filePath = String("/moods/") + String(f.name());
+        String filePath = String("/M5Gotchi/moods/") + String(f.name());
         String fileName = String(f.name());
         f.close();
 

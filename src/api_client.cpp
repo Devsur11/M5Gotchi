@@ -15,8 +15,8 @@ using namespace pwngrid::crypto;
 
 static const char *Endpoint = "https://api.pwnagotchi.ai/api/v1";
 static String token = "";
-static const char *tokenPath = "/pwngrid/token.json";
-static String keysPathGlobal = "/pwngrid/keys";
+static const char *tokenPath = "/M5Gotchi/pwngrid/token.json";
+static String keysPathGlobal = "/M5Gotchi/pwngrid/keys";
 extern const char pwngid_root_ca_pem_start[] asm("_binary_certs_pwngrid_root_ca_pem_start");
 extern const char pwngid_root_ca_pem_end[] asm("_binary_certs_pwngrid_root_ca_pem_end");
 
@@ -580,9 +580,9 @@ bool api_client::pollInbox() {
 
 // helper: ensures /pwngrid dir exists and returns cache file path
 static String getPwngridCachePath() {
-    const char *p = "/pwngrid";
+    const char *p = "/M5Gotchi/pwngrid";
     if (!FSYS.exists(p)) FSYS.mkdir(p);
-    return String("/pwngrid/cracks.conf");
+    return String("/M5Gotchi/pwngrid/cracks.conf");
 }
 
 // Add an AP to the cache for later upload. Appends to a JSON array of objects {"essid":"..","bssid":".."}

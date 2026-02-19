@@ -139,7 +139,7 @@ void performUpdate(Stream &updateSource, size_t updateSize) {
 
 // check given FS for valid update.bin and perform update if available
 void updateFromFS(fs::FS &fs) {
-   File updateBin = fs.open("/update.bin");
+   File updateBin = fs.open("/M5Gotchi/update.bin");
    if (updateBin) {
       if(updateBin.isDirectory()){
          logMessage("Error, update.bin is not a file");

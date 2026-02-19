@@ -86,8 +86,8 @@ Keyboard (M5Cardputer) and button (M5StickS3) are mutually exclusive:
 **Always unload before loading a new font**:
 
 ```cpp
-if (FSYS.exists("/fonts/big.vlw")) {
-    canvas_main.loadFont(FSYS, "/fonts/big.vlw");
+if (FSYS.exists("/M5Gotchi/fonts/big.vlw")) {
+    canvas_main.loadFont(FSYS, "/M5Gotchi/fonts/big.vlw");
     canvas_main.setTextSize(0.35);
     canvas_main.drawString(text, x, y);
     canvas_main.unloadFont();  // MUST DO THIS
@@ -134,7 +134,7 @@ Apps (`runApp(uint8_t appID)`) are modal overlays that modify `menuID` on exit.
 
 ```cpp
 StaticJsonDocument<512> doc;
-deserializeJson(doc, FSYS.open("/m5gothi.conf", FILE_READ));
+deserializeJson(doc, FSYS.open("/M5Gotchi/m5gothi.conf", FILE_READ));
 String name = doc["name"];  // safe access
 ```
 

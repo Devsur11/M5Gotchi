@@ -41,8 +41,8 @@ bool wifion(){
 #endif
 
 #define NORMAL_JSON_URL UPDATE_URL
-#define ADDRES_BOOK_FILE "/pwngrid/contacts.conf"
-#define KEYS_FILE "/pwngrid/keys"
+#define ADDRES_BOOK_FILE "/M5Gotchi/pwngrid/contacts.conf"
+#define KEYS_FILE "/M5Gotchi/pwngrid/keys"
 
 #ifndef M5STICKS3_ENV
 #define UPDATE_URL "https://devsur11.github.io/M5Gotchi/firmware/firmware.json"
@@ -50,12 +50,12 @@ bool wifion(){
 #define UPDATE_URL "https://devsur11.github.io/M5Gotchi/firmware/m5sticks3.json"
 #endif
 
-#define TEMP_DIR        "/temp"
-#define TEMP_JSON_PATH  TEMP_DIR "/update.json"
-#define TEMP_BIN_PATH   TEMP_DIR "/update.bin"
-#define NEW_CONFIG_FILE "/m5gothi.conf"
-#define PERSONALITY_FILE "/personality.conf"
-#define NEW_PERSONALITY_FILE "/new_personality.conf"
+#define TEMP_DIR        "/M5Gotchi/temp"
+#define TEMP_JSON_PATH  TEMP_DIR "/M5Gotchi/update.json"
+#define TEMP_BIN_PATH   TEMP_DIR "/M5Gotchi/update.bin"
+#define NEW_CONFIG_FILE "/M5Gotchi/m5gothi.conf"
+#define PERSONALITY_FILE "/M5Gotchi/personality.conf"
+#define NEW_PERSONALITY_FILE "/M5Gotchi/new_personality.conf"
 #define UNIT_NAME_MAX 32
 #define UNIT_FP_MAX   64
 #define SERIAL_LOGS
@@ -203,3 +203,11 @@ extern bool check_inbox_at_startup;
 extern String originalMacAddress;
 extern bool configChanged;
 extern uint8_t menu_display_mode;  // 0=list, 1=grid
+
+// Helper functions to encrypt/decrypt sensitive stat values using MAC address as key
+String encryptStatsValue(uint64_t value, const String &macAddress);
+String encryptStatsValue32(uint32_t value, const String &macAddress);
+String encryptStatsValue16(uint16_t value, const String &macAddress);
+bool decryptStatsValue(const String &encrypted, const String &macAddress, uint64_t &outValue);
+bool decryptStatsValue32(const String &encrypted, const String &macAddress, uint32_t &outValue);
+bool decryptStatsValue16(const String &encrypted, const String &macAddress, uint16_t &outValue);

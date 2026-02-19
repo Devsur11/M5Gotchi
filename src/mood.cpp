@@ -196,8 +196,8 @@ static bool writeTextFile(const String &path, const String &content) {
 
 // Create default faces.txt and texts.txt under /moods
 bool createDefaultMoodFiles() {
-  if (!FSYS.exists("/moods")) {
-    FSYS.mkdir("/moods");
+  if (!FSYS.exists("/M5Gotchi/moods")) {
+    FSYS.mkdir("/M5Gotchi/moods");
   }
 
   // Faces
@@ -217,7 +217,7 @@ bool createDefaultMoodFiles() {
   addSection("excited", excited, sizeof(excited)/sizeof(excited[0]));
 
 
-  bool ok1 = writeTextFile("/moods/faces.txt", facesContent);
+  bool ok1 = writeTextFile("/M5Gotchi/moods/faces.txt", facesContent);
 
   // Texts
   String textsContent = "";
@@ -250,7 +250,7 @@ bool createDefaultMoodFiles() {
 
   textsContent += "\n";
 
-  bool ok2 = writeTextFile("/moods/texts.txt", textsContent);
+  bool ok2 = writeTextFile("/M5Gotchi/moods/texts.txt", textsContent);
 
   logMessage(String("Default mood files created: faces.txt=") + (ok1?"ok":"fail") + ", texts.txt=" + (ok2?"ok":"fail"));
   return ok1 && ok2;
@@ -283,8 +283,8 @@ bool reloadMoodFiles() {
   facesMap.clear();
   textsMap.clear();
 
-  bool okFaces = parseSectionedFile("/moods/faces.txt", facesMap);
-  bool okTexts = parseSectionedFile("/moods/texts.txt", textsMap);
+  bool okFaces = parseSectionedFile("/M5Gotchi/moods/faces.txt", facesMap);
+  bool okTexts = parseSectionedFile("/M5Gotchi/moods/texts.txt", textsMap);
 
   String details = "";
   details += "faces sections=" + String(facesMap.size());
@@ -358,7 +358,7 @@ void debugPrintMoods() {
 
 bool initMoodsFromSD() {
   // ensure files exist
-  if (!FSYS.exists("/moods/faces.txt") || !FSYS.exists("/moods/texts.txt")) {
+  if (!FSYS.exists("/M5Gotchi/moods/faces.txt") || !FSYS.exists("/M5Gotchi/moods/texts.txt")) {
     createDefaultMoodFiles();
   }
   initedMoods = true;

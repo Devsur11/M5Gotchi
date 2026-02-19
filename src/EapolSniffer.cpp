@@ -254,11 +254,11 @@ void SnifferLoop() {
                      bssid[0], bssid[1], bssid[2], bssid[3], bssid[4], bssid[5]);
 
             char filename[64];
-            snprintf(filename, sizeof(filename), "/handshake/%s_%s_ID_%i.pcap",
+            snprintf(filename, sizeof(filename), "/M5Gotchi/handshake/%s_%s_ID_%i.pcap",
                      bssidStr, apName, random(999));
 
-            if (!FSYS.exists("/handshake")) {
-                FSYS.mkdir("/handshake");
+            if (!FSYS.exists("/M5Gotchi/handshake")) {
+                FSYS.mkdir("/M5Gotchi/handshake");
             }
 
             file = FSYS.open(filename, FILE_WRITE, true);

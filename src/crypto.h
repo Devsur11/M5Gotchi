@@ -6,7 +6,7 @@
 namespace pwngrid {
 namespace crypto {
 
-// Initialize / ensure keys exist under keysPath (e.g. "/sd/keys").
+// Initialize / ensure keys exist under keysPath (e.g. "/M5Gotchi/sd/keys").
 // If missing, generates RSA keypair (VERY SLOW for 4096 bits).
 // Returns true on success.
 bool ensureKeys(const String &keysPath);
@@ -37,6 +37,16 @@ String publicPEMBase64();
 // Base64 helpers
 String base64Encode(const std::vector<uint8_t> &data);
 std::vector<uint8_t> base64Decode(const String &b64);
+
+// Simple symmetric encryption with password/key string (e.g., MAC address)
+// Uses AES-256-GCM with SHA256-derived key
+// Returns base64-encoded ciphertext on success, empty string on failure
+String encryptWithPassword(const std::vector<uint8_t> &plaintext, const String &password);
+
+// Decrypt ciphertext produced by encryptWithPassword
+// Takes base64-encoded ciphertext and password, returns plaintext
+// Returns true on success, false on failure
+bool decryptWithPassword(const String &ciphertext_b64, const String &password, std::vector<uint8_t> &outPlaintext);
 
 // Helper to meet all pwngrid api requiements
 static String normalizePublicPEM(const String &pem_in);

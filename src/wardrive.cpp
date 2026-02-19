@@ -21,11 +21,11 @@ int tot_observed_networks = 0;
 static SemaphoreHandle_t wardriveMutex = nullptr;
 
 // Session filename state
-static String currentWardrivePath = "/wardriving/first_seen.csv";
+static String currentWardrivePath = "/M5Gotchi/wardriving/first_seen.csv";
 static bool filenameLocked = false; // once set by startWardriveSession, stays until explicitly changed
 
 // First-seen map (persistent on SD)
-static const char* FIRST_SEEN_PATH = "/wardriving/first_seen.csv";
+static const char* FIRST_SEEN_PATH = "/M5Gotchi/wardriving/first_seen.csv";
 
 // Internal representation of a parsed fix
 struct GpsFix {
@@ -178,8 +178,8 @@ static int channelToFrequency(int ch) {
 // ---- first-seen persistence ----
 static void ensureWardrivingDir() {
     // ensure directory exists; FSYS.mkdir returns true if directory created or already exists
-    if (!FSYS.exists("/wardriving")) {
-        FSYS.mkdir("/wardriving");
+    if (!FSYS.exists("/M5Gotchi/wardriving")) {
+        FSYS.mkdir("/M5Gotchi/wardriving");
     }
 }
 
@@ -258,7 +258,7 @@ void startWardriveSession(unsigned long gpsTimeoutMs) {
         snprintf(buf, sizeof(buf), "wardriving/wardrive_millis_%lu.csv", t);
         fname = String(buf);
     }
-    currentWardrivePath = "/" + fname; // ensure leading slash
+    currentWardrivePath = "/M5Gotchi/" + fname; // ensure leading slash
     filenameLocked = true;
 
     fLogMessage("Wardrive session file set to: %s", currentWardrivePath.c_str());

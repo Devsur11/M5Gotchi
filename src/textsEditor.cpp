@@ -83,7 +83,7 @@ static String simpleTextInput(const String &prompt, const String &initial, int m
 
 // Draw a simple list and return when user exits
 void runTextsEditor() {
-    const String path = "/moods/texts.txt";
+    const String path = "/M5Gotchi/moods/texts.txt";
     std::map<String, std::vector<String>> texts;
     std::vector<String> order;
     if (!parseSectionedFileLocal(path, texts, order)) {

@@ -3,7 +3,7 @@
 #include <FS.h>
 #include "fontDownloader.h"
 
-const char* FONTS_FOLDER = "/fonts";
+const char* FONTS_FOLDER = "/M5Gotchi/fonts";
 
 // Embedded font files from platformio.ini board_build.embed_files
 extern const uint8_t big_vlw_start[] asm("_binary_fonts_big_vlw_start");
@@ -19,7 +19,7 @@ bool fileExists(const char* path) {
 }
 
 bool copyEmbeddedFont(const uint8_t* fontStart, const uint8_t* fontEnd, const char* fontName) {
-    String fontPath = String(FONTS_FOLDER) + "/" + String(fontName);
+    String fontPath = String(FONTS_FOLDER) + "/M5Gotchi/" + String(fontName);
     
     if (fileExists(fontPath.c_str())) {
         fLogMessage("Font already exists: %s\n", fontPath.c_str());

@@ -126,12 +126,12 @@ struct CrackedEntry {
 std::vector<CrackedEntry> getCrackedEntries() {
     std::vector<CrackedEntry> entries;
 
-    if (!FSYS.exists("/cracked.json")) {
+    if (!FSYS.exists("/M5Gotchi/cracked.json")) {
         logMessage("No cracked.json found on SD card.");
         return entries; // empty
     }
 
-    File file = FSYS.open("/cracked.json", FILE_READ);
+    File file = FSYS.open("/M5Gotchi/cracked.json", FILE_READ);
     if (!file) {
         logMessage("Failed to open cracked.json for reading.");
         return entries;
@@ -177,7 +177,7 @@ bool isAlreadyUploaded(const char* fileName, JsonDocument &doc) {
 
 // Helper: save uploaded.json back to SD (pretty)
 void saveUploadedList(JsonDocument &doc) {
-    File jsonFile = FSYS.open("/uploaded.json", FILE_WRITE);
+    File jsonFile = FSYS.open("/M5Gotchi/uploaded.json", FILE_WRITE);
     if (!jsonFile) {
         logMessage("Failed to open /uploaded.json for writing");
         return;
@@ -190,8 +190,8 @@ void saveUploadedList(JsonDocument &doc) {
 // Append single filename to /uploaded.json safely (no duplicate)
 static void appendToUploadedList(const char* fileName) {
     DynamicJsonDocument doc(2048);
-    if (FSYS.exists("/uploaded.json")) {
-        File upf = FSYS.open("/uploaded.json", FILE_READ);
+    if (FSYS.exists("/M5Gotchi/uploaded.json")) {
+        File upf = FSYS.open("/M5Gotchi/uploaded.json", FILE_READ);
         if (upf) {
             DeserializationError err = deserializeJson(doc, upf);
             upf.close();
@@ -375,8 +375,8 @@ String decodeChunkedBody(const String &chunked) {
 static void parseAndSavePotfileBody(const String &bodyRaw) {
     // Load or init cracked.json
     DynamicJsonDocument crackedDoc(8 * 1024);
-    if (FSYS.exists("/cracked.json")) {
-        File cf = FSYS.open("/cracked.json", FILE_READ);
+    if (FSYS.exists("/M5Gotchi/cracked.json")) {
+        File cf = FSYS.open("/M5Gotchi/cracked.json", FILE_READ);
         if (cf) {
             DeserializationError err = deserializeJson(crackedDoc, cf);
             cf.close();
@@ -456,7 +456,7 @@ static void parseAndSavePotfileBody(const String &bodyRaw) {
     }
 
     // write cracked.json back (pretty)
-    File out = FSYS.open("/cracked.json", FILE_WRITE);
+    File out = FSYS.open("/M5Gotchi/cracked.json", FILE_WRITE);
     if (!out) {
         logMessage("Failed to open /cracked.json for writing");
         return;
@@ -470,9 +470,9 @@ static void parseAndSavePotfileBody(const String &bodyRaw) {
 void processWpaSec(const char* apiKey) {
     // Load uploaded.json (list of filenames)
     DynamicJsonDocument uploadedDoc(2048);
-    if (FSYS.exists("/uploaded.json")) {
+    if (FSYS.exists("/M5Gotchi/uploaded.json")) {
         logMessage("Loading /uploaded.json");
-        File upf = FSYS.open("/uploaded.json", FILE_READ);
+        File upf = FSYS.open("/M5Gotchi/uploaded.json", FILE_READ);
         if (upf) {
             DeserializationError err = deserializeJson(uploadedDoc, upf);
             upf.close();
@@ -491,7 +491,7 @@ void processWpaSec(const char* apiKey) {
 
     // Scan handshake folder: collect paths to upload while keeping uploadedDoc in scope
     std::vector<String> toUpload;
-    File dir = FSYS.open("/handshake");
+    File dir = FSYS.open("/M5Gotchi/handshake");
     if (!dir || !dir.isDirectory()) {
         logMessage("No /handshake folder");
     } else {
@@ -502,7 +502,7 @@ void processWpaSec(const char* apiKey) {
                 String name = String(file.name());
                 if (name.endsWith(".pcap")) {
                     if (!isAlreadyUploaded(name.c_str(), uploadedDoc)) {
-                        String path = String("/handshake/") + name;
+                        String path = String("/M5Gotchi/handshake/") + name;
                         toUpload.push_back(path);
                         toUpload.push_back(name);
                     } else {

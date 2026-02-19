@@ -490,8 +490,8 @@ void handleFileWrite(FileWriteRequest *req) {
     if (!req) return;
     logMessage("[FileWriter] Writing PCAP for: " + req->ssid);
 
-    if (!FSYS.exists("/handshake")) {
-        FSYS.mkdir("/handshake");
+    if (!FSYS.exists("/M5Gotchi/handshake")) {
+        FSYS.mkdir("/M5Gotchi/handshake");
         vTaskDelay(100 / portTICK_PERIOD_MS);
     }
 

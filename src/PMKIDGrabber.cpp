@@ -403,8 +403,8 @@ bool runPMKIDAttack(const uint8_t *apBSSID, int channel) {
     hexPMKID[32] = '\0';
 
     // Ensure directory exists — use the same filesystem handle for both checks and writes
-    if (!FSYS.exists("/pmkid")) {
-        FSYS.mkdir("/pmkid");
+    if (!FSYS.exists("/M5Gotchi/pmkid")) {
+        FSYS.mkdir("/M5Gotchi/pmkid");
     }
 
     char filename[64];

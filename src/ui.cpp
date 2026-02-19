@@ -547,7 +547,7 @@ void initUi() {
   }
   attachInterrupt(digitalPinToInterrupt(0), handleInterrupt, FALLING);
   xTaskCreate(buttonTask, "ButtonTask", 4096, NULL, 1, NULL);
-  crackedList = FSYS.exists("/pwngrid/cracks.conf");
+  crackedList = FSYS.exists("/M5Gotchi/pwngrid/cracks.conf");
   M5.Display.setRotation(1);
   M5.Display.setTextSize(1);
   M5.Display.fillScreen(bg_color_rgb565);
@@ -870,7 +870,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
     prevMID = 7;
   }
   else if (menuID == 8){
-    if(!(prevMID == 8)){toUpload = FSYS.open("/pwngrid/cracks.conf");}
+    if(!(prevMID == 8)){toUpload = FSYS.open("/M5Gotchi/pwngrid/cracks.conf");}
     if((toUpload && toUpload.size() > 5) && (pwngrid_indentity.length()>10)){ 
       drawMenuList(pwngrid_menu_to_send, 8, 8);
     }
@@ -1136,7 +1136,7 @@ void drawMood(String face, String phrase) {
         // Safe VLW Loading for Face
         // 1. Reset TextSize before loading VLW to prevent metric calculation errors
         canvas_main.setTextSize(1.0); 
-        canvas_main.loadFont(FSYS, "/fonts/big.vlw");
+        canvas_main.loadFont(FSYS, "/M5Gotchi/fonts/big.vlw");
         delay(50);
         
         // 2. Draw
@@ -1163,7 +1163,7 @@ void drawMood(String face, String phrase) {
     if(getPwngridTotalPeers() > 0){
         // Safe VLW Loading for Peers
         canvas_main.setTextSize(1.0); // Reset size BEFORE loading
-        canvas_main.loadFont(FSYS, "/fonts/small.vlw");
+        canvas_main.loadFont(FSYS, "/M5Gotchi/fonts/small.vlw");
         
         canvas_main.setTextSize(0.35); 
         
@@ -1374,7 +1374,7 @@ void drawHintBox(const String &text, uint8_t hintID) {
 
 #include <esp_sntp.h>
 
-static const char *BASE_DIR = "/pwngrid/chats";
+static const char *BASE_DIR = "/M5Gotchi/pwngrid/chats";
 
 bool registerNewMessage(message newMess) {
   // fix timestamp if missing
@@ -1383,7 +1383,7 @@ bool registerNewMessage(message newMess) {
   }
 
   // build file path
-  String path = String(BASE_DIR) + "/" + newMess.fromOrTo;
+  String path = String(BASE_DIR) + "/M5Gotchi/" + newMess.fromOrTo;
 
   // load file or create new JSON
   JsonDocument doc;
@@ -1428,7 +1428,7 @@ std::vector<message> loadMessageHistory(const String &unitName) {
     out.reserve(20); 
 
     // Construct path safely
-    String path = "/pwngrid/chats/" + unitName; // Hardcoded path is safer than String(BASE_DIR) + ...
+    String path = "/M5Gotchi/pwngrid/chats/" + unitName; // Hardcoded path is safer than String(BASE_DIR) + ...
     
     if (!FSYS.exists(path)) return out;
 
@@ -1596,7 +1596,7 @@ void pwngridMessenger() {
   }
 
   // 2. Setup Directory
-  if (!FSYS.exists("/pwngrid/chats")) FSYS.mkdir("/pwngrid/chats");
+  if (!FSYS.exists("/M5Gotchi/pwngrid/chats")) FSYS.mkdir("/M5Gotchi/pwngrid/chats");
 
   drawInfoBox("Please wait", "Syncing inbox", "with pwngrid...", false, false);
 
@@ -1611,7 +1611,7 @@ void pwngridMessenger() {
   // 3. Load Chat List (Safe Method)
   std::vector<String> chats;
   {
-      File dir = FSYS.open("/pwngrid/chats");
+      File dir = FSYS.open("/M5Gotchi/pwngrid/chats");
       if (dir) {
           dir.rewindDirectory();
           while (true) {
@@ -1619,8 +1619,8 @@ void pwngridMessenger() {
             if (!name.length()) break;
             
             // FIX: Prevent crash if getNextFileName returns only the filename
-            if (name.startsWith("/pwngrid/chats/")) {
-                chats.push_back(name.substring(15));
+            if (name.startsWith("/M5Gotchi/pwngrid/chats/")) {
+                chats.push_back(name.substring(24)); // Extract just the chat name
             } else {
                 // Ignore hidden files like .DS_Store
                 if (!name.startsWith(".")) chats.push_back(name);
@@ -1690,7 +1690,7 @@ void pwngridMessenger() {
     }
 
     // Create file safely
-    File newChat = FSYS.open("/pwngrid/chats/" + names[result], FILE_WRITE, true);
+    File newChat = FSYS.open("/M5Gotchi/pwngrid/chats/" + names[result], FILE_WRITE, true);
     if(newChat) newChat.close();
     
     chats.push_back(names[result]);
@@ -1784,7 +1784,7 @@ void pwngridMessenger() {
       if (inputManager::isButtonALongPressed()) {
         // Delete chat
         if(drawQuestionBox("Delete chat?", "Are you sure?", "")){
-          FSYS.remove("/pwngrid/chats/" + chats[result]);
+          FSYS.remove("/M5Gotchi/pwngrid/chats/" + chats[result]);
           drawInfoBox("Info", "Chat deleted.", "", true, false);
           menuID = 8;
           debounceDelay();
@@ -1876,7 +1876,7 @@ void pwngridMessenger() {
           
           if (c == 'd') {
             if(drawQuestionBox("Delete chat?", "Are you sure?", "")){
-              FSYS.remove("/pwngrid/chats/" + chats[result]);
+              FSYS.remove("/M5Gotchi/pwngrid/chats/" + chats[result]);
               drawInfoBox("Info", "Chat deleted.", "", true, false);
               menuID = 8;
               debounceDelay();
@@ -2154,9 +2154,9 @@ void runApp(uint8_t appID){
       }
       drawHintBox("Depending on network and device speed, enrollment may take several minutes or even fail.", 10);
       drawInfoBox("Init", "Initializing keys...", "This may take a while.", false, false);
-      FSYS.mkdir("/pwngrid");
-      FSYS.mkdir("/pwngrid/keys");
-      FSYS.mkdir("/pwngrid/chats");
+      FSYS.mkdir("/M5Gotchi/pwngrid");
+      FSYS.mkdir("/M5Gotchi/pwngrid/keys");
+      FSYS.mkdir("/M5Gotchi/pwngrid/chats");
       File cont = FSYS.open(ADDRES_BOOK_FILE, FILE_WRITE);
       cont.print("[]");
       cont.flush();
@@ -2350,14 +2350,14 @@ void runApp(uint8_t appID){
         canvas_main.drawString("Deletion in progress, please wait...", canvas_center_x, (canvas_h*6)/7);
         pushAll();
         //TODO: Deletion of all pwngrid files
-        FSYS.remove("/pwngrid/keys/id_rsa");
-        FSYS.remove("/pwngrid/keys/id_rsa.pub");
-        FSYS.remove("/pwngrid/token.json");
+        FSYS.remove("/M5Gotchi/pwngrid/keys/id_rsa");
+        FSYS.remove("/M5Gotchi/pwngrid/keys/id_rsa.pub");
+        FSYS.remove("/M5Gotchi/pwngrid/token.json");
         FSYS.remove(ADDRES_BOOK_FILE);
-        FSYS.rmdir("/pwngrid/keys");
-        FSYS.rmdir("/pwngrid/chats");
-        FSYS.remove("/pwngrid/cracks.conf");
-        File chatsDis = FSYS.open("/pwngrid/chats");
+        FSYS.rmdir("/M5Gotchi/pwngrid/keys");
+        FSYS.rmdir("/M5Gotchi/pwngrid/chats");
+        FSYS.remove("/M5Gotchi/pwngrid/cracks.conf");
+        File chatsDis = FSYS.open("/M5Gotchi/pwngrid/chats");
         while(true){
           String nextFileName = chatsDis.getNextFileName();
           if(nextFileName.length()>8){
@@ -2368,7 +2368,7 @@ void runApp(uint8_t appID){
           }
         }
         chatsDis.close();
-        FSYS.rmdir("/pwngrid");
+        FSYS.rmdir("/M5Gotchi/pwngrid");
         lastTokenRefresh = 0;
 
         delay(5000);
@@ -2409,7 +2409,7 @@ void runApp(uint8_t appID){
       canvas_main.clear(bg_color_rgb565);
       canvas_main.setTextSize(0.4);
       canvas_main.setTextDatum(middle_center);
-      canvas_main.loadFont(FSYS, "/fonts/small.vlw");
+      canvas_main.loadFont(FSYS, "/M5Gotchi/fonts/small.vlw");
       canvas_main.drawString(peers_list[choice].face, canvas_center_x, canvas_h / 8);
       canvas_main.unloadFont();
       canvas_main.setTextSize(1.5);
@@ -2915,7 +2915,7 @@ void runApp(uint8_t appID){
       drawHintBox("This app is VERY slow due to complexity of whole csv parsing. Please be patient or use only for searching", 14);
       File csvFile;
       // Wardriving CSV viewer with search function
-      String selectedPath = "/wardriving/first_seen.csv";
+      String selectedPath = "/M5Gotchi/wardriving/first_seen.csv";
       String menu[] = {"Select file", "Use default (GPS data from pwned networks if enabled)"};
       int8_t fileChoice = drawMultiChoice("CSV File Option:", menu, 2, 2, 0);
       debounceDelay();
@@ -2928,7 +2928,7 @@ void runApp(uint8_t appID){
         csvFile = FSYS.open(selectedPath, FILE_READ);
       }
       else {
-        csvFile = FSYS.open("/wardriving/first_seen.csv", FILE_READ);
+        csvFile = FSYS.open("/M5Gotchi/wardriving/first_seen.csv", FILE_READ);
       }
       if (!csvFile) {
         drawInfoBox("Error", "File not found", "Wrong selection?", true, false);
@@ -3102,7 +3102,7 @@ void runApp(uint8_t appID){
             lowerSearch.toLowerCase();
             
             // Optimized: Read file once and parse line by line
-            File csvFile = FSYS.open("/wardrive.csv", FILE_READ);
+            File csvFile = FSYS.open("/M5Gotchi/wardrive.csv", FILE_READ);
             if (csvFile) {
               uint32_t currentLine = 0;
               String line = "";
@@ -4298,7 +4298,7 @@ void runApp(uint8_t appID){
     }
     if(appID == 112){
       // Mood Font Tester: enumerate faces from /moods/faces.txt and display them using the custom mood font/size
-      File f = FSYS.open("/moods/faces.txt", FILE_READ);
+      File f = FSYS.open("/M5Gotchi/moods/faces.txt", FILE_READ);
       if(!f){
         drawInfoBox("Error", "faces.txt not found", "Ensure /moods/faces.txt exists", true, false);
         return;
@@ -4325,16 +4325,16 @@ void runApp(uint8_t appID){
         canvas_main.setColor(tx_color_rgb565);
         canvas_main.setTextDatum(middle_center);
         // load custom font used in drawMood for faces
-        if(FSYS.exists("/fonts/big.vlw")){
-          canvas_main.loadFont(SD, "/fonts/big.vlw");
+        if(FSYS.exists("/M5Gotchi/fonts/big.vlw")){
+          canvas_main.loadFont(SD, "/M5Gotchi/fonts/big.vlw");
         }
         canvas_main.setTextSize(0.35);
         canvas_main.drawString(faces[idx], canvas_center_x, canvas_h/2);
-        if(FSYS.exists("/fonts/big.vlw")) canvas_main.unloadFont();
+        if(FSYS.exists("/M5Gotchi/fonts/big.vlw")) canvas_main.unloadFont();
         // show index
         canvas_main.setTextDatum(top_left);
         canvas_main.setTextSize(1);
-        canvas_main.drawString(String(idx+1) + "/" + String(faces.size()), 2, 2);
+        canvas_main.drawString(String(idx+1) + "/M5Gotchi/" + String(faces.size()), 2, 2);
         pushAll();
         M5.update();
 #ifndef BUTTON_ONLY_INPUT
@@ -4486,9 +4486,9 @@ void runApp(uint8_t appID){
     }
     if(appID == 39){
       drawInfoBox("Info", "Reading SD card...", "Please wait", false, false);
-      File root = FSYS.open("/handshake");
+      File root = FSYS.open("/M5Gotchi/handshake");
       if (!root || !root.isDirectory()) {
-        drawInfoBox("Error", "Cannot open \"/handshake\" folder.", "Check SD card!", true, true);
+        drawInfoBox("Error", "Cannot open \"/M5Gotchi/handshake\" folder.", "Check SD card!", true, true);
         menuID = 5;
         return;
       }
@@ -4841,18 +4841,18 @@ void runApp(uint8_t appID){
       runApp(15);
       if (true) {
         FSYS.remove(NEW_CONFIG_FILE);
-        FSYS.remove("/uploaded.json");
-        FSYS.remove("/cracked.json");
+        FSYS.remove("/M5Gotchi/uploaded.json");
+        FSYS.remove("/M5Gotchi/cracked.json");
         FSYS.remove(PERSONALITY_FILE);
-        FSYS.remove("/moods/faces.txt");
-        FSYS.remove("/moods/texts.txt");
-        FSYS.rmdir("/moods");
-        FSYS.rmdir("/temp");
+        FSYS.remove("/M5Gotchi/moods/faces.txt");
+        FSYS.remove("/M5Gotchi/moods/texts.txt");
+        FSYS.rmdir("/M5Gotchi/moods");
+        FSYS.rmdir("/M5Gotchi/temp");
         //recursevely delete "fonts" "wardrive" "handshake" folders
-        FSYS.remove("/fonts/big.vlw");
-        FSYS.remove("/fonts/small.vlw");
-        FSYS.rmdir("/fonts");
-        File wardriveDir = FSYS.open("/wardrive");
+        FSYS.remove("/M5Gotchi/fonts/big.vlw");
+        FSYS.remove("/M5Gotchi/fonts/small.vlw");
+        FSYS.rmdir("/M5Gotchi/fonts");
+        File wardriveDir = FSYS.open("/M5Gotchi/wardrive");
         if (wardriveDir && wardriveDir.isDirectory()) {
           File wardriveFile = wardriveDir.openNextFile();
           while (wardriveFile) {
@@ -4860,9 +4860,9 @@ void runApp(uint8_t appID){
             wardriveFile = wardriveDir.openNextFile();
           }
           wardriveDir.close();
-          FSYS.rmdir("/wardrive");
+          FSYS.rmdir("/M5Gotchi/wardrive");
         }
-        File handshakeDir = FSYS.open("/handshake");
+        File handshakeDir = FSYS.open("/M5Gotchi/handshake");
         if (handshakeDir && handshakeDir.isDirectory()) {
           File handshakeFile = handshakeDir.openNextFile();
           while (handshakeFile) {
@@ -4873,7 +4873,7 @@ void runApp(uint8_t appID){
             handshakeFile = handshakeDir.openNextFile();
           }
           handshakeDir.close();
-          FSYS.rmdir("/handshake");
+          FSYS.rmdir("/M5Gotchi/handshake");
         }
 
 
@@ -4910,8 +4910,8 @@ void runApp(uint8_t appID){
       return;
     }    
     if(appID == 53){
-      if(FSYS.exists("/cracked.json")){
-        File crackedFile = FSYS.open("/cracked.json", FILE_READ);
+      if(FSYS.exists("/M5Gotchi/cracked.json")){
+        File crackedFile = FSYS.open("/M5Gotchi/cracked.json", FILE_READ);
         if (!crackedFile) {
           drawInfoBox("Error", "Failed to open cracked.json", "Check SD card!", true, false);
           menuID = 7;
@@ -7641,7 +7641,7 @@ void drawStorageInfo() {
     uint64_t used_size = 0;
     
     // Calculate used space (rough estimate)
-    File root = FSYS.open("/");
+    File root = FSYS.open("/M5Gotchi/");
     if (root) {
       // Simple dir traversal for used space
       File file = root.openNextFile();

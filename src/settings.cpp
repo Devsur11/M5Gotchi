@@ -5,6 +5,80 @@
 #include "logger.h"
 #include "pwnagothi.h"
 #include "ui.h"
+#include "crypto.h"
+
+static String _encryptSensitiveData(uint64_t val, const String &secret) {
+    String payload = String(val);
+    std::vector<uint8_t> buf((const uint8_t*)payload.c_str(), (const uint8_t*)payload.c_str() + payload.length());
+    return pwngrid::crypto::encryptWithPassword(buf, secret);
+}
+
+static String _encryptSensitiveData32(uint32_t val, const String &secret) {
+    String payload = String(val);
+    std::vector<uint8_t> buf((const uint8_t*)payload.c_str(), (const uint8_t*)payload.c_str() + payload.length());
+    return pwngrid::crypto::encryptWithPassword(buf, secret);
+}
+
+static String _encryptSensitiveData16(uint16_t val, const String &secret) {
+    String payload = String(val);
+    std::vector<uint8_t> buf((const uint8_t*)payload.c_str(), (const uint8_t*)payload.c_str() + payload.length());
+    return pwngrid::crypto::encryptWithPassword(buf, secret);
+}
+
+static bool _decryptSensitiveData(const String &ciphertext, const String &secret, uint64_t &result) {
+    std::vector<uint8_t> decoded;
+    if (!pwngrid::crypto::decryptWithPassword(ciphertext, secret, decoded)) {
+        return false;
+    }
+    String s((const char*)decoded.data(), decoded.size());
+    result = s.toInt();
+    return true;
+}
+
+static bool _decryptSensitiveData32(const String &ciphertext, const String &secret, uint32_t &result) {
+    std::vector<uint8_t> decoded;
+    if (!pwngrid::crypto::decryptWithPassword(ciphertext, secret, decoded)) {
+        return false;
+    }
+    String s((const char*)decoded.data(), decoded.size());
+    result = s.toInt();
+    return true;
+}
+
+static bool _decryptSensitiveData16(const String &ciphertext, const String &secret, uint16_t &result) {
+    std::vector<uint8_t> decoded;
+    if (!pwngrid::crypto::decryptWithPassword(ciphertext, secret, decoded)) {
+        return false;
+    }
+    String s((const char*)decoded.data(), decoded.size());
+    result = s.toInt();
+    return true;
+}
+
+// Public API wrappers to maintain compatibility
+String encryptStatsValue(uint64_t value, const String &macAddress) {
+    return _encryptSensitiveData(value, macAddress);
+}
+
+String encryptStatsValue32(uint32_t value, const String &macAddress) {
+    return _encryptSensitiveData32(value, macAddress);
+}
+
+String encryptStatsValue16(uint16_t value, const String &macAddress) {
+    return _encryptSensitiveData16(value, macAddress);
+}
+
+bool decryptStatsValue(const String &encrypted, const String &macAddress, uint64_t &outValue) {
+    return _decryptSensitiveData(encrypted, macAddress, outValue);
+}
+
+bool decryptStatsValue32(const String &encrypted, const String &macAddress, uint32_t &outValue) {
+    return _decryptSensitiveData32(encrypted, macAddress, outValue);
+}
+
+bool decryptStatsValue16(const String &encrypted, const String &macAddress, uint16_t &outValue) {
+    return _decryptSensitiveData16(encrypted, macAddress, outValue);
+}
 
 String hostname = "M5Gotchi";
 bool sound = false;
@@ -12,7 +86,6 @@ int brightness = 150;
 bool autoDimEnabled = true;
 uint16_t autoDimTimeout = 60000;  // 60 seconds
 uint8_t autoDimMinBrightness = 10;
-uint16_t pwned_ap;
 SPIClass sdSPI;
 String savedApSSID;
 String savedAPPass;
@@ -55,6 +128,7 @@ uint32_t allTimeEpochs = 0;
 uint16_t allTimePeers = 0;
 long long allSessionTime = 0;
 uint16_t prev_level = 0;
+uint16_t pwned_ap;
 bool randomise_mac_at_boot = true;
 bool add_new_units_to_friends = false;
 bool check_inbox_at_startup = false;
@@ -455,6 +529,57 @@ bool initVars() {
     }
     #endif
 
+    if(FSYS.exists("/M5Gotchi")) {
+        logMessage("/M5Gotchi directory exists");
+    } else {
+        logMessage("/M5Gotchi directory does not exist, creating...");
+        if (FSYS.mkdir("/M5Gotchi")) {
+            logMessage("/M5Gotchi directory created successfully");
+            initColorSettings();
+            initUi();
+            drawInfoBox("WARNING!", "Some files are not in the wrong places. Don't worry I'll fix them now.","",  false, false);
+            // Migrate files and folders to /M5Gotchi directory
+            logMessage("Starting file migration to /M5Gotchi...");
+
+            // Migrate individual config files
+            if (FSYS.exists("/M5gothi.conf")) {
+                FSYS.rename("/M5gothi.conf", "/M5Gotchi/M5gothi.conf");
+                logMessage("Migrated M5gothi.conf");
+            }
+            if (FSYS.exists("/personality.conf")) {
+                FSYS.rename("/personality.conf", "/M5Gotchi/personality.conf");
+                logMessage("Migrated personality.conf");
+            }
+            if (FSYS.exists("/new_personality.conf")) {
+                FSYS.rename("/new_personality.conf", "/M5Gotchi/new_personality.conf");
+                logMessage("Migrated new_personality.conf");
+            }
+            if (FSYS.exists("/cracked.json")) {
+                FSYS.rename("/cracked.json", "/M5Gotchi/cracked.json");
+                logMessage("Migrated cracked.json");
+            }
+            if (FSYS.exists("/uploaded.conf")) {
+                FSYS.rename("/uploaded.conf", "/M5Gotchi/uploaded.conf");
+                logMessage("Migrated uploaded.conf");
+            }
+
+            // Migrate directories with all their content
+            const char* dirsToMigrate[] = {"/handshake", "/wardriving", "/fonts", "/temp", "/moods", "/pwngrid"};
+            for (const char* dir : dirsToMigrate) {
+                if (FSYS.exists(dir)) {
+                    String newPath = String("/M5Gotchi") + dir;
+                    FSYS.rename(dir, newPath);
+                    logMessage("Migrated directory: " + String(dir));
+                }
+            }
+
+            logMessage("File migration completed successfully");
+        } else {
+            logMessage("Failed to create /M5Gotchi directory");
+            return false;
+        }
+    }
+
     String macAddr = WiFi.macAddress();
     originalMacAddress = macAddr;
     logMessage("Original MAC Address: " + macAddr);
@@ -504,7 +629,14 @@ bool initVars() {
         if (config["autoDimMinBrightness"].is<uint8_t>()) autoDimMinBrightness = config["autoDimMinBrightness"];
         else configChanged = true;
 
-        if (config["pwned_ap"].is<uint16_t>()) pwned_ap = config["pwned_ap"];
+        if (config["pwned_ap"].is<uint16_t>()&& !config["system_stats_menu_mode"].is<uint8_t>()) pwned_ap = config["pwned_ap"];
+        else if (config["pwned_ap"].is<String>()) {
+            uint16_t tmpVal = 0;
+            if (decryptStatsValue16(config["pwned_ap"].as<String>(), originalMacAddress, tmpVal)) {
+                pwned_ap = tmpVal;
+            }
+            if (tmpVal == 0 && !config["pwned_ap"].is<uint16_t>()) configChanged = true;
+        }
         else configChanged = true;
 
         // legacy single saved network keys
@@ -607,25 +739,76 @@ bool initVars() {
         if(config["getLocationAfterPwn"].is<bool>()) getLocationAfterPwn = config["getLocationAfterPwn"].as<bool>();
         else configChanged = true;
 
-        if(config["lastSessionDeauths"].is<uint>()) lastSessionDeauths = config["lastSessionDeauths"].as<uint>();
+        if(config["lastSessionDeauths"].is<uint>()&& !config["system_stats_menu_mode"].is<uint8_t>()) lastSessionDeauths = config["lastSessionDeauths"].as<uint>();
+        else if(config["lastSessionDeauths"].is<String>()) {
+            // Try to decrypt if MAC is available
+            uint tmpVal = 0;
+            if (decryptStatsValue32(config["lastSessionDeauths"].as<String>(), originalMacAddress, tmpVal)) {
+                lastSessionDeauths = tmpVal;
+            }
+            // If decryption fails, mark for re-encryption on save
+            if (tmpVal == 0 && !config["lastSessionDeauths"].is<uint>()) configChanged = true;
+        }
         else configChanged = true;
         
-        if(config["lastSessionTime"].is<long>()) lastSessionTime = config["lastSessionTime"].as<long>();
+        if(config["lastSessionTime"].is<long>()&& !config["system_stats_menu_mode"].is<uint8_t>()) lastSessionTime = config["lastSessionTime"].as<long>();
+        else if(config["lastSessionTime"].is<String>()) {
+            uint64_t tmpVal = 0;
+            if (decryptStatsValue(config["lastSessionTime"].as<String>(), originalMacAddress, tmpVal)) {
+                lastSessionTime = (long)tmpVal;
+            }
+            if (tmpVal == 0 && !config["lastSessionTime"].is<long>()) configChanged = true;
+        }
         else configChanged = true;
 
-        if(config["lastSessionPeers"].is<uint8_t>()) lastSessionPeers = config["lastSessionPeers"].as<uint8_t>();
+        if(config["lastSessionPeers"].is<uint8_t>()&& !config["system_stats_menu_mode"].is<uint8_t>()) lastSessionPeers = config["lastSessionPeers"].as<uint8_t>();
+        else if(config["lastSessionPeers"].is<String>()) {
+            uint16_t tmpVal = 0;
+            if (decryptStatsValue16(config["lastSessionPeers"].as<String>(), originalMacAddress, tmpVal)) {
+                lastSessionPeers = (uint8_t)tmpVal;
+            }
+            if (tmpVal == 0 && !config["lastSessionPeers"].is<uint8_t>()) configChanged = true;
+        }
         else configChanged = true;
 
-        if(config["allTimeDeauths"].is<uint32_t>()) allTimeDeauths = config["allTimeDeauths"].as<uint32_t>();
+        if(config["allTimeDeauths"].is<uint32_t>()&& !config["system_stats_menu_mode"].is<uint8_t>()) allTimeDeauths = config["allTimeDeauths"].as<uint32_t>();
+        else if(config["allTimeDeauths"].is<String>()) {
+            uint32_t tmpVal = 0;
+            if (decryptStatsValue32(config["allTimeDeauths"].as<String>(), originalMacAddress, tmpVal)) {
+                allTimeDeauths = tmpVal;
+            }
+            if (tmpVal == 0 && !config["allTimeDeauths"].is<uint32_t>()) configChanged = true;
+        }
         else configChanged = true;
 
-        if(config["allTimeEpochs"].is<uint32_t>()) allTimeEpochs = config["allTimeEpochs"].as<uint32_t>();
+        if(config["allTimeEpochs"].is<uint32_t>()&& !config["system_stats_menu_mode"].is<uint8_t>()) allTimeEpochs = config["allTimeEpochs"].as<uint32_t>();
+        else if(config["allTimeEpochs"].is<String>()) {
+            uint32_t tmpVal = 0;
+            if (decryptStatsValue32(config["allTimeEpochs"].as<String>(), originalMacAddress, tmpVal)) {
+                allTimeEpochs = tmpVal;
+            }
+            if (tmpVal == 0 && !config["allTimeEpochs"].is<uint32_t>()) configChanged = true;
+        }
         else configChanged = true;
 
-        if(config["allTimePeers"].is<uint16_t>()) allTimePeers = config["allTimePeers"].as<uint16_t>();
+        if(config["allTimePeers"].is<uint16_t>()&& !config["system_stats_menu_mode"].is<uint8_t>()) allTimePeers = config["allTimePeers"].as<uint16_t>();
+        else if(config["allTimePeers"].is<String>()) {
+            uint16_t tmpVal = 0;
+            if (decryptStatsValue16(config["allTimePeers"].as<String>(), originalMacAddress, tmpVal)) {
+                allTimePeers = tmpVal;
+            }
+            if (tmpVal == 0 && !config["allTimePeers"].is<uint16_t>()) configChanged = true;
+        }
         else configChanged = true;
 
-        if(config["allSessionTime"].is<long long>()) allSessionTime = config["allSessionTime"].as<long long>();
+        if(config["allSessionTime"].is<long long>() && !config["system_stats_menu_mode"].is<uint8_t>()) allSessionTime = config["allSessionTime"].as<long long>();
+        else if(config["allSessionTime"].is<String>()) {
+            uint64_t tmpVal = 0;
+            if (decryptStatsValue(config["allSessionTime"].as<String>(), originalMacAddress, tmpVal)) {
+                allSessionTime = (long long)tmpVal;
+            }
+            if (tmpVal == 0 && !config["allSessionTime"].is<long long>()) configChanged = true;
+        }
         else configChanged = true;
 
         if(config["prev_level"].is<uint16_t>()) prev_level = config["prev_level"].as<uint16_t>();
@@ -658,7 +841,7 @@ bool initVars() {
     config["autoDimEnabled"] = autoDimEnabled;
     config["autoDimTimeout"] = autoDimTimeout;
     config["autoDimMinBrightness"] = autoDimMinBrightness;
-    config["pwned_ap"] = pwned_ap;
+    config["pwned_ap"] = encryptStatsValue16(pwned_ap, originalMacAddress);
     config["savedApSSID"] = savedApSSID;
     config["savedAPPass"] = savedAPPass;
     // Save new networks array
@@ -695,19 +878,22 @@ bool initVars() {
     config["useCustomGPSPins"] = useCustomGPSPins;
     config["gpsBaudRate"] = gpsBaudRate;
     config["getLocationAfterPwn"] = getLocationAfterPwn;
-    config["lastSessionDeauths"] = lastSessionDeauths;
+    // Encrypt sensitive stats using MAC address as key
+    config["lastSessionDeauths"] = encryptStatsValue32(lastSessionDeauths, originalMacAddress);
     config["lastSessionCaptures"] = lastSessionCaptures;
-    config["lastSessionTime"] = lastSessionTime;
-    config["lastSessionPeers"] = lastSessionPeers;
-    config["allTimeDeauths"] = allTimeDeauths;
-    config["allTimeEpochs"] = allTimeEpochs;
-    config["allTimePeers"] = allTimePeers;
-    config["allSessionTime"] = allSessionTime;
+    config["lastSessionTime"] = encryptStatsValue(lastSessionTime, originalMacAddress);
+    config["lastSessionPeers"] = encryptStatsValue16(lastSessionPeers, originalMacAddress);
+    config["allTimeDeauths"] = encryptStatsValue32(allTimeDeauths, originalMacAddress);
+    config["allTimeEpochs"] = encryptStatsValue32(allTimeEpochs, originalMacAddress);
+    config["allTimePeers"] = encryptStatsValue16(allTimePeers, originalMacAddress);
+    config["allSessionTime"] = encryptStatsValue(allSessionTime, originalMacAddress);
     config["prev_level"] = prev_level;
     config["randomise_mac_at_boot"] = randomise_mac_at_boot;
     config["add_new_units_to_friends"] = add_new_units_to_friends;
     config["check_inbox_at_startup"] = check_inbox_at_startup;
     config["sync_pwned_on_boot"] = sync_pwned_on_boot;
+    config["menu_display_mode"] = menu_display_mode;
+    config["system_stats_menu_mode"] = 1; // Always save in list mode, grid mode is just a display option
 
     if (configChanged) {
         logMessage("Config updated with missing/default values, saving...");
@@ -735,7 +921,7 @@ bool saveSettings(){
     config["autoDimEnabled"] = autoDimEnabled;
     config["autoDimTimeout"] = autoDimTimeout;
     config["autoDimMinBrightness"] = autoDimMinBrightness;
-    config["pwned_ap"] = pwned_ap;
+    config["pwned_ap"] = encryptStatsValue16(pwned_ap, originalMacAddress);
     config["savedApSSID"] = savedApSSID;
     config["savedAPPass"] = savedAPPass;
     // savedNetworks
@@ -767,20 +953,22 @@ bool saveSettings(){
     config["gpsRx"] = gpsRx;
     config["connectWiFiOnStartup"] = connectWiFiOnStartup;
     config["checkUpdatesAtNetworkStart"] = checkUpdatesAtNetworkStart;
-    config["lastSessionDeauths"] = lastSessionDeauths;
-    config["lastSessionCaptures"] = lastSessionCaptures;
-    config["lastSessionTime"] = lastSessionTime;
-    config["lastSessionPeers"] = lastSessionPeers;
-    config["allTimeDeauths"] = allTimeDeauths;
-    config["allTimeEpochs"] = allTimeEpochs;
-    config["allTimePeers"] = allTimePeers;
-    config["allSessionTime"] = allSessionTime;
-    config["prev_level"] = prev_level;
+    // Encrypt sensitive stats using MAC address as key
+    config["lastSessionDeauths"] = encryptStatsValue32(lastSessionDeauths, originalMacAddress);
+    config["lastSessionCaptures"] = encryptStatsValue32(lastSessionCaptures, originalMacAddress);
+    config["lastSessionTime"] = encryptStatsValue(lastSessionTime, originalMacAddress);
+    config["lastSessionPeers"] = encryptStatsValue16(lastSessionPeers, originalMacAddress);
+    config["allTimeDeauths"] = encryptStatsValue32(allTimeDeauths, originalMacAddress);
+    config["allTimeEpochs"] = encryptStatsValue32(allTimeEpochs, originalMacAddress);
+    config["allTimePeers"] = encryptStatsValue16(allTimePeers, originalMacAddress);
+    config["allSessionTime"] = encryptStatsValue(allSessionTime, originalMacAddress);
+    config["prev_level"] = encryptStatsValue16(prev_level, originalMacAddress);
     config["randomise_mac_at_boot"] = randomise_mac_at_boot;
     config["add_new_units_to_friends"] = add_new_units_to_friends;
     config["check_inbox_at_startup"] = check_inbox_at_startup;
     config["sync_pwned_on_boot"] = sync_pwned_on_boot;
     config["menu_display_mode"] = menu_display_mode;
+    config["system_stats_menu_mode"] = 1; // Always save in list mode, grid mode is just a display option
 
     logMessage("JSON data creation successful, proceeding to save");
     FConf = FSYS.open(NEW_CONFIG_FILE, FILE_WRITE, false);

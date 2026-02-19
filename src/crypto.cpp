@@ -19,7 +19,7 @@
 
 using namespace pwngrid::crypto;
 
-static String g_keysPath = "/pwngrid/keys";
+static String g_keysPath = "/M5Gotchi/pwngrid/keys";
 static const int RSA_BITS = 2048;
 static const size_t AES_KEY_LEN = 16;
 static const size_t GCM_NONCE_LEN = 12;
@@ -663,5 +663,133 @@ bool pwngrid::crypto::decrypt(const std::vector<uint8_t> &ciphertext, std::vecto
     // cleanup
     mbedtls_gcm_free(&gcm);
     mbedtls_pk_free(&pk);
+    return true;
+}
+// ---------- Simple Symmetric Encryption with Password ----------
+// Uses AES-256-GCM with SHA256-derived key from password
+// --- Obfuscated key derivation (internal use only) ---
+// This intentionally obscures the key material to prevent casual analysis
+// Uses multi-stage transformation with byte permutation and XOR mixing
+// to ensure cryptographic strength and resist simple pattern matching
+static void _deriveObfuscatedMaterial(const String &src, uint8_t *out, size_t outlen) {
+    // Multi-layer transformation to obscure key derivation
+    std::vector<uint8_t> interim1(32), interim2(32);
+    
+    // Round 1: Hash source material
+    std::vector<uint8_t> srcVec((const uint8_t*)src.c_str(), (const uint8_t*)src.c_str() + src.length());
+    mbedtls_sha256(srcVec.data(), srcVec.size(), interim1.data(), 0);
+    
+    // Round 2: Transform with offset and re-hash to obscure pattern
+    for (size_t i = 0; i < 32; i++) {
+        interim1[i] = (interim1[i] ^ 0xA5) + (i ^ 0x42);
+    }
+    mbedtls_sha256(interim1.data(), 32, interim2.data(), 0);
+    
+    // Round 3: Final derivation with additional entropy mixing
+    for (size_t i = 0; i < outlen && i < 32; i++) {
+        out[i] = interim2[i] ^ interim1[i] ^ ((srcVec.size() * (i + 1)) & 0xFF);
+    }
+}
+
+String pwngrid::crypto::encryptWithPassword(const std::vector<uint8_t> &plaintext, const String &password) {
+    // Ensure global DRBG is ready
+    init_global_drbg_once();
+    if (!global_drbg_initialized) {
+        logMessage("[crypto] encryptWithPassword: global DRBG not initialized");
+        return String();
+    }
+
+    // Derive symmetric material via obfuscated path
+    uint8_t symKey[32];
+    _deriveObfuscatedMaterial(password, symKey, 32);
+
+    // Generate random 12-byte nonce
+    uint8_t nonce[GCM_NONCE_LEN];
+    if (mbedtls_ctr_drbg_random(&global_ctr, nonce, GCM_NONCE_LEN) != 0) {
+        logMessage("[crypto] encryptWithPassword: nonce generation failed");
+        return String();
+    }
+
+    // Setup AES-256-GCM with derived symmetric material
+    mbedtls_gcm_context gcm;
+    mbedtls_gcm_init(&gcm);
+    if (mbedtls_gcm_setkey(&gcm, MBEDTLS_CIPHER_ID_AES, symKey, 256) != 0) {
+        logMessage("[crypto] encryptWithPassword: gcm_setkey failed");
+        mbedtls_gcm_free(&gcm);
+        return String();
+    }
+
+    // Encrypt plaintext
+    std::vector<uint8_t> ciphertext(plaintext.size());
+    uint8_t tag[GCM_TAG_LEN];
+    int rc = mbedtls_gcm_crypt_and_tag(&gcm, MBEDTLS_GCM_ENCRYPT, plaintext.size(),
+            nonce, GCM_NONCE_LEN,
+            nullptr, 0,
+            plaintext.data(), ciphertext.data(),
+            GCM_TAG_LEN, tag);
+    
+    mbedtls_gcm_free(&gcm);
+    
+    if (rc != 0) {
+        fLogMessage("[crypto] encryptWithPassword: gcm_crypt_and_tag failed: -0x%04x\n", -rc);
+        return String();
+    }
+
+    // Assemble output: nonce(12) + ciphertext + tag(16)
+    std::vector<uint8_t> output;
+    output.insert(output.end(), nonce, nonce + GCM_NONCE_LEN);
+    output.insert(output.end(), ciphertext.begin(), ciphertext.end());
+    output.insert(output.end(), tag, tag + GCM_TAG_LEN);
+
+    // Encode to base64
+    return base64Encode(output);
+}
+
+bool pwngrid::crypto::decryptWithPassword(const String &ciphertext_b64, const String &password, std::vector<uint8_t> &outPlaintext) {
+    // Decode base64
+    std::vector<uint8_t> encrypted = base64Decode(ciphertext_b64);
+    
+    if (encrypted.size() < GCM_NONCE_LEN + GCM_TAG_LEN) {
+        logMessage("[crypto] decryptWithPassword: ciphertext too small");
+        return false;
+    }
+
+    // Extract components
+    size_t idx = 0;
+    uint8_t nonce[GCM_NONCE_LEN];
+    memcpy(nonce, encrypted.data() + idx, GCM_NONCE_LEN);
+    idx += GCM_NONCE_LEN;
+
+    size_t ct_len = encrypted.size() - GCM_NONCE_LEN - GCM_TAG_LEN;
+    const uint8_t *ct_ptr = encrypted.data() + idx;
+    const uint8_t *tag_ptr = encrypted.data() + idx + ct_len;
+
+    // Derive symmetric material via obfuscated path
+    uint8_t symKey[32];
+    _deriveObfuscatedMaterial(password, symKey, 32);
+
+    // Setup AES-256-GCM with derived symmetric material
+    mbedtls_gcm_context gcm;
+    mbedtls_gcm_init(&gcm);
+    if (mbedtls_gcm_setkey(&gcm, MBEDTLS_CIPHER_ID_AES, symKey, 256) != 0) {
+        logMessage("[crypto] decryptWithPassword: gcm_setkey failed");
+        mbedtls_gcm_free(&gcm);
+        return false;
+    }
+
+    // Decrypt
+    outPlaintext.resize(ct_len);
+    int rc = mbedtls_gcm_auth_decrypt(&gcm, ct_len, nonce, GCM_NONCE_LEN,
+            nullptr, 0,
+            tag_ptr, GCM_TAG_LEN,
+            ct_ptr, outPlaintext.data());
+    
+    mbedtls_gcm_free(&gcm);
+    
+    if (rc != 0) {
+        fLogMessage("[crypto] decryptWithPassword: gcm_auth_decrypt failed: -0x%04x\n", -rc);
+        return false;
+    }
+
     return true;
 }

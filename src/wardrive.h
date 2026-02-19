@@ -37,7 +37,7 @@ struct WigleEntry {
 // Append one CSV row per network to an SD file using a recent GPS fix read from Serial2.
 // - networks: vector of wifiSpeedScan seen at this moment
 // - timeoutMs: how long to wait for a valid GPS fix (reads Serial2)
-// - filename: path on SD to append rows (default: "/wardrive.csv")
+// - filename: path on SD to append rows (default: "/M5Gotchi/wardrive.csv")
 // Returns true if at least one row was written successfully.
 wardriveStatus wardrive(const std::vector<wifiSpeedScan>& networks, unsigned long timeoutMs);
 
