@@ -624,6 +624,11 @@ bool n_pwnagotchi::beginWardriving() {
 
 bool n_pwnagotchi::end() {
     logMessage("Stopping Pwnagotchi/Wardriving...");
+    lastSessionTime = millis();
+    lastSessionCaptures = sessionCaptures;
+    lastSessionPeers = 0; //TODO
+    lastSessionDeauths = 0;  //TODO
+    setMoodToStatus();
 
     // ── 1. Signal tasks to stop and delete them ───────────────────────────────
     pwnagotchiRunning = false;

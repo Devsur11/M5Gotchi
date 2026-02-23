@@ -492,6 +492,7 @@ void setup() {
   initUi();
   preloadMoods();
   initPersonality();
+  initNewPersonality();
   
   // Ensure mood text/face files exist and load them from SD
   if (!initMoodsFromSD()) {

@@ -198,7 +198,7 @@ n_personality n_pwnagotchi_personality = {
     -75,     // rssi_threshold (dBm) - minimum RSSI to attack (-100 to 0)
     false,   // enable_wardriving - enable GPS logging during attacks
     5000,    // gps_timeout_ms - timeout for GPS fix
-    true     // enable_pmkid_attack - enable PMKID attack
+    false     // enable_pmkid_attack - enable PMKID attack
 };
 
 bool initPersonality(){
@@ -962,7 +962,7 @@ bool saveSettings(){
     config["allTimeEpochs"] = encryptStatsValue32(allTimeEpochs, originalMacAddress);
     config["allTimePeers"] = encryptStatsValue16(allTimePeers, originalMacAddress);
     config["allSessionTime"] = encryptStatsValue(allSessionTime, originalMacAddress);
-    config["prev_level"] = encryptStatsValue16(prev_level, originalMacAddress);
+    config["prev_level"] = prev_level;
     config["randomise_mac_at_boot"] = randomise_mac_at_boot;
     config["add_new_units_to_friends"] = add_new_units_to_friends;
     config["check_inbox_at_startup"] = check_inbox_at_startup;
