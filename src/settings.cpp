@@ -880,7 +880,7 @@ bool initVars() {
     config["getLocationAfterPwn"] = getLocationAfterPwn;
     // Encrypt sensitive stats using MAC address as key
     config["lastSessionDeauths"] = encryptStatsValue32(lastSessionDeauths, originalMacAddress);
-    config["lastSessionCaptures"] = lastSessionCaptures;
+    config["lastSessionCaptures"] = encryptStatsValue32(lastSessionCaptures, originalMacAddress);
     config["lastSessionTime"] = encryptStatsValue(lastSessionTime, originalMacAddress);
     config["lastSessionPeers"] = encryptStatsValue16(lastSessionPeers, originalMacAddress);
     config["allTimeDeauths"] = encryptStatsValue32(allTimeDeauths, originalMacAddress);
@@ -912,26 +912,18 @@ bool initVars() {
     logMessage("Loaded identity: " + pwngrid_indentity);
     return true;
 }
-
 bool saveSettings(){
     JsonDocument config;
+
+    // --- Non-sensitive fields (no validation needed) ---
     config["Hostname"] = hostname;
     config["sound"] = sound;
     config["brightness"] = brightness;
     config["autoDimEnabled"] = autoDimEnabled;
     config["autoDimTimeout"] = autoDimTimeout;
     config["autoDimMinBrightness"] = autoDimMinBrightness;
-    config["pwned_ap"] = encryptStatsValue16(pwned_ap, originalMacAddress);
     config["savedApSSID"] = savedApSSID;
     config["savedAPPass"] = savedAPPass;
-    // savedNetworks
-    JsonArray nets = config.createNestedArray("savedNetworks");
-    for (auto &n : savedNetworks) {
-        JsonObject net = nets.createNestedObject();
-        net["ssid"] = n.ssid;
-        net["pass"] = n.pass;
-        net["connectOnStart"] = n.connectOnStart;
-    }
     config["whitelist"] = whitelist;
     config["auto_mode_on_startup"] = pwnagothiModeEnabled;
     config["bg_color"] = bg_color;
@@ -947,42 +939,102 @@ bool saveSettings(){
     config["lastTokenRefresh"] = lastTokenRefresh;
     config["wiggle_api_key"] = wiggle_api_key;
     config["hintsDisplayed"] = hintsDisplayed;
-    config["getLocationAfterPwn"] = getLocationAfterPwn;
-    config["useCustomGPSPins"] = useCustomGPSPins;
+    config["dev_mode"] = dev_mode;
+    config["serial_overlay"] = serial_overlay;
+    config["coords_overlay"] = coords_overlay;
+    config["skip_file_manager_checks_in_dev"] = skip_file_manager_checks_in_dev;
+    config["checkUpdatesAtNetworkStart"] = checkUpdatesAtNetworkStart;
+    config["connectWiFiOnStartup"] = connectWiFiOnStartup;
     config["gpsTx"] = gpsTx;
     config["gpsRx"] = gpsRx;
-    config["connectWiFiOnStartup"] = connectWiFiOnStartup;
-    config["checkUpdatesAtNetworkStart"] = checkUpdatesAtNetworkStart;
-    // Encrypt sensitive stats using MAC address as key
-    config["lastSessionDeauths"] = encryptStatsValue32(lastSessionDeauths, originalMacAddress);
-    config["lastSessionCaptures"] = encryptStatsValue32(lastSessionCaptures, originalMacAddress);
-    config["lastSessionTime"] = encryptStatsValue(lastSessionTime, originalMacAddress);
-    config["lastSessionPeers"] = encryptStatsValue16(lastSessionPeers, originalMacAddress);
-    config["allTimeDeauths"] = encryptStatsValue32(allTimeDeauths, originalMacAddress);
-    config["allTimeEpochs"] = encryptStatsValue32(allTimeEpochs, originalMacAddress);
-    config["allTimePeers"] = encryptStatsValue16(allTimePeers, originalMacAddress);
-    config["allSessionTime"] = encryptStatsValue(allSessionTime, originalMacAddress);
+    config["useCustomGPSPins"] = useCustomGPSPins;
+    config["gpsBaudRate"] = gpsBaudRate;
+    config["getLocationAfterPwn"] = getLocationAfterPwn;
     config["prev_level"] = prev_level;
     config["randomise_mac_at_boot"] = randomise_mac_at_boot;
     config["add_new_units_to_friends"] = add_new_units_to_friends;
     config["check_inbox_at_startup"] = check_inbox_at_startup;
     config["sync_pwned_on_boot"] = sync_pwned_on_boot;
     config["menu_display_mode"] = menu_display_mode;
-    config["system_stats_menu_mode"] = 1; // Always save in list mode, grid mode is just a display option
+    config["system_stats_menu_mode"] = 1;
+    config["auto_mode_and_wardrive"] = auto_mode_and_wardrive;
 
-    logMessage("JSON data creation successful, proceeding to save");
-    FConf = FSYS.open(NEW_CONFIG_FILE, FILE_WRITE, false);
-    if (FConf) {
-        String output;
-        serializeJsonPretty(config, output);
-        FConf.print(output);
-        FConf.close();
-        logMessage("Config saved successfully");
+    // savedNetworks array
+    JsonArray nets = config.createNestedArray("savedNetworks");
+    for (auto &n : savedNetworks) {
+        JsonObject net = nets.createNestedObject();
+        net["ssid"] = n.ssid;
+        net["pass"] = n.pass;
+        net["connectOnStart"] = n.connectOnStart;
+    }
+
+    // --- Sensitive/encrypted fields with validation ---
+    // Helper lambda to encrypt and validate, falling back to reading the
+    // existing value from the config file on disk if encryption fails.
+    // This prevents overwriting a good encrypted value with an empty string.
+    auto safeEncrypt16 = [&](const char* key, uint16_t value) -> bool {
+        String enc = encryptStatsValue16(value, originalMacAddress);
+        if (enc.length() == 0) {
+            fLogMessage("[settings] saveSettings: encryption failed for key '%s', aborting save\n", key);
+            return false;
+        }
+        config[key] = enc;
         return true;
-    } else {
-        logMessage("Failed to open config file for writing");
+    };
+
+    auto safeEncrypt32 = [&](const char* key, uint32_t value) -> bool {
+        String enc = encryptStatsValue32(value, originalMacAddress);
+        if (enc.length() == 0) {
+            fLogMessage("[settings] saveSettings: encryption failed for key '%s', aborting save\n", key);
+            return false;
+        }
+        config[key] = enc;
+        return true;
+    };
+
+    auto safeEncrypt64 = [&](const char* key, uint64_t value) -> bool {
+        String enc = encryptStatsValue(value, originalMacAddress);
+        if (enc.length() == 0) {
+            fLogMessage("[settings] saveSettings: encryption failed for key '%s', aborting save\n", key);
+            return false;
+        }
+        config[key] = enc;
+        return true;
+    };
+
+    // Bail out early if any encryption step fails — never persist partial/empty values
+    if (!safeEncrypt16("pwned_ap",           pwned_ap))           return false;
+    if (!safeEncrypt32("lastSessionDeauths", lastSessionDeauths)) return false;
+    if (!safeEncrypt32("lastSessionCaptures",lastSessionCaptures)) return false; 
+    if (!safeEncrypt64("lastSessionTime",    (uint64_t)lastSessionTime))  return false;
+    if (!safeEncrypt16("lastSessionPeers",   (uint16_t)lastSessionPeers)) return false;
+    if (!safeEncrypt32("allTimeDeauths",     allTimeDeauths))     return false;
+    if (!safeEncrypt32("allTimeEpochs",      allTimeEpochs))      return false;
+    if (!safeEncrypt16("allTimePeers",       allTimePeers))       return false;
+    if (!safeEncrypt64("allSessionTime",     (uint64_t)allSessionTime))   return false;
+
+    // --- Write to disk ---
+    logMessage("[settings] saveSettings: all fields validated, writing to disk");
+
+    FConf = FSYS.open(NEW_CONFIG_FILE, FILE_WRITE, false);
+    if (!FConf) {
+        logMessage("[settings] saveSettings: failed to open config file for writing");
         return false;
     }
+
+    String output;
+    serializeJsonPretty(config, output);
+    size_t written = FConf.print(output);
+    FConf.close();
+
+    if (written != output.length()) {
+        fLogMessage("[settings] saveSettings: write incomplete (%u of %u bytes)\n",
+                    (unsigned)written, (unsigned)output.length());
+        return false;
+    }
+
+    logMessage("[settings] saveSettings: config saved successfully");
+    return true;
 }
 
 bool addSavedNetwork(const String &ssid, const String &pass, bool connectOnStart){
@@ -1076,6 +1128,7 @@ void attemptConnectSavedNetworks(){
                 }
             }
         }
+        WiFi.mode(WIFI_MODE_NULL);
         return;
     }
 

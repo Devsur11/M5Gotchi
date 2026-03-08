@@ -189,6 +189,7 @@ menu pwngotchi_menu[] = {
 //menuID 10
 menu n_pwnagotchi_menu[] = {
   {"N_AUTO Mode", 125},           // Pwnagotchi attack system
+  {"N_AUTO + Wardriving", 128},   // Pwnagotchi with wardriving enabled
   {"Debug views", 92},                 // Show debug info on screen
   {"N_AUTO Personality", 124},    // New pwnagotchi personality editor
   {"Back", 255}
@@ -197,6 +198,8 @@ menu n_pwnagotchi_menu[] = {
 menu n_auto_running_menu[] = {
   {"Switch to manual mode", 126},     // Stop N_AUTO mode
   {"Debug views", 92},                 // Show debug info on screen
+  {"N_AUTO Personality", 124},    // New pwnagotchi personality editor
+  {"PLACEHOLDER", 255},
   {"Back", 255}
 };
 
@@ -721,12 +724,10 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
     prevMID = 2;
   }
   else if (menuID == 5){
-    drawMenuList( pwngotchi_menu , 5, 7);
+    drawMenuList( pwngotchi_menu , 5, 6);
     prevMID = 5;
   }
   else if (menuID == 6){
-    //lets modify each setting based on current value
-    // lets modify each setting based on current value
     char val_1[50];   // Auto Mode on Boot
     char val_2[55];   // Auto-Connect WiFi
     char val_3[55];   // Check Updates on Boot
@@ -888,7 +889,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
     prevMID = 9;
   }
   else if (menuID == 10){
-    drawMenuList((pwnagotchiTaskHandle == nullptr)?n_pwnagotchi_menu:n_auto_running_menu, 10, 3);
+    drawMenuList((pwnagotchiTaskHandle == nullptr)?n_pwnagotchi_menu:n_auto_running_menu, 10, 5);
     prevMID = 10;
   }
   else if (menuID == 99) {
@@ -5503,6 +5504,24 @@ void runApp(uint8_t appID){
     else if (appID == 126){
       n_pwnagotchi::end();
       drawInfoBox("Pwnagotchi stopped", "Pwnagotchi has been stopped.", "Press enter to continue", true, false);
+      menuID = 0;
+    }
+    else if (appID == 128){
+      // N_AUTO Mode with Wardriving
+      if(n_pwnagotchi::begin()){
+        logMessage("N_AUTO mode started successfully");
+        if(n_pwnagotchi::beginWardriving()){
+          drawInfoBox("Success", "Pwnagotchi + Wardriving", "enabled and running.", true, false);
+          logMessage("Wardriving task started successfully");
+        }
+        else{
+          drawInfoBox("Warning", "Pwnagotchi started", "Wardriving failed to start", true, false);
+          logMessage("Wardriving task failed to start");
+        }
+      }
+      else{
+        drawInfoBox("Error", "Failed to start Pwnagotchi", "Check logs!", true, false);
+      }
       menuID = 0;
     }
     return;

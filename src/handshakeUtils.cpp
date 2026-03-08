@@ -243,32 +243,19 @@ static bool parseEapolKey(const uint8_t *buf, uint32_t len,
 
     // Key Information word (big-endian)
     uint16_t keyInfo = (uint16_t)(key[EAPOL_KEY_INFO_OFFSET] << 8)
-                     |            key[EAPOL_KEY_INFO_OFFSET + 1];
+                 |            key[EAPOL_KEY_INFO_OFFSET + 1];
 
-    // Key Information bit positions (0 = LSB):
-    //   bit 3  = Key MIC
-    //   bit 7  = Key Ack
-    //   bit 8  = Install
-    //   bit 9  = Key ACK (same as bit 7 in IEEE naming - bit 7 from the word MSB)
-    // NOTE: keyInfo is the full 16-bit word. Bit 7 of the *word* (0-indexed from LSB)
-    // corresponds to byte key[1] bit 7 (MSB of byte 1, which is the low byte of the word
-    // since it's big-endian). Let's be explicit:
-    //   key[1] = high byte of Key Information
-    //   key[2] = low byte of Key Information
-    // Key Ack is bit 7 of the Key Information word counting from bit 0 = LSB of low byte.
-    // That means: keyInfo bit 7 = (keyInfo >> 7) & 1  ✓
-    bool keyAck = (keyInfo >> 7) & 1;
-    bool keyMic = (keyInfo >> 3) & 1;
+    bool keyAck    = (keyInfo >> 7) & 1;
+    bool keyMic    = (keyInfo >> 8) & 1; 
+    bool keySecure = (keyInfo >> 9) & 1; 
+
+    isMsgM1      = keyAck  && !keyMic;              // M1: Ack=1, MIC=0
+    bool isM3    = keyAck  &&  keyMic;              // M3: Ack=1, MIC=1
+    bool isM2    = !keyAck &&  keyMic && !keySecure; 
 
     logMessage("[EAPOL] keyInfo=0x" + String(keyInfo, HEX) +
                " KeyAck=" + String(keyAck) +
                " KeyMIC=" + String(keyMic));
-
-    isMsgM1   = keyAck && !keyMic;
-    bool isM2 = !keyAck && keyMic;
-
-    // M3 (Ack=1,MIC=1) also contains ANonce - we can use it to fill M1 if we missed it
-    bool isM3 = keyAck && keyMic;
 
     if (!isMsgM1 && !isM2 && !isM3) {
         logMessage("[EAPOL] Not M1/M2/M3, skipping");

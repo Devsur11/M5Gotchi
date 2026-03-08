@@ -19,7 +19,7 @@ bool fileExists(const char* path) {
 }
 
 bool copyEmbeddedFont(const uint8_t* fontStart, const uint8_t* fontEnd, const char* fontName) {
-    String fontPath = String(FONTS_FOLDER) + "/M5Gotchi/" + String(fontName);
+    String fontPath = String(FONTS_FOLDER) + "/" + String(fontName);
     
     if (fileExists(fontPath.c_str())) {
         fLogMessage("Font already exists: %s\n", fontPath.c_str());
