@@ -547,6 +547,9 @@ void setup() {
   
   // Try to connect to any saved networks on startup if enabled
   bool newVersionAvailable = false;
+  logMessage("connectWiFiOnStartup is " + String(connectWiFiOnStartup ? "enabled" : "disabled"));
+  printHeapInfo();
+  int networksFound = WiFi.scanNetworks();
   if(connectWiFiOnStartup){
     attemptConnectSavedNetworks();
     if(WiFi.status() == WL_CONNECTED){
@@ -571,16 +574,22 @@ void setup() {
         logMessage("Sync completed with status: " + String(ok ? "success" : "failure"));
       }
     } else {
+      xSemaphoreTake(wifiMutex, portMAX_DELAY);
+      WiFi.scanDelete();
+      xSemaphoreGive(wifiMutex);
       logMessage("Failed to connect to WiFi on startup");
+      delay(100);
     }
   }
 
   fontSetup();
+  printHeapInfo();
 
   //
   if(advertisePwngrid) {
     logMessage("Pwngrid advertisement enabled");
     initPwngrid();
+    printHeapInfo();
   } else {
     logMessage("Pwngrid advertisement disabled");
   }

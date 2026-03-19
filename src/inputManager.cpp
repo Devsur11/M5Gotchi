@@ -30,6 +30,9 @@ void update() {
     bool btnA_pressed = M5.BtnA.isPressed();
     if (btnA_pressed && !buttonA.isCurrentlyPressed) {
         updateLastInteractionTime();
+        if(buttonB.wasPressed){
+            buttonB.wasPressed = false;
+        }
         // Button just pressed
         buttonA.isCurrentlyPressed = true;
         buttonA.pressStartTime = millis();
@@ -58,6 +61,9 @@ void update() {
     // Button B handling
     bool btnB_pressed = M5.BtnB.isPressed();
     if (btnB_pressed && !buttonB.isCurrentlyPressed) {
+        if(buttonA.wasPressed){
+            buttonA.wasPressed = false;
+        }
         updateLastInteractionTime();
         // Button just pressed
         buttonB.isCurrentlyPressed = true;

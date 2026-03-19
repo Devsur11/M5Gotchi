@@ -192,6 +192,12 @@ uint8_t getEAPOLOrder(uint8_t *buf, size_t buf_len) {
 // PROMISCUOUS CALLBACK
 // ==========================================
 
+// pwnSnifferCallback is defined in pwngrid.cpp and registered by initPwngrid()
+// at startup so peer detection works in manual mode without pwnagotchi running.
+// In auto mode we upgrade to unifiedSnifferCallback (below) so both subsystems
+// share the single ESP32 promiscuous slot. On end() we restore pwnSnifferCallback.
+extern void pwnSnifferCallback(void *buf, wifi_promiscuous_pkt_type_t type);
+
 void wifiRTScanCallback(void *buf, wifi_promiscuous_pkt_type_t type) {
     wifi_promiscuous_pkt_t *pkt = (wifi_promiscuous_pkt_t *)buf;
     if (pkt == nullptr) return;
@@ -366,6 +372,19 @@ void wifiRTScanCallback(void *buf, wifi_promiscuous_pkt_type_t type) {
             portYIELD_FROM_ISR();
         }
     }
+}
+
+// ==========================================
+// UNIFIED SNIFFER DISPATCHER
+// ==========================================
+// Registered only while auto mode is active.  Fans out to both the pwnagotchi
+// AP-scan/EAPOL handler and the pwngrid peer-detection handler so neither
+// evicts the other from the single ESP32 promiscuous callback slot.
+// Manual mode never reaches this — initPwngrid() keeps pwnSnifferCallback
+// registered directly for that case, and end() restores it when auto stops.
+static void unifiedSnifferCallback(void *buf, wifi_promiscuous_pkt_type_t type) {
+    wifiRTScanCallback(buf, type);
+    pwnSnifferCallback(buf, type);
 }
 
 // ==========================================
@@ -551,7 +570,9 @@ bool n_pwnagotchi::begin() {
     }
     xSemaphoreTake(wifiMutex, portMAX_DELAY);
     WiFi.disconnect();
-    esp_wifi_set_promiscuous_rx_cb(&wifiRTScanCallback);
+    // Upgrade from pwnSnifferCallback (set by initPwngrid at startup) to the
+    // unified dispatcher so AP scanning and pwngrid peer detection both run.
+    esp_wifi_set_promiscuous_rx_cb(&unifiedSnifferCallback);
     esp_wifi_set_promiscuous(true);
     xSemaphoreGive(wifiMutex);
     allTimeDeauths += lastSessionDeauths;
@@ -623,9 +644,12 @@ bool n_pwnagotchi::end() {
 
     xSemaphoreTake(wifiMutex, portMAX_DELAY);
     esp_wifi_set_promiscuous(false);
-    esp_wifi_set_promiscuous_rx_cb(nullptr);
+    // Downgrade from unifiedSnifferCallback back to pwnSnifferCallback so that
+    // peer detection keeps working in manual mode after auto mode is stopped.
+    esp_wifi_set_promiscuous_rx_cb(&pwnSnifferCallback);
+    esp_wifi_set_promiscuous(true);
     xSemaphoreGive(wifiMutex);
-    logMessage("[end] Promiscuous mode disabled.");
+    logMessage("[end] Promiscuous mode restored for manual/pwngrid use.");
 
     if (packetQueue != nullptr) {
         CapturedPacket *p = nullptr;
@@ -896,7 +920,9 @@ void attackTask(void *parameter) {
     xSemaphoreTake(wifiMutex, portMAX_DELAY);
     esp_wifi_set_promiscuous(false);
     vTaskDelay(100 / portTICK_PERIOD_MS);
-    esp_wifi_set_promiscuous_rx_cb(&wifiRTScanCallback);
+    // Re-register the unified callback (not wifiRTScanCallback alone) so that
+    // pwngrid peer detection stays alive during the EAPOL capture phase.
+    esp_wifi_set_promiscuous_rx_cb(&unifiedSnifferCallback);
     esp_wifi_set_promiscuous(true);
     xSemaphoreGive(wifiMutex);
 

@@ -709,12 +709,13 @@ bool initVars() {
 
         if(config["hintsDisplayed"].is<uint64_t>()) hintsDisplayed = config["hintsDisplayed"].as<uint64_t>();
         else configChanged = true;
-        if (config["dev_mode"].is<bool>()) dev_mode = config["dev_mode"].as<bool>();
-        else configChanged = true;
+
         if (config["serial_overlay"].is<bool>()) serial_overlay = config["serial_overlay"].as<bool>();
         else configChanged = true;
+
         if (config["coords_overlay"].is<bool>()) coords_overlay = config["coords_overlay"].as<bool>();
         else configChanged = true;
+        
         if (config["skip_file_manager_checks_in_dev"].is<bool>()) skip_file_manager_checks_in_dev = config["skip_file_manager_checks_in_dev"].as<bool>();
         else configChanged = true;
 
@@ -1111,67 +1112,63 @@ bool setSavedNetworkConnectOnStart(size_t idx, bool enabled){
 }
 
 void attemptConnectSavedNetworks(){
-    // Scan for available networks first
     logMessage("Scanning for available networks...");
     int networksFound = WiFi.scanNetworks();
     logMessage("Found " + String(networksFound) + " networks");
-    
+
+    // ── legacy fallback ──────────────────────────────────────────────────────
     if(savedNetworks.size() == 0){
-        // fallback to legacy single saved values
         if(savedApSSID.length() > 0){
             for(int i = 0; i < networksFound; i++){
                 if(WiFi.SSID(i) == savedApSSID){
                     logMessage("Connecting to " + savedApSSID);
+                    WiFi.scanDelete();          // free BEFORE begin(); no longer needed
                     WiFi.begin(savedApSSID.c_str(), savedAPPass.c_str());
                     unsigned long start = millis();
-                    while(millis() - start < 10000 && WiFi.status() != WL_CONNECTED) delay(500);
+                    while(millis() - start < 10000 && WiFi.status() != WL_CONNECTED)
+                        delay(500);
+                    return;                     // scanDelete already called
                 }
             }
         }
-        WiFi.mode(WIFI_MODE_NULL);
+        WiFi.scanDelete();                      // network not found, still must free
         return;
     }
-
-    // Try connectOnStart flagged networks
-    for(auto &n : savedNetworks){
-        if(n.connectOnStart){
-            // Check if this network was found in scan
-            bool found = false;
-            for(int i = 0; i < networksFound; i++){
-                if(WiFi.SSID(i) == n.ssid){
-                    found = true;
-                    break;
-                }
-            }
-            
-            if(found){
-                logMessage("Connecting to " + n.ssid);
-                WiFi.begin(n.ssid.c_str(), n.pass.c_str());
-                unsigned long start = millis();
-                while(millis() - start < 10000 && WiFi.status() != WL_CONNECTED) delay(500);
-                if(WiFi.status() == WL_CONNECTED) return;
-            }
-        }
+    else{
+        logMessage("Using savedNetworks list with " + String(savedNetworks.size()) + " entries");
     }
-    
-    // Try other saved networks
+
+    // ── build a set of visible SSIDs once, O(n) lookups instead of O(n²) ────
+    // (also prevents touching scan buffer after it's freed)
+    std::vector<String> visible;
+    for(int i = 0; i < networksFound; i++)
+        visible.push_back(WiFi.SSID(i));
+
+    WiFi.scanDelete();                          // scan buffer no longer needed
+
+    // ── connectOnStart networks first ────────────────────────────────────────
+    logMessage("Attempting to connect to saved networks with connectOnStart=true");
     for(auto &n : savedNetworks){
-        bool found = false;
-        for(int i = 0; i < networksFound; i++){
-            if(WiFi.SSID(i) == n.ssid){
-                found = true;
-                break;
-            }
-        }
-        
-        if(found){
+        if(n.connectOnStart && std::find(visible.begin(), visible.end(), n.ssid) != visible.end()){
             logMessage("Connecting to " + n.ssid);
             WiFi.begin(n.ssid.c_str(), n.pass.c_str());
             unsigned long start = millis();
-            while(millis() - start < 10000 && WiFi.status() != WL_CONNECTED) delay(500);
+            while(millis() - start < 10000 && WiFi.status() != WL_CONNECTED)
+                delay(500);
             if(WiFi.status() == WL_CONNECTED) return;
         }
     }
-    
-    WiFi.mode(WIFI_MODE_NULL);
+
+    // ── remaining saved networks ─────────────────────────────────────────────
+    logMessage("Attempting to connect to remaining saved networks");
+    for(auto &n : savedNetworks){
+        if(std::find(visible.begin(), visible.end(), n.ssid) != visible.end()){
+            logMessage("Connecting to " + n.ssid);
+            WiFi.begin(n.ssid.c_str(), n.pass.c_str());
+            unsigned long start = millis();
+            while(millis() - start < 10000 && WiFi.status() != WL_CONNECTED)
+                delay(500);
+            if(WiFi.status() == WL_CONNECTED) return;
+        }
+    }
 }

@@ -104,45 +104,45 @@ bool api_client::sub_init(const String &keysPath) {
 }
 
 bool api_client::init(const String &keysPath) {
-    initDone = xSemaphoreCreateBinary();
-    if (!initDone) return false;
+    // initDone = xSemaphoreCreateBinary();
+    // if (!initDone) return false;
 
-    // ---------- FIX: use static global instead of allocating String on heap ----------
-    g_apiInitParam = keysPath;
+    // // ---------- FIX: use static global instead of allocating String on heap ----------
+    // g_apiInitParam = keysPath;
 
-    xTaskCreatePinnedToCore(
-        apiInitTask,
-        "apiInitTask",
-        16384,   // increased stack: HTTPClient + mbedtls can require significantly more stack
-        &g_apiInitParam,
-        2,       // slightly higher priority to avoid preemption during heavy init
-        &initTaskHandle,
-        0
-    );
+    // xTaskCreatePinnedToCore(
+    //     apiInitTask,
+    //     "apiInitTask",
+    //     16384,   // increased stack: HTTPClient + mbedtls can require significantly more stack
+    //     &g_apiInitParam,
+    //     2,       // slightly higher priority to avoid preemption during heavy init
+    //     &initTaskHandle,
+    //     0
+    // );
 
-    if (!initTaskHandle) {
-        // nothing allocated on heap here to free
-        return false;
-    }
+    // if (!initTaskHandle) {
+    //     // nothing allocated on heap here to free
+    //     return false;
+    // }
 
-    // wait for up to timeout
-    if (xSemaphoreTake(initDone, pdMS_TO_TICKS(60000)) == pdTRUE) {
-        // finished normally
-        vSemaphoreDelete(initDone);
-        initDone = nullptr;
-        // clear global param (not strictly required, but tidy)
-        g_apiInitParam = String();
-        return initResult;
-    }
+    // // wait for up to timeout
+    // if (xSemaphoreTake(initDone, pdMS_TO_TICKS(60000)) == pdTRUE) {
+    //     // finished normally
+    //     vSemaphoreDelete(initDone);
+    //     initDone = nullptr;
+    //     // clear global param (not strictly required, but tidy)
+    //     g_apiInitParam = String();
+    //     return initResult;
+    // }
 
-    // timeout... kill the init task (task may be using stack/mbedtls; this is last resort)
-    vTaskDelete(initTaskHandle);
-    initTaskHandle = nullptr;
-    vSemaphoreDelete(initDone);
-    initDone = nullptr;
-    // clear global param
-    g_apiInitParam = String();
-    return false;
+    // // timeout... kill the init task (task may be using stack/mbedtls; this is last resort)
+    // vTaskDelete(initTaskHandle);
+    // initTaskHandle = nullptr;
+    // vSemaphoreDelete(initDone);
+    // initDone = nullptr;
+    // // clear global param
+    // g_apiInitParam = String();
+    return api_client::sub_init(keysPath);
 }
 
 

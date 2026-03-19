@@ -48,7 +48,6 @@ M5Canvas bar_right4(&M5.Display);
 // Mutex that protects all display and canvas operations (loadFont, draw, pushSprite)
 SemaphoreHandle_t displayMutex = NULL;
 
-
 static const char * const funny_ssids[] = {
   "Mom Use This One",
   "Abraham Linksys",
@@ -420,7 +419,6 @@ void pwngridInboxTask(void *param) {
   pwngridInboxTaskHandle = nullptr;
   vTaskDelete(nullptr);
 }
-
 
 void stopPwngridInboxTask() {
   if (pwngridInboxTaskHandle != nullptr) {
@@ -1372,8 +1370,6 @@ void drawHintBox(const String &text, uint8_t hintID) {
   appRunning = false;
 }
 
-
-
 #include <esp_sntp.h>
 
 static const char *BASE_DIR = "/M5Gotchi/pwngrid/chats";
@@ -1385,7 +1381,7 @@ bool registerNewMessage(message newMess) {
   }
 
   // build file path
-  String path = String(BASE_DIR) + "/M5Gotchi/" + newMess.fromOrTo;
+  String path = String(BASE_DIR) + "/" + newMess.fromOrTo;
 
   // load file or create new JSON
   JsonDocument doc;
@@ -2839,7 +2835,11 @@ void runApp(uint8_t appID){
       canvas_main.setTextDatum(middle_left);
       canvas_main.drawString("Wardriving mode active...", 5, 8);
       canvas_main.setTextSize(1);
+      #ifndef BUTTON_ONLY_INPUT
       canvas_main.drawString("Hold \"ESC\" to stop", 5, 18);
+      #else
+      canvas_main.drawString("Hold B to stop", 5, 18);
+      #endif
       pushAll();
       while(true){
         M5.update();
@@ -2911,8 +2911,6 @@ void runApp(uint8_t appID){
       menuID = 9;
       return;
     }
-    // IMPROVED VERSION - Replace lines 2774-3208 in src/ui.cpp
-
     if(appID == 19){
       drawHintBox("This app is VERY slow due to complexity of whole csv parsing. Please be patient or use only for searching", 14);
       File csvFile;
@@ -4490,193 +4488,248 @@ void runApp(uint8_t appID){
       drawInfoBox("Info", "Reading SD card...", "Please wait", false, false);
       File root = FSYS.open("/M5Gotchi/handshake");
       if (!root || !root.isDirectory()) {
-        drawInfoBox("Error", "Cannot open \"/M5Gotchi/handshake\" folder.", "Check SD card!", true, true);
-        menuID = 5;
-        return;
+      drawInfoBox("Error", "Cannot open \"/M5Gotchi/handshake\" folder.", "Check SD card!", true, true);
+      menuID = 5;
+      return;
       }
       String fileList[50];
       String filePaths[50];
       uint8_t fileCount = 0;
       File file = root.openNextFile();
       while (file && fileCount < 50) {
-        if (!file.isDirectory()) {
-          fileList[fileCount] = String(file.name());
-          filePaths[fileCount] = String("/M5Gotchi/handshake/") + fileList[fileCount];
-          fileCount++;
-        }
-        file = root.openNextFile();
+      if (!file.isDirectory()) {
+        fileList[fileCount] = String(file.name());
+        filePaths[fileCount] = String("/M5Gotchi/handshake/") + fileList[fileCount];
+        fileCount++;
+      }
+      file = root.openNextFile();
       }
       root.close();
       
       if (fileCount == 0) {
-        drawInfoBox("Info", "No handshakes found", "", true, false);
-        menuID = 5;
-        return;
+      drawInfoBox("Info", "No handshakes found", "", true, false);
+      menuID = 5;
+      return;
       }
       
       // Use drawMultiChoiceLonger to show file list
       while(true) {
-        int8_t fileChoice = drawMultiChoiceLonger("Handshakes:", fileList, fileCount, 5, 3);
+      int8_t fileChoice = drawMultiChoiceLonger("Handshakes:", fileList, fileCount, 5, 3);
+      
+      if (fileChoice == -1) {
+        // User exited with backtick
+        break;
+      }
+      
+      if (fileChoice >= 0 && fileChoice < fileCount) {
+        // User selected a file - show options menu
+        HandshakeInfo info = validateHandshake(filePaths[fileChoice]);
         
-        if (fileChoice == -1) {
-          // User exited with backtick
-          break;
-        }
+        while(true) {
+        String detailMenu[4];
+        detailMenu[0] = "View Info";
+        detailMenu[1] = "Hashcat Format";
+        detailMenu[2] = "Crack w/ Wordlist";
+        detailMenu[3] = "Back to List";
         
-        if (fileChoice >= 0 && fileChoice < fileCount) {
-          // User selected a file - show options menu
-          HandshakeInfo info = validateHandshake(filePaths[fileChoice]);
-          
+        int8_t detailChoice = drawMultiChoice("Handshake Options", detailMenu, 4, 5, 3);
+        
+        if (detailChoice == 0) {
+          // View validation info
+          String infoText = getValidationStatus(info);
+          // Custom UI for handshake validation info
+          debounceDelay();
           while(true) {
-            String detailMenu[4];
-            detailMenu[0] = "View Info";
-            detailMenu[1] = "Hashcat Format";
-            detailMenu[2] = "Crack w/ Wordlist";
-            detailMenu[3] = "Back to List";
-            
-            int8_t detailChoice = drawMultiChoice("Handshake Options", detailMenu, 4, 5, 3);
-            
-            if (detailChoice == 0) {
-              // View validation info
-              String infoText = getValidationStatus(info);
-                // Custom UI for handshake validation info
-                debounceDelay();
-                while(true) {
-                drawTopCanvas();
-                drawBottomCanvas();
-                canvas_main.fillSprite(bg_color_rgb565);
-                canvas_main.setTextColor(tx_color_rgb565);
-                canvas_main.setTextSize(1);
-                canvas_main.setTextDatum(middle_center);
-                canvas_main.drawString(fileList[fileChoice], canvas_center_x, 15);
-                
-                canvas_main.setTextSize(1);
-                canvas_main.setTextDatum(top_left);
-                canvas_main.setCursor(5, 35);
-                canvas_main.println("Status: " + String(info.valid ? "VALID" : "INVALID"));
-                canvas_main.println("SSID: " + info.ssid);
-                char mac[18];
-                sprintf(mac, "%02X:%02X:%02X:%02X:%02X:%02X", info.bssid[0], info.bssid[1], info.bssid[2], info.bssid[3], info.bssid[4], info.bssid[5]);
-                canvas_main.println("BSSID: " + String(mac));
-                canvas_main.println("Packets: " + String(info.packetCount));
-                if (info.fileSize > 0) {
-                  canvas_main.println("Size: " + String(info.fileSize / 1024.0, 2) + " KB");
-                }
-                
-                canvas_main.setTextDatum(middle_center);
-                canvas_main.setTextSize(1);
-                canvas_main.drawString("[ENTER] back [D] delete", canvas_center_x, canvas_h - 10);
-                pushAll();
-                
-                M5.update();
-        #ifndef BUTTON_ONLY_INPUT
-                M5Cardputer.update();
-                Keyboard_Class::KeysState ks = M5Cardputer.Keyboard.keysState();
-                if (ks.enter) break;
-                for (auto c : ks.word) {
-                  if (c == 'd' || c == 'D') {
-                  if (drawQuestionBox("Delete", "Remove handshake?", fileList[fileChoice])) {
-                    FSYS.remove(filePaths[fileChoice]);
-                    drawInfoBox("Deleted", fileList[fileChoice], "removed", true, false);
-                    debounceDelay();
-                    break;
-                  }
-                  }
-                }
-        #else
-                inputManager::update();
-                if (inputManager::isButtonAPressed()) break;
-                if (inputManager::isButtonBLongPressed()) {
-                  if (drawQuestionBox("Delete", "Remove handshake?", fileList[fileChoice])) {
-                  FSYS.remove(filePaths[fileChoice]);
-                  drawInfoBox("Deleted", fileList[fileChoice], "removed", true, false);
-                  debounceDelay();
-                  break;
-                  }
-                }
-        #endif
-                delay(100);
-                }
-            } 
-            else if (detailChoice == 1) {
-              // Show hashcat format
-              String hashcatInfo = convertToHashcatFormat(filePaths[fileChoice], filePaths[fileChoice].substring(0, filePaths[fileChoice].lastIndexOf('.')) + ".hc22000");
-              while(true) {
-                drawTopCanvas();
-                drawBottomCanvas();
-                canvas_main.fillSprite(bg_color_rgb565);
-                canvas_main.setTextColor(tx_color_rgb565);
-                canvas_main.setTextSize(1);
-                canvas_main.setTextDatum(middle_center);
-                canvas_main.setCursor(0, 5);
-                canvas_main.println("Tool result:");
-                canvas_main.println(hashcatInfo);
-                canvas_main.println("\nPress [ENTER] to go back.");
-
-                pushAll();
-                
-                M5.update();
-                M5Cardputer.update();
-                
-                if (M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER) || M5Cardputer.Keyboard.isKeyPressed('`')) break;
-              }
-            }
-            else if (detailChoice == 2) {
-              // Load wordlist and attempt crack
-              drawInfoBox("Select Wordlist", "Choose a .txt file on SD card", "", false, false);
-              delay(5000);
-              String wordlistPath = sdmanager::selectFile( ".txt");
-              if (wordlistPath.length() > 0) {
-                drawInfoBox("Initialization...", "", "", false, false);
-                if(!startCrackTask(info, wordlistPath)){
-                  drawInfoBox("Error", "Failed to start crack task", "Check file format and validity", true, false);
-                  continue;
-                }
-                while(true){
-                  CrackStatus st = getCrackStatus();
-                  char status[128];
-                  sprintf(status, 
-                    "%.1f t/s | %lu/%lu | Last: %s\n",
-                    st.triesPerSecond,
-                    st.attemptsDone,
-                    st.totalCandidates,
-                    st.lastTested.c_str()
-                  );
-                  
-                  M5.update();
-                  #ifndef BUTTON_ONLY_INPUT
-                  drawInfoBox("Cracking", status, "Press ESC to end", false, false);
-                  M5Cardputer.update();
-                  if(M5Cardputer.Keyboard.isKeyPressed('`')) {
-                    stopCrackTask();
-                    break;
-                  }
-                  #else
-                  drawInfoBox("Cracking", status, "Press NEXT to end", false, false);
-                  inputManager::update();
-                  if(inputManager::isButtonBPressed()) {
-                    stopCrackTask();
-                    break;
-                  }
-                  #endif
-
-                  delay(150);
-                  if (!isCrackRunning()) break;
-                }
-                // After cracking ends, show result if found
-                CrackStatus st = getCrackStatus();
-                drawInfoBox("Finished", "Crack task ended", st.foundPassword.length() ? "Password: " + st.foundPassword : "Password not found", true, false);
-                
-              }
-            }
-            else {
-              // Back to list
-              break;
+          drawTopCanvas();
+          drawBottomCanvas();
+          canvas_main.fillSprite(bg_color_rgb565);
+          canvas_main.setTextColor(tx_color_rgb565);
+          canvas_main.setTextSize(1);
+          canvas_main.setTextDatum(middle_center);
+          canvas_main.drawString(fileList[fileChoice], canvas_center_x, 15);
+          
+          canvas_main.setTextSize(1);
+          canvas_main.setTextDatum(top_left);
+          canvas_main.setCursor(5, 35);
+          canvas_main.println("Status: " + String(info.valid ? "VALID" : "INVALID"));
+          canvas_main.println("SSID: " + info.ssid);
+          char mac[18];
+          sprintf(mac, "%02X:%02X:%02X:%02X:%02X:%02X", info.bssid[0], info.bssid[1], info.bssid[2], info.bssid[3], info.bssid[4], info.bssid[5]);
+          canvas_main.println("BSSID: " + String(mac));
+          canvas_main.println("Packets: " + String(info.packetCount));
+          if (info.fileSize > 0) {
+            canvas_main.println("Size: " + String(info.fileSize / 1024.0, 2) + " KB");
+          }
+          
+          canvas_main.setTextDatum(middle_center);
+          canvas_main.setTextSize(1);
+          
+          #ifdef BUTTON_ONLY_INPUT
+          canvas_main.drawString("A: back  B long: delete", canvas_center_x, canvas_h - 10);
+          #else
+          canvas_main.drawString("[ENTER] back [D] delete", canvas_center_x, canvas_h - 10);
+          #endif
+          
+          pushAll();
+          
+          M5.update();
+          
+          #ifdef BUTTON_ONLY_INPUT
+          inputManager::update();
+          if (inputManager::isButtonAPressed()) {
+            debounceDelay();
+            break;
+          }
+          if (inputManager::isButtonBLongPressed()) {
+            debounceDelay();
+            if (drawQuestionBox("Delete", "Remove handshake?", fileList[fileChoice])) {
+            FSYS.remove(filePaths[fileChoice]);
+            drawInfoBox("Deleted", fileList[fileChoice], "removed", true, false);
+            debounceDelay();
+            break;
             }
           }
-        } else {
+          #else
+          M5Cardputer.update();
+          Keyboard_Class::KeysState ks = M5Cardputer.Keyboard.keysState();
+          if (ks.enter) {
+            debounceDelay();
+            break;
+          }
+          for (auto c : ks.word) {
+            if (c == 'd' || c == 'D') {
+            debounceDelay();
+            if (drawQuestionBox("Delete", "Remove handshake?", fileList[fileChoice])) {
+              FSYS.remove(filePaths[fileChoice]);
+              drawInfoBox("Deleted", fileList[fileChoice], "removed", true, false);
+              debounceDelay();
+              break;
+            }
+            break;
+            }
+          }
+          #endif
+          
+          delay(100);
+          }
+        } 
+        else if (detailChoice == 1) {
+          // Show hashcat format
+          String hashcatInfo = convertToHashcatFormat(filePaths[fileChoice], filePaths[fileChoice].substring(0, filePaths[fileChoice].lastIndexOf('.')) + ".hc22000");
+          debounceDelay();
+          while(true) {
+          drawTopCanvas();
+          drawBottomCanvas();
+          canvas_main.fillSprite(bg_color_rgb565);
+          canvas_main.setTextColor(tx_color_rgb565);
+          canvas_main.setTextSize(1);
+          canvas_main.setTextDatum(top_left);
+          canvas_main.setCursor(2, 5);
+          canvas_main.println("Hashcat Format:");
+          canvas_main.println("");
+          canvas_main.println(hashcatInfo);
+          
+          canvas_main.setTextDatum(middle_center);
+          #ifdef BUTTON_ONLY_INPUT
+          canvas_main.drawString("A: back", canvas_center_x, canvas_h - 10);
+          #else
+          canvas_main.drawString("[ENTER] or [`] back", canvas_center_x, canvas_h - 10);
+          #endif
+
+          pushAll();
+          
+          M5.update();
+          
+          #ifdef BUTTON_ONLY_INPUT
+          inputManager::update();
+          if (inputManager::isButtonAPressed()) {
+            debounceDelay();
+            break;
+          }
+          #else
+          M5Cardputer.update();
+          Keyboard_Class::KeysState ks = M5Cardputer.Keyboard.keysState();
+          if (ks.enter) {
+            debounceDelay();
+            break;
+          }
+          for (auto c : ks.word) {
+            if (c == '`') {
+            debounceDelay();
+            break;
+            }
+          }
+          #endif
+          
+          delay(100);
+          }
+        }
+        else if (detailChoice == 2) {
+          // Load wordlist and attempt crack
+          drawInfoBox("Select Wordlist", "Choose a .txt file", "", false, false);
+          delay(2000);
+          String wordlistPath = sdmanager::selectFile(".txt");
+          if (wordlistPath.length() > 0) {
+          drawInfoBox("Initialization...", "Starting crack task...", "", false, false);
+          delay(1000);
+          if(!startCrackTask(info, wordlistPath)){
+            drawInfoBox("Error", "Failed to start crack task", "Check file format", true, false);
+            continue;
+          }
+          
+          debounceDelay();
+          while(true){
+            CrackStatus st = getCrackStatus();
+            char status[128];
+            sprintf(status, 
+            "%.1f t/s | %lu/%lu\nLast: %s",
+            st.triesPerSecond,
+            st.attemptsDone,
+            st.totalCandidates,
+            st.lastTested.c_str()
+            );
+            
+            M5.update();
+            
+            #ifdef BUTTON_ONLY_INPUT
+            drawInfoBox("Cracking", status, "B long: stop", false, false);
+            inputManager::update();
+            if(inputManager::isButtonBLongPressed()) {
+            debounceDelay();
+            stopCrackTask();
+            break;
+            }
+            #else
+            drawInfoBox("Cracking", status, "Press [`] to stop", false, false);
+            M5Cardputer.update();
+            Keyboard_Class::KeysState ks = M5Cardputer.Keyboard.keysState();
+            for (auto c : ks.word) {
+            if (c == '`') {
+              debounceDelay();
+              stopCrackTask();
+              break;
+            }
+            }
+            #endif
+
+            delay(150);
+            if (!isCrackRunning()) break;
+          }
+          
+          // After cracking ends, show result if found
+          CrackStatus st = getCrackStatus();
+          String resultMsg = st.foundPassword.length() ? "Password: " + st.foundPassword : "Password not found";
+          drawInfoBox("Finished", "Crack task ended", resultMsg, true, false);
+          }
+        }
+        else {
+          // Back to list
           break;
         }
+        }
+      } else {
+        break;
+      }
       }
       
       menuID = 5;
@@ -5097,27 +5150,197 @@ void runApp(uint8_t appID){
           return;
         }
         String displayList[entries.size()];
-        while(true){
-          for (size_t i = 0; i < entries.size(); i++) {
-            displayList[i] = entries[i].ssid;
-          }
-          int8_t selection = drawMultiChoice("Cracked list", displayList, entries.size(), 5, 3);
-          if(selection == -1){
-            crackedFile.close();
-            menuID = 7;
-            return;
-          }
-          String detailInfo = "Password: " + entries[selection].password;
-          String detailInfo2 = "Bssid: " + entries[selection].bssid;
-          drawInfoBox(entries[selection].ssid, detailInfo, detailInfo2, true , false);
-          M5.update();
-#ifndef BUTTON_ONLY_INPUT
-          M5Cardputer.update();
-          Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
-          if(M5Cardputer.Keyboard.isChange()){Sound(10000, 100, sound);}
-#else
-          inputManager::update();
-#endif
+        if(true){ //just placeholder
+            // Build list of SSIDs with page tracking
+            std::vector<String> displayList;
+            for (size_t i = 0; i < entries.size(); i++) {
+            displayList.push_back(entries[i].ssid);
+            }
+            
+            // Display cracked results in a custom table UI
+            int selectedIdx = 0;
+            int pageSize = 4;  // 4 entries per page
+            int totalPages = (entries.size() + pageSize - 1) / pageSize;
+            int currentPage = 0;
+            
+            debounceDelay();
+            while(true) {
+            drawTopCanvas();
+            drawBottomCanvas();
+
+            
+            // Clear canvas
+            canvas_main.fillSprite(bg_color_rgb565);
+            canvas_main.setTextColor(tx_color_rgb565);
+            canvas_main.setTextSize(1);
+            canvas_main.setTextDatum(top_left);
+            
+            // Draw title
+            canvas_main.setTextSize(2);
+            canvas_main.drawString("Cracked Networks", 5, 5);
+            canvas_main.setTextSize(1);
+            
+            // Draw table header
+            int headerY = 25;
+            canvas_main.drawString("SSID", 5, headerY + 2);
+            canvas_main.drawString("BSSID", 130, headerY + 2);
+            canvas_main.drawLine(0, headerY + 12, canvas_main.width(), headerY + 12, tx_color_rgb565);
+            
+            // Calculate page range (most recent at top - reverse order)
+            int startIdx = entries.size() - 1 - (currentPage * pageSize);
+            if (startIdx < 0) startIdx = 0;
+            int endIdx = max(0, startIdx - pageSize + 1);
+            
+            // Draw table rows
+            int rowY = headerY + 15;
+            int rowHeight = 12;
+            int visibleCount = 0;
+
+            if(selectedIdx >= (int)entries.size()) selectedIdx = entries.size() - 1;
+            
+            for (int i = startIdx; i >= endIdx && i >= 0; i--) {
+              bool isSelected = (selectedIdx == (int)i);
+              
+              // Highlight selected row
+              if (isSelected) {
+              canvas_main.fillRect(0, rowY - 1, canvas_main.width(), rowHeight, tx_color_rgb565);
+              canvas_main.setTextColor(bg_color_rgb565);
+              } else {
+              canvas_main.setTextColor(tx_color_rgb565);
+              }
+              
+              // Draw SSID (truncated if too long)
+              String ssidDisplay = entries[i].ssid;
+              if (ssidDisplay.length() > 25) {
+              ssidDisplay = ssidDisplay.substring(0, 22) + "...";
+              }
+              canvas_main.drawString(ssidDisplay, 5, rowY);
+              
+              // Draw BSSID (truncated)
+              String bssidDisplay = entries[i].bssid;
+              if (bssidDisplay.length() > 15) {
+              bssidDisplay = bssidDisplay.substring(0, 12) + "...";
+              }
+              canvas_main.drawString(bssidDisplay, 130, rowY);
+              
+              rowY += rowHeight;
+              visibleCount++;
+            }
+            
+            // Draw pagination info
+            canvas_main.setTextColor(tx_color_rgb565);
+            canvas_main.setTextSize(1);
+            canvas_main.setTextDatum(middle_center);
+            String pageInfo = "Page " + String(currentPage + 1) + "/" + String(totalPages);
+            canvas_main.drawString(pageInfo, canvas_center_x, canvas_main.height() - 18);
+            
+            // Draw instructions based on input mode
+            #ifdef BUTTON_ONLY_INPUT
+            canvas_main.drawString("A:Details B:Nav long B:Back", canvas_center_x, canvas_main.height() - 7);
+            #else
+            canvas_main.drawString("[;][.] Navigate [,][/] Page [ENTR] View", canvas_center_x, canvas_main.height() - 7);
+            #endif
+            
+            pushAll();
+            M5.update();
+            
+            #ifdef BUTTON_ONLY_INPUT
+            inputManager::update();
+            
+            // Button B: Navigate down in list
+            if (inputManager::isButtonBPressed()) {
+              if (selectedIdx > 0) {
+              selectedIdx--;
+              // Auto-page up if needed
+              if (selectedIdx < entries.size() - 1 - (currentPage * pageSize)) {
+                if (currentPage > 0) currentPage--;
+              }
+              }
+              debounceDelay();
+            }
+            
+            // Button A (short): Select and show details
+            if (inputManager::isButtonAPressed()) {
+              String detailInfo = "Password: " + entries[selectedIdx].password;
+              String detailInfo2 = "BSSID: " + entries[selectedIdx].bssid;
+              drawInfoBox(entries[selectedIdx].ssid, detailInfo, detailInfo2, true, false);
+              debounceDelay();
+            }
+            
+            // Button B (long): Go back
+            if (inputManager::isButtonBLongPressed()) {
+              debounceDelay();
+              crackedFile.close();
+              menuID = 7;
+              return;
+            }
+            
+            #else
+            M5Cardputer.update();
+            Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
+            keyboard_changed = M5Cardputer.Keyboard.isChange();
+            if(keyboard_changed){Sound(10000, 100, sound);}
+            
+            // Navigation keys
+            for (auto k : status.word) {
+              if (k == ';') {  // Up (toward newer entries)
+              if (selectedIdx < (int)entries.size() - 1) {
+                selectedIdx++;
+                // Auto-page down if needed
+                int startIdxForPage = entries.size() - 1 - (currentPage * pageSize);
+                if (selectedIdx > startIdxForPage) {
+                currentPage++;
+                }
+              }
+              debounceDelay();
+              }
+              else if (k == '.') {  // Down (toward older entries)
+              if (selectedIdx > 0) {
+                selectedIdx--;
+                // Auto-page up if needed
+                int startIdxForPage = entries.size() - 1 - (currentPage * pageSize);
+                int endIdxForPage = max(0, startIdxForPage - pageSize + 1);
+                if (selectedIdx < endIdxForPage && currentPage > 0) {
+                currentPage--;
+                }
+              }
+              debounceDelay();
+              }
+              else if (k == '/') {  // Page down (toward older)
+              if (currentPage < totalPages - 1) {
+                currentPage++;
+                selectedIdx = entries.size() - 1 - (currentPage * pageSize);
+                if (selectedIdx < 0) selectedIdx = 0;
+              }
+              debounceDelay();
+              }
+              else if (k == ',') {  // Page up (toward newer)
+              if (currentPage > 0) {
+                currentPage--;
+                selectedIdx = entries.size() - 1 - (currentPage * pageSize);
+                if (selectedIdx < 0) selectedIdx = 0;
+              }
+              debounceDelay();
+              }
+              else if (k == '`') {  // Back
+              debounceDelay();
+              crackedFile.close();
+              menuID = 7;
+              return;
+              }
+            }
+            
+            // Enter key: Show details
+            if (status.enter) {
+              String detailInfo = "Password: " + entries[selectedIdx].password;
+              String detailInfo2 = "BSSID: " + entries[selectedIdx].bssid;
+              drawInfoBox(entries[selectedIdx].ssid, detailInfo, detailInfo2, true, false);
+              debounceDelay();
+            }
+            #endif
+            
+            delay(50);
+            }
         }
       }
       else{

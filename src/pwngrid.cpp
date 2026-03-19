@@ -135,7 +135,7 @@ esp_err_t pwngridAdvertise(uint8_t channel, String face) {
   // https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/network/esp_wifi.html#_CPPv417esp_wifi_80211_tx16wifi_interface_tPKvib
   // Send only the used portion of the buffer (frame_byte)
   xSemaphoreTake(wifiMutex, portMAX_DELAY);
-  esp_err_t result = esp_wifi_80211_tx(WIFI_IF_AP, pwngrid_beacon_frame,
+  esp_err_t result = esp_wifi_80211_tx(WIFI_IF_STA, pwngrid_beacon_frame,
                                        frame_byte, false);
   xSemaphoreGive(wifiMutex);
   free(pwngrid_beacon_frame);
@@ -331,16 +331,17 @@ void initPwngrid() {
   }
   // reserve the vector to avoid runtime reallocations that can throw
   pwngrid_peers.reserve(PWNGRID_MAX_PEERS);
-
   xSemaphoreTake(wifiMutex, portMAX_DELAY);
-  wifi_init_config_t WIFI_INIT_CONFIG = WIFI_INIT_CONFIG_DEFAULT();
-  esp_wifi_init(&WIFI_INIT_CONFIG);
-  esp_wifi_set_storage(WIFI_STORAGE_RAM);
-  esp_wifi_set_mode(WIFI_MODE_APSTA);
-  WiFi.softAP("pwngrid", NULL, 1, 1, 1);
-  esp_wifi_start();
-  esp_wifi_set_promiscuous_rx_cb(&pwnSnifferCallback);
-  esp_wifi_set_promiscuous(true);
+  if(esp_wifi_set_promiscuous_rx_cb(&pwnSnifferCallback) != ESP_OK){
+    logMessage("Failed to set promiscuous callback for pwngrid");
+    xSemaphoreGive(wifiMutex);
+    return;
+  }
+  if(esp_wifi_set_promiscuous(true) != ESP_OK){
+    logMessage("Failed to enable promiscuous mode for pwngrid");
+    xSemaphoreGive(wifiMutex);
+    return;
+  }
   delay(1);
   xSemaphoreGive(wifiMutex);
   //check if task is already created
@@ -353,7 +354,7 @@ void initPwngrid() {
 
   xTaskCreatePinnedToCore(
         pwngridAdvertiseLoop,      // Function to be executed
-        "pwngridTx",    // Name of the task
+        "pwngridTx",               // Name of the task
         8192,                      // Stack size (in bytes) — increased to avoid stack overflow
         NULL,                      // Parameters to pass to the task
         1,                         // Priority (1 is the lowest priority)
