@@ -452,8 +452,20 @@ wardriveStatus wardrive(const std::vector<wifiSpeedScan>& networks, unsigned lon
     // Ensure firstSeenMap loaded - TOO HEAVY ON MEMORY
     // if (firstSeenMap.empty()) loadFirstSeenMap();
 
-    // Initialize GPS serial (Serial2)
-    Serial2.begin(gpsBaudRate, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
+    // Initialize GPS serial (Serial2). Respect custom GPS pin settings if configured.
+    //chack if serial2 already initialized - if not, initialize with appropriate pins and baudrate
+    if(Serial2) {
+        // Serial2 already initialized, do nothing
+    }
+    else if(!useCustomGPSPins){
+        Serial2.begin(gpsBaudRate, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
+    }
+    else{
+        Serial2.begin(gpsBaudRate, SERIAL_8N1, gpsRx, gpsTx);
+    }
+
+
+    
 
     GpsFix bestFix;
     unsigned long start = millis();

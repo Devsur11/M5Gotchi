@@ -1,25 +1,25 @@
-namespace n_pwnagotchi{
-    bool begin();
-    bool beginWardriving();
-    bool end();
-}
-void attackTask(void* parameter);
-void task(void* parameter);
-void wardrivingTask(void* parameter);
+// namespace n_pwnagotchi{
+//     bool begin();
+//     bool beginWardriving();
+//     bool end();
+// }
+// void attackTask(void* parameter);
+// void task(void* parameter);
+// void wardrivingTask(void* parameter);
 
-// File write queue management for SD operations
-struct FileWriteRequest;
-extern QueueHandle_t fileWriteQueue;
-void handleFileWrite(FileWriteRequest* req);
-struct wifiRTResults{
-    String ssid;
-    int rssi;
-    int channel;
-    bool secure;
-    uint8_t bssid[6];
-    long lastSeen;
-};
-extern std::vector<wifiRTResults> g_wifiRTResults;
-extern wifiRTResults ap; //network being currently attacked
-extern TaskHandle_t pwnagotchiTaskHandle;
-extern TaskHandle_t wardrivingTaskHandle;
+// // File write queue management for SD operations
+// struct FileWriteRequest;
+// extern QueueHandle_t fileWriteQueue;
+// void handleFileWrite(FileWriteRequest* req);
+// struct wifiRTResults{
+//     String ssid;
+//     int rssi;
+//     int channel;
+//     bool secure;
+//     uint8_t bssid[6];
+//     long lastSeen;
+// };
+// extern std::vector<wifiRTResults> g_wifiRTResults;
+// extern wifiRTResults ap; //network being currently attacked
+// extern TaskHandle_t pwnagotchiTaskHandle;
+// extern TaskHandle_t wardrivingTaskHandle;

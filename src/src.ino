@@ -732,7 +732,7 @@ void setup() {
 
   if(pwnagothiModeEnabled) {
     logMessage("Pwnagothi mode enabled");
-    pwnagothiBegin();
+    pwn::begin();
   } else {
     logMessage("Pwnagothi mode disabled");
   }

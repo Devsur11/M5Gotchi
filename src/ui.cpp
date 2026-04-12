@@ -140,7 +140,6 @@ static const char * const broken_ssids[]{
 menu main_menu[] = {
     {"Manual Control", 1},        // Manual mode
     {"Auto Mode", 4},             // Auto mode (original pwnagotchi)
-    {"N_Auto Mode", 2},         // New pwnagotchi auto mode
     {"WPA-SEC", 55},              // WPA-SEC companion
     {"Pwngrid", 7},               // Pwngrid companion
     {"Wardriving", 8},            // Wardriving companion
@@ -177,81 +176,32 @@ menu wpasec_setup_menu[] = {
 
 // menuID 5
 menu pwngotchi_menu[] = {
-  {"Enable Auto Mode", 36},      // Switch to auto mode
-  {"Auto + Wardriving", 14},     // Auto mode + wardriving
+  {"Enable Auto Mode", 125},      // Switch to auto mode
+  {"Auto + Wardriving", 128},     // Auto mode + wardriving
+  {"Debug views", 92},
   {"Whitelist", 38},             // Whitelist editor
   {"Handshakes", 39},            // Handshakes file list
-  {"Personality", 57},           // Personality editor
   {"Back", 255}
 };
 
-//menuID 10
-menu n_pwnagotchi_menu[] = {
-  {"N_AUTO Mode", 125},           // Pwnagotchi attack system
-  {"N_AUTO + Wardriving", 128},   // Pwnagotchi with wardriving enabled
-  {"Debug views", 92},                 // Show debug info on screen
-  {"N_AUTO Personality", 124},    // New pwnagotchi personality editor
-  {"Back", 255}
-};
-
-menu n_auto_running_menu[] = {
+menu auto_menu[] = {
   {"Switch to manual mode", 126},     // Stop N_AUTO mode
   {"Debug views", 92},                 // Show debug info on screen
-  {"N_AUTO Personality", 124},    // New pwnagotchi personality editor
-  {"PLACEHOLDER", 255},
   {"Back", 255}
 };
 
 // menuID 6
+// Main Settings Menu - Category based
 menu settings_menu[] = {
-  // Startup / Boot behavior
-  {"Auto Mode on Boot", 48},             // M5Gotchi auto mode on boot
-  {"Auto-Connect WiFi", 29},             // On startup, connect to wifi
-  {"Check Updates on Boot", 33},         // At boot, check for updates
-  {"Random MAC on Boot", 34},            // Randomise mac at startup
-  {"Check inbox at boot", 9},
-
-  // Network / WiFi
-  {"WiFi Connect", 43},                   // Connect to WiFi
-  {"Saved Networks", 32},                 // Manage saved networks
-  {"GPS Pins", 30},                       // GPS GPIO pins
-  {"GPS Baud Rate", 37},                  // GPS Baud Rate
-  {"GPS Logging", 31},                    // Log GPS data after handshake
-  {"Pwngrid Broadcast", 60},              // Advertise Pwngrid presence
-
-  // Interface / Display
-  {"Theme", 50},                          // UI Theme
-  {"Menu Display Mode", 89},              // List or Grid mode for main menu
-  {"Brightness", 41},                     // Display brightness
-  {"Auto-Dim Display", 127},              // Auto-dim display when idle
-  {"Key Sounds", 42},                     // Keyboard Sound
-  {"Text Faces", 90},                     // Edit text faces
-
-  // User / Device
-  {"Device Name", 40},                    // Change Hostname/name
-  {"GO Button Action", 59},               // GO button press function
-  {"Auto-Add Friends", 35},               // Add all met pwnagotchis to friends
-
-  // Logging / Storage
-  {"SD Logging", 58},                     // Log to SD
-  #ifdef USE_LITTLEFS
-  {"LittleFS Manager", 71},               // LittleFS manager
-  {"Web file manager", 73},                 // Enable USB drive mode
-  #endif
-  {"Storage Info", 72},
-
-  // System / Maintenance
-  {"System Update", 44},                  // Update system
-  {"Factory Reset", 51},                  // Factory reset
-  {"System Info", 3},                     // System info
-  {"About", 45},                          // About M5Gotchi
-  {"Power Off", 46},                      // Power off system
-  {"Reboot", 56},                         // Reboot system
-
-  // Optional / advanced
-  {"Skip EAPOL Check", 49},                // Skip EAPOL integrity check
-  {"Send bug report to dev", 123},
-  {"Back", 255}                           // Back to main menu
+  {"Startup / Boot", 160},               // Startup/Boot behavior category
+  {"Network / WiFi", 161},               // Network/WiFi category
+  {"Interface / Display", 162},          // Interface/Display category
+  {"User / Device", 163},                // User/Device category
+  {"Personality Settings", 150},         // Personality settings (still app-based)
+  {"Logging / Storage", 164},            // Logging/Storage category
+  {"System / Maintenance", 165},         // System/Maintenance category
+  {"Advanced", 166},                     // Advanced/Optional settings
+  {"Back", 255}                          // Back to main menu
 };
 
 
@@ -394,7 +344,15 @@ void autoDimTask(void *param) {
         }
       } else {
         // When user is active, restore brightness if dimmed
-        if (M5.Display.getBrightness() < brightness) {
+        if (M5.Display.getBrightness() < brightness ) {
+          #ifndef BUTTON_ONLY_INPUT
+          if(M5.Display.getBrightness() == 0){
+            //black untill brightness will be !=0
+            while(M5.Display.getBrightness() == 0){
+              delay(1000);
+            }
+          }
+          #endif
           uint8_t currentBrightness = M5.Display.getBrightness();
           uint8_t newBrightness = (currentBrightness < brightness - 5) ? currentBrightness + 5 : brightness;
           M5.Display.setBrightness(newBrightness);
@@ -668,7 +626,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
   keyboard_changed = M5Cardputer.Keyboard.isChange();
   M5Cardputer.update();
   if(keyboard_changed){Sound(10000, 100, sound);}
-#endif       
+#endif
   if (toggleMenuBtnPressed()) {
     debounceDelay();
     if(pwnagotchiTaskHandle != nullptr){
@@ -687,9 +645,6 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
         return;
       }
     }
-    if(pwnagothiMode){
-      return;
-    }
     if (menuID==1) {
       menu_current_opt = 0;
       menu_current_page = 1;
@@ -705,7 +660,8 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
     redrawUi(show_toolbars);
   }
   if(show_toolbars)
-  {  drawTopCanvas();
+  {  
+    drawTopCanvas();
     drawBottomCanvas();
   }
   
@@ -726,143 +682,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
     prevMID = 5;
   }
   else if (menuID == 6){
-    char val_1[50];   // Auto Mode on Boot
-    char val_2[55];   // Auto-Connect WiFi
-    char val_3[55];   // Check Updates on Boot
-    char val_4[55];   // Random MAC on Boot
-    char val_4_5[55]; // check_inbox_at_startup
-    char val_5[45];   // WiFi Connect
-    char val_6[70];   // GPS Pins
-    char val_6_5[70]; // GPS Baud Rate
-    char val_7[70];   // GPS Logging
-    char val_8[42];   // Key Sounds
-    char val_9[50];   // Pwngrid Broadcast
-    char val_10[75];  // Auto-Add Friends
-    char val_11[50];  // SD Logging
-    char val_12[45];  // Skip EAPOL Check
-    char val_13[50];  // Sync Pwnd on Boot
-    char val_14[50];  // Auto-Dim Display
-
-    snprintf(val_1, sizeof(val_1),
-            "Auto Mode on Boot: %s",
-            pwnagothiModeEnabled ? "ON" : "OFF");
-
-    snprintf(val_2, sizeof(val_2),
-            "Auto-Connect WiFi: %s",
-            connectWiFiOnStartup ? "ON" : "OFF");
-
-    snprintf(val_3, sizeof(val_3),
-            "Check Updates on Boot: %s",
-            checkUpdatesAtNetworkStart ? "ON" : "OFF");
-
-    snprintf(val_4, sizeof(val_4),
-            "Random MAC on Boot: %s",
-            randomise_mac_at_boot ? "ON" : "OFF");
-
-    snprintf(val_4_5, sizeof(val_4_5),
-             "Check inbox at boot %s",
-             check_inbox_at_startup? "ON" : "OFF");
-
-    snprintf(val_5, sizeof(val_5),
-            "WiFi %s",
-            (WiFi.status() == WL_CONNECTED) ? "disconnect" : "connect");
-
-    snprintf(val_6, sizeof(val_6),
-            "GPS Pins: %s",
-            !useCustomGPSPins ? "Default" : "Custom");
-
-    snprintf(val_6_5, sizeof(val_6_5),
-            "GPS Baud: %lu",
-            gpsBaudRate);
-
-    snprintf(val_7, sizeof(val_7),
-            "GPS Logging: %s",
-            getLocationAfterPwn ? "ON" : "OFF");
-
-    snprintf(val_8, sizeof(val_8),
-            "Key Sounds: %s",
-            sound ? "ON" : "OFF");
-
-    snprintf(val_9, sizeof(val_9),
-            "Pwngrid Broadcast: %s",
-            advertisePwngrid ? "ON" : "OFF");
-
-    snprintf(val_10, sizeof(val_10),
-            "Auto-Add Friends: %s",
-            add_new_units_to_friends ? "ON" : "OFF");
-
-    snprintf(val_11, sizeof(val_11),
-            "SD Logging: %s",
-            sd_logging ? "ON" : "OFF");
-
-    snprintf(val_12, sizeof(val_12),
-            "Skip EAPOL Check: %s",
-            skip_eapol_check ? "ON" : "OFF");
-
-    snprintf(val_13, sizeof(val_13),
-            "Sync pwned on Boot: %s",
-            sync_pwned_on_boot ? "ON" : "OFF");
-
-    snprintf(val_14, sizeof(val_14),
-            "Auto-Dim Display: %s",
-            autoDimEnabled ? "ON" : "OFF");
-
-    menu new_settings_menu[] = {
-        // Startup / Boot behavior
-        { val_1, 48 },   // Auto Mode on Boot
-        { val_2, 29 },   // Auto-Connect WiFi
-        { val_3, 33 },   // Check Updates on Boot
-        { val_4, 34 },   // Random MAC on Boot
-        { val_4_5, 9 },  //check_inbox_at_startup
-
-        // Network / WiFi
-        { val_5, 43 },   // WiFi Connect
-        { "Saved Networks", 32 },  // Manage saved networks
-        { val_6, 30 },   // GPS Pins
-        { val_6_5, 37 }, // GPS Baud Rate
-        { val_7, 31 },   // GPS Logging
-        { val_9, 60 },   // Pwngrid Broadcast
-        { val_13, 122 }, // Sync pwned on boot
-
-        // Interface / Display
-        { "Theme", 50 },       // UI Theme
-        { "Menu Display Mode", 89 }, // List or Grid mode for main menu
-        { "Brightness", 41 },  // Display brightness
-        { val_14, 127 },     // Auto-Dim Display
-        { "Sounds" , 42 },         // Key Sounds
-        { "Text Faces", 90 },  // Edit text faces
-
-        // User / Device
-        { "Device Name", 40 }, // Change Hostname/name
-        { "GO Button Action", 59 }, // GO button press function
-        { val_10, 35 },        // Auto-Add Friends
-
-        // Logging / Storage
-        { val_11, 58 },        // SD Logging
-        #ifdef USE_LITTLEFS
-        {"LittleFS Manager", 71},               // LittleFS manager
-        {"Web file manager", 73},                 // Enable USB drive mode
-        #endif
-        {"Storage Info", 72},
-
-        // System / Maintenance
-        { "System Update", 44 },
-        { "Factory Reset", 51 },
-        { "System Info", 3 },
-        { "About", 45 },
-        { "Power Off", 46 },
-        { "Reboot", 56 },
-
-        // Optional / Advanced
-        { val_12, 49 },         // Skip EAPOL Check
-        { "Send bug report to devs", 123 }, // Send bug report
-        { "Back", 255 }
-    };
-    #ifdef USE_LITTLEFS
-    drawMenuList( new_settings_menu , 6, 34);
-    #else
-    drawMenuList( new_settings_menu , 6, 31);
-    #endif
+    drawMenuList(settings_menu, 6, 9);
     prevMID = 6;
   }  
   else if (menuID == 7){
@@ -887,7 +707,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
     prevMID = 9;
   }
   else if (menuID == 10){
-    drawMenuList((pwnagotchiTaskHandle == nullptr)?n_pwnagotchi_menu:n_auto_running_menu, 10, 5);
+    drawMenuList(auto_menu, 10, 3);
     prevMID = 10;
   }
   else if (menuID == 99) {
@@ -903,7 +723,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
   {
     //redraw only in 5 seconds intervals
     unsigned long currentTime = millis();
-    if ((currentTime - lastRedrawTime >= 5000 )|| needsUiRedraw || pwnagothiMode) {
+    if ((currentTime - lastRedrawTime >= 5000 )|| needsUiRedraw) {
       if(prevMID){
         drawInfoBox("", "Refreshing data...", "", false, false);
         prevMID=0;
@@ -914,7 +734,6 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
     }
   }
   
-
   M5.Display.startWrite();
   if (show_toolbars) {
     canvas_top.pushSprite(0, 0);
@@ -928,10 +747,10 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
   M5.Display.endWrite();
   if(pwnagothiMode && triggerPwnagothi){
     if(!stealth_mode){
-      pwnagothiLoop();
+      //nothing - this will be a task
     }
     else{
-      pwnagothiStealthLoop();
+      legacyLoop();
     }
   }
 }
@@ -1055,7 +874,7 @@ void drawBottomCanvas() {
   canvas_bot.setTextDatum(top_right);
   String modeStatus;
   if (pwnagotchiTaskHandle != nullptr) {
-    modeStatus = "N_AUTO";
+    modeStatus = "AUTO";
   } else if (pwnagothiMode) {
     modeStatus = "AUTO";
   } else {
@@ -1989,6 +1808,7 @@ bool addUnitToAddressBook(const unit u) {
     logMessage("Added unit to address book: " + u.name);
     return true;
 }
+bool back = false;
 
 void runApp(uint8_t appID){
   logMessage("App started running, ID:"+ String(appID));
@@ -1996,10 +1816,14 @@ void runApp(uint8_t appID){
   menu_current_page = 1;
   if(appID){
     if(appID == 255){
-      if(menuID != 1){
+      back = true;
+      if(menuID != 1 ){
         menuID = 1;
       }
       else{
+        menuID = 0;
+      }
+      if(pwnagotchiTaskHandle != nullptr){
         menuID = 0;
       }
     }
@@ -2012,10 +1836,7 @@ void runApp(uint8_t appID){
       debounceDelay();
       drawMenuList( wifi_menu , 2, 6);
     }
-    if(appID == 2){
-      debounceDelay();
-      drawMenuList(n_pwnagotchi_menu, 10, 3);
-    }
+    if(appID == 2){}
     if(appID == 3){
       drawSysInfo();
       menuID = 6;
@@ -2309,9 +2130,15 @@ void runApp(uint8_t appID){
           }
           drawInfoBox("INITIALIZING", "Pwnagothi mode initialization", "please wait...", false, false);
           menuID = 5;
-          if(pwnagothiBegin()){
+          if(pwn::begin()){
             auto_mode_and_wardrive = true;
             pwnagothiMode = true;
+            // Start wardriving task when auto mode + wardrive requested
+            if (!pwn::beginWardriving()) {
+              logMessage("Warning: failed to start Wardriving task in auto mode");
+            } else {
+              logMessage("Wardriving task started in auto mode");
+            }
             menuID = 0;
             return;
           }
@@ -4279,7 +4106,6 @@ void runApp(uint8_t appID){
     if(appID == 109){
       if(!dev_mode){ drawInfoBox("Dev only", "Enable dev mode to run.", "", true, false); return; }
       drawInfoBox("Speed scan", "Running speed test", "Please wait...", false, false);
-      speedScanTestAndPrintResults();
       drawInfoBox("Done", "Speed scan finished", "", true, false);
       return;
     }
@@ -4290,9 +4116,8 @@ void runApp(uint8_t appID){
     }
     if(appID == 111){
       if(!dev_mode){ drawInfoBox("Dev only", "Enable dev mode to run.", "", true, false); return; }
-      drawInfoBox("Crash test", "This will crash the device", "Press Enter to continue", false, false);
+      drawInfoBox("Crash test", "This will crash the device", "Press Enter to continue", true, false);
       delay(1000);
-      speedScanTestAndPrintResults();
       esp_will_beg_for_its_life();
       return;
     }
@@ -4462,7 +4287,7 @@ void runApp(uint8_t appID){
           }
           drawInfoBox("INITIALIZING", "Pwnagothi mode initialization", "please wait...", false, false);
           menuID = 5;
-          if(pwnagothiBegin()){
+          if(pwn::begin()){
             pwnagothiMode = true;
             menuID = 0;
             return;
@@ -4837,15 +4662,15 @@ void runApp(uint8_t appID){
           }
         }
         else if(choice == 2){
-          String brightnessStr = userInput("New min brightness (10-100)", "Set minimum brightness:", 3);
+          String brightnessStr = userInput("New min brightness (0-100)", "Set minimum brightness:", 3);
           if(brightnessStr != ""){
             uint8_t newMinBrightness = brightnessStr.toInt();
-            if(newMinBrightness >= 10 && newMinBrightness <= 100){
+            if(newMinBrightness >= 0 && newMinBrightness <= 100){
               autoDimMinBrightness = newMinBrightness;
               if(saveSettings()) drawInfoBox("Saved", "Min brightness set to " + String(newMinBrightness), "", true, false);
               else drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);
             } else {
-              drawInfoBox("Invalid", "Brightness must be 10-100", "", true, false);
+              drawInfoBox("Invalid", "Brightness must be 0-100", "", true, false);
             }
           }
         }
@@ -5621,102 +5446,388 @@ void runApp(uint8_t appID){
         drawInfoBox("Error", "Core dump logging is disabled", "Recompile with ENABLE_COREDUMP_LOGGING", true, false);
       #endif
     }
-    if(appID == 124){
-      // New Pwnagotchi Personality Editor
+    // Personality Settings Categories - AppID 150
+    if(appID == 150){
       if(initNewPersonality()){
         debounceDelay();
       }
       else{
         drawInfoBox("Error", "Can't load personality", "Check SD card!", true, false);
-        menuID = 5;
+        menuID = 6;
         return;
       }
-      while (true) {
-        String personality_options[] = {
-          "EAPOL Timeout" + String(" (ms): ") + String(n_pwnagotchi_personality.eapol_timeout),
-          "Deauth Packets Count" + String(" : ") + String(n_pwnagotchi_personality.deauth_packets_count),
-          "Deauth Packet Interval" + String(" (ms): ") + String(n_pwnagotchi_personality.deauth_packet_interval),
-          "PMKID Attack Timeout" + String(" (ms): ") + String(n_pwnagotchi_personality.pmkid_attack_timeout),
-          "Delay Between Attacks" + String(" (ms): ") + String(n_pwnagotchi_personality.delay_between_attacks),
-          "RSSI Threshold" + String(" (dBm): ") + String(n_pwnagotchi_personality.rssi_threshold),
-          "Sound on Handshake" + String(n_pwnagotchi_personality.sound_on_handshake ? " (y)" : " (n)"),
-          "Sound on PMKID" + String(n_pwnagotchi_personality.sound_on_pmkid ? " (y)" : " (n)"),
-          "Enable Wardriving" + String(n_pwnagotchi_personality.enable_wardriving ? " (y)" : " (n)"),
-          "GPS Timeout" + String(" (ms): ") + String(n_pwnagotchi_personality.gps_timeout_ms),
-          "Enable PMKID Attack" + String(n_pwnagotchi_personality.enable_pmkid_attack ? " (y)" : " (n)"),
+      
+      menu personality_categories[] = {
+        {"Timing Settings", 151},
+        {"Behavior Settings", 152},
+        {"Advanced Settings", 153},
+        {"Back", 255}
+      };
+      while(!back){
+      drawMenuList(personality_categories, 6, 4);
+      }
+      back = false;
+      menuID = 6;
+      return;
+    }
+    // Personality - Timing Settings (AppID 151)
+    if(appID == 151){
+      bool editingPersonality = true;
+      uint16_t currentField = 0;
+      
+      while(editingPersonality){
+        // Build timing options strings dynamically
+        String timing_options[] = {
+          "EAPOL Timeout (ms): " + String(n_pwnagotchi_personality.eapol_timeout),
+          "Deauth Packet Interval (ms): " + String(n_pwnagotchi_personality.deauth_packet_interval),
+          "PMKID Attack Timeout (ms): " + String(n_pwnagotchi_personality.pmkid_attack_timeout),
+          "Delay Between Attacks (ms): " + String(n_pwnagotchi_personality.delay_between_attacks),
+          "GPS Timeout (ms): " + String(n_pwnagotchi_personality.gps_timeout_ms),
           "Back"
         };
-      
-        int8_t choice = drawMultiChoice("New Pwnagotchi Personality", personality_options, 12, 6, 4);
-        if(choice == 11 || choice == -1){
+        
+        int8_t choice = drawMultiChoice("Timing Settings", timing_options, 6, 6, 0);
+        
+        if(choice == 5 || choice == -1){
           saveNewPersonality();
-          menuID = 5;
+          menuID = 6;
+          editingPersonality = false;
           return;
         }
-        else if(choice >= 6){
-          bool valueToSet = getBoolInput(personality_options[choice], "Press t or f, then ENTER", false);
-          logMessage("Value to set: " + String(valueToSet ? "true" : "false") + " to " + personality_options[choice]);
-          switch (choice) {
-            case 6:
+        
+        if(choice >= 0 && choice < 5){
+          int16_t valueToSet = getNumberfromUser(timing_options[choice], "Enter new value", 60000);
+          
+          if(valueToSet != -1){
+            switch(choice){
+              case 0:
+                n_pwnagotchi_personality.eapol_timeout = valueToSet;
+                break;
+              case 1:
+                n_pwnagotchi_personality.deauth_packet_interval = valueToSet;
+                break;
+              case 2:
+                n_pwnagotchi_personality.pmkid_attack_timeout = valueToSet;
+                break;
+              case 3:
+                n_pwnagotchi_personality.delay_between_attacks = valueToSet;
+                break;
+              case 4:
+                n_pwnagotchi_personality.gps_timeout_ms = valueToSet;
+                break;
+            }
+            saveNewPersonality();
+          }
+        }
+      }
+      
+      menuID = 6;
+      return;
+    }
+    // Personality - Behavior Settings (AppID 152)
+    if(appID == 152){
+      bool editingPersonality = true;
+      
+      while(editingPersonality){
+        String behavior_options[] = {
+          "Deauth Packets Count: " + String(n_pwnagotchi_personality.deauth_packets_count),
+          "Sound on Handshake: " + String(n_pwnagotchi_personality.sound_on_handshake ? "ON" : "OFF"),
+          "Sound on PMKID: " + String(n_pwnagotchi_personality.sound_on_pmkid ? "ON" : "OFF"),
+          "Enable Wardriving: " + String(n_pwnagotchi_personality.enable_wardriving ? "ON" : "OFF"),
+          "Enable PMKID Attack: " + String(n_pwnagotchi_personality.enable_pmkid_attack ? "ON" : "OFF"),
+          "Back"
+        };
+        
+        int8_t choice = drawMultiChoice("Behavior Settings", behavior_options, 6, 6, 0);
+        
+        if(choice == 5 || choice == -1){
+          saveNewPersonality();
+          menuID = 6;
+          editingPersonality = false;
+          return;
+        }
+        
+        if(choice == 0){  // Deauth Packets Count (numeric)
+          int16_t valueToSet = getNumberfromUser(behavior_options[choice], "Enter new value", 60000);
+          if(valueToSet != -1){
+            n_pwnagotchi_personality.deauth_packets_count = valueToSet;
+            saveNewPersonality();
+          }
+        }
+        else if(choice > 0 && choice < 5){  // Boolean settings
+          bool valueToSet = getBoolInput(behavior_options[choice], "Press t for true, f for false", false);
+          
+          switch(choice){
+            case 1:
               n_pwnagotchi_personality.sound_on_handshake = valueToSet;
               break;
-            case 7:
+            case 2:
               n_pwnagotchi_personality.sound_on_pmkid = valueToSet;
               break;
-            case 8:
+            case 3:
               n_pwnagotchi_personality.enable_wardriving = valueToSet;
               break;
-            case 10:
-              n_pwnagotchi_personality.enable_pmkid_attack = valueToSet;
-              break;
-            default:
-              break;
-          }
-          saveNewPersonality();
-        }
-        else{
-          int16_t valueToSet = getNumberfromUser(personality_options[choice], "Enter new value", 60000);
-          logMessage("Value to set: " + String(valueToSet) + " to " + personality_options[choice]);
-          if(valueToSet == -1){
-            continue;
-          }
-          switch (choice) {
-            case 0:
-              n_pwnagotchi_personality.eapol_timeout = valueToSet;
-              break;
-            case 1:
-              n_pwnagotchi_personality.deauth_packets_count = valueToSet;
-              break;
-            case 2:
-              n_pwnagotchi_personality.deauth_packet_interval = valueToSet;
-              break;
-            case 3:
-              n_pwnagotchi_personality.pmkid_attack_timeout = valueToSet;
-              break;
             case 4:
-              n_pwnagotchi_personality.delay_between_attacks = valueToSet;
-              break;
-            case 5:
-              // RSSI threshold can be negative, handle specially
-              if(valueToSet == 0) valueToSet = -75; // default if 0
-              if(valueToSet > 0) valueToSet = -valueToSet; // make negative
-              n_pwnagotchi_personality.rssi_threshold = valueToSet;
-              break;
-            case 9:
-              n_pwnagotchi_personality.gps_timeout_ms = valueToSet;
-              break;
-            default:
+              n_pwnagotchi_personality.enable_pmkid_attack = valueToSet;
               break;
           }
           saveNewPersonality();
         }
       }
       
-      menuID = 5;
+      menuID = 6;
+      return;
+    }
+    // Personality - Advanced Settings (AppID 153)
+    if(appID == 153){
+      bool editingPersonality = true;
+      
+      while(editingPersonality){
+        String advanced_options[] = {
+          "RSSI Threshold (dBm): " + String(n_pwnagotchi_personality.rssi_threshold),
+          "Back"
+        };
+        
+        int8_t choice = drawMultiChoice("Advanced Settings", advanced_options, 2, 6, 0);
+        
+        if(choice == 1 || choice == -1){
+          saveNewPersonality();
+          menuID = 6;
+          editingPersonality = false;
+          return;
+        }
+        
+        if(choice == 0){  // RSSI Threshold (can be negative)
+          int16_t valueToSet = getNumberfromUser(advanced_options[choice], "Enter RSSI value (-100 to 0)", 100);
+          
+          if(valueToSet != -1 && valueToSet != 0){
+            // Make it negative if positive input
+            if(valueToSet > 0) valueToSet = -valueToSet;
+            n_pwnagotchi_personality.rssi_threshold = valueToSet;
+            saveNewPersonality();
+          }
+        }
+      }
+      
+      menuID = 6;
+      return;
+    }
+    if(appID == 124){
+      // Deprecated: Old personality editor - now handled through category menus
+      drawInfoBox("Notice", "Personality editor moved", "Use Settings > Personality", true, false);
+      menuID = 6;
+      return;
+    }
+    // Settings Categories with Current Values
+    // Startup / Boot category (AppID 160)
+    if(appID == 160){
+      debounceDelay();
+      
+      char val_1[70], val_2[70], val_3[70], val_4[70], val_5[70];
+      
+      snprintf(val_1, sizeof(val_1), "Auto Mode on Boot [%s]", 
+               pwnagothiModeEnabled ? "ON" : "OFF");
+      snprintf(val_2, sizeof(val_2), "Auto-Connect WiFi [%s]", 
+               connectWiFiOnStartup ? "ON" : "OFF");
+      snprintf(val_3, sizeof(val_3), "Check Updates on Boot [%s]", 
+               checkUpdatesAtNetworkStart ? "ON" : "OFF");
+      snprintf(val_4, sizeof(val_4), "Random MAC on Boot [%s]", 
+               randomise_mac_at_boot ? "ON" : "OFF");
+      snprintf(val_5, sizeof(val_5), "Check inbox at boot [%s]", 
+               check_inbox_at_startup ? "ON" : "OFF");
+      
+      menu startup_boot_menu_dynamic[] = {
+        {val_1, 48},
+        {val_2, 29},
+        {val_3, 33},
+        {val_4, 34},
+        {val_5, 9},
+        {"Back", 255}
+      };
+      while(!back){
+      drawMenuList(startup_boot_menu_dynamic, 6, 6);
+      }
+      back = false;
+      menu_current_opt = 0;
+      menu_current_page = 0;
+      menuID = 6;
+      return;
+    }
+    // Network / WiFi category (AppID 161)
+    if(appID == 161){
+      debounceDelay();
+      
+      char val_5[70], val_6[70], val_7[70], val_9[70];
+      
+      snprintf(val_5, sizeof(val_5), "WiFi %s", 
+               (WiFi.status() == WL_CONNECTED) ? "disconnect" : "connect");
+      snprintf(val_6, sizeof(val_6), "GPS Pins [%s]", 
+               !useCustomGPSPins ? "Default" : "Custom");
+      snprintf(val_7, sizeof(val_7), "GPS Logging [%s]", 
+               getLocationAfterPwn ? "ON" : "OFF");
+      snprintf(val_9, sizeof(val_9), "Pwngrid Broadcast [%s]", 
+               advertisePwngrid ? "ON" : "OFF");
+      
+      menu network_wifi_menu_dynamic[] = {
+        {val_5, 43},
+        {"Saved Networks", 32},
+        {val_6, 30},
+        {"GPS Baud Rate", 37},
+        {val_7, 31},
+        {val_9, 60},
+        {"Back", 255}
+      };
+      while(!back){
+      drawMenuList(network_wifi_menu_dynamic, 6, 7);
+      }
+      menu_current_opt = 0;
+      menu_current_page = 0;
+      back = false;
+      menuID = 6;
+      return;
+    }
+    // Interface / Display category (AppID 162)
+    if(appID == 162){
+      debounceDelay();
+      
+      char val_8[70], val_14[70];
+      
+      snprintf(val_8, sizeof(val_8), "Key Sounds [%s]", 
+               sound ? "ON" : "OFF");
+      snprintf(val_14, sizeof(val_14), "Auto-Dim Display [%s]", 
+               autoDimEnabled ? "ON" : "OFF");
+      
+      menu interface_display_menu_dynamic[] = {
+        {"Theme", 50},
+        {"Menu Display Mode", 89},
+        {"Brightness", 41},
+        {val_14, 127},
+        {val_8, 42},
+        {"Text Faces", 90},
+        {"Back", 255}
+      };
+      while(!back){
+      drawMenuList(interface_display_menu_dynamic, 6, 7);
+      }
+      menu_current_opt = 0;
+      menu_current_page = 0;
+      back = false;
+      menuID = 6;
+      return;
+    }
+    // User / Device category (AppID 163)
+    if(appID == 163){
+      debounceDelay();
+      
+      char val_10[70];
+      
+      snprintf(val_10, sizeof(val_10), "Auto-Add Friends [%s]", 
+               add_new_units_to_friends ? "ON" : "OFF");
+      
+      menu user_device_menu_dynamic[] = {
+        {"Device Name", 40},
+        {"GO Button Action", 59},
+        {val_10, 35},
+        {"Back", 255}
+      };
+      while(!back){
+      drawMenuList(user_device_menu_dynamic, 6, 4);
+      }
+      menu_current_opt = 0;
+      menu_current_page = 0;
+      back = false;
+      menuID = 6;
+      return;
+    }
+    // Logging / Storage category (AppID 164)
+    if(appID == 164){
+      debounceDelay();
+      
+      char val_11[70];
+      
+      snprintf(val_11, sizeof(val_11), "SD Logging [%s]", 
+               sd_logging ? "ON" : "OFF");
+      
+      #ifdef USE_LITTLEFS
+      menu logging_storage_menu_dynamic[] = {
+        {val_11, 58},
+        {"LittleFS Manager", 71},
+        {"Web file manager", 73},
+        {"Storage Info", 72},
+        {"Back", 255}
+      };
+      while(!back){
+      drawMenuList(logging_storage_menu_dynamic, 6, 5);
+      }
+      menu_current_opt = 0;
+      menu_current_page = 0;
+      back = false;
+      #else
+      menu logging_storage_menu_dynamic[] = {
+        {val_11, 58},
+        {"Storage Info", 72},
+        {"Back", 255}
+      };
+      while(!back){
+      drawMenuList(logging_storage_menu_dynamic, 6, 3);
+      
+      }
+      back = false;
+      menu_current_opt = 0;
+      menu_current_page = 0;
+      #endif
+      
+      menuID = 6;
+      return;
+    }
+    // System / Maintenance category (AppID 165)
+    if(appID == 165){
+      debounceDelay();
+      
+      menu system_maintenance_menu[] = {
+        {"System Update", 44},
+        {"Factory Reset", 51},
+        {"System Info", 3},
+        {"About", 45},
+        {"Power Off", 46},
+        {"Reboot", 56},
+        {"Back", 255}
+      };
+      while(!back){
+      drawMenuList(system_maintenance_menu, 6, 7);
+      }
+      menu_current_opt = 0;
+      menu_current_page = 0;
+      back = false;
+      menuID = 6;
+      return;
+    }
+    // Advanced / Optional category (AppID 166)
+    if(appID == 166){
+      debounceDelay();
+      
+      char val_12[70];
+      
+      snprintf(val_12, sizeof(val_12), "Skip EAPOL Check [%s]", 
+               skip_eapol_check ? "ON" : "OFF");
+      
+      menu advanced_menu_dynamic[] = {
+        {val_12, 49},
+        {"Send bug report to dev", 123},
+        {"Back", 255}
+      };
+      
+      while(!back){
+      drawMenuList(advanced_menu_dynamic, 6, 3);
+      }
+      menu_current_opt = 0;
+      menu_current_page = 0;
+      back = false;
+      menuID = 6;
       return;
     }
     else if (appID == 125){
-      if(n_pwnagotchi::begin()){
+      if(pwn::begin()){
         drawInfoBox("Pwnagotchi started", "Pwnagotchi is now running.", "Press enter to continue", true, false);
       }
       else{
@@ -5725,15 +5836,16 @@ void runApp(uint8_t appID){
       menuID = 0;
     }
     else if (appID == 126){
-      n_pwnagotchi::end();
+      pwn::end();
       drawInfoBox("Pwnagotchi stopped", "Pwnagotchi has been stopped.", "Press enter to continue", true, false);
       menuID = 0;
     }
     else if (appID == 128){
-      // N_AUTO Mode with Wardriving
-      if(n_pwnagotchi::begin()){
-        logMessage("N_AUTO mode started successfully");
-        if(n_pwnagotchi::beginWardriving()){
+      drawInfoBox("GPS locking", "Waiting for GPS lock...", "This may take a while.", false, false); 
+      startWardriveSession(30000);
+      if(pwn::begin()){
+        logMessage("Auto mode started successfully");
+        if(pwn::beginWardriving()){
           drawInfoBox("Success", "Pwnagotchi + Wardriving", "enabled and running.", true, false);
           logMessage("Wardriving task started successfully");
         }
@@ -7057,6 +7169,7 @@ void drawMenuList(menu toDraw[], uint8_t menuIDPriv, uint8_t menu_size) {
 
   canvas_main.fillRect(sbX, 0, 6, sbH, bg_color_rgb565);
   canvas_main.fillRect(sbX, barY, 6, barH, tx_color_rgb565);
+  pushAll();
 
   // ============================================================
   // input handling
@@ -7113,6 +7226,7 @@ void drawMenuList(menu toDraw[], uint8_t menuIDPriv, uint8_t menu_size) {
   }
   if (keys.isKeyPressed('`')) {
     debounceDelay();
+    back = true;
     return;
   }
   #endif
@@ -7604,8 +7718,6 @@ void drawAttackMode(){
       }
       canvas_main.setTextColor(tx_color_rgb565);
     }
-    
-
 
     canvas_main.drawString("[MENU] - Controls | [ESC] - Exit", 5, 85);
     canvas_main.drawString("[H] - Help", 5, 95);
@@ -7622,7 +7734,7 @@ void drawAttackMode(){
       if (answer == 0) {
         // Start attack
         drawInfoBox("Starting", "Initializing attack system...", "Please wait...", false, false);
-        if (n_pwnagotchi::begin()) {
+        if (pwn::begin()) {
           drawInfoBox("Success", "Attack system started", "Scanning networks...", true, false);
         } else {
           drawInfoBox("Error", "Failed to start", "Check logs", true, false);
@@ -7644,12 +7756,12 @@ void drawAttackMode(){
       else if (answer == 1) {
         // Stop attack
         drawInfoBox("Stopping", "Stopping attack system...", "Please wait...", false, false);
-        if (n_pwnagotchi::end()) {
+        if (pwn::end()) {
           drawInfoBox("Success", "Attack system stopped", "Results saved", true, false);
         } else {
           drawInfoBox("Error", "Failed to stop", "Check logs", true, false);
         }
-        menuID = 5;
+        menuID = 0;
         return;
       }
       else if (answer == 2) {
@@ -7669,13 +7781,13 @@ void drawAttackMode(){
         pushAll();
       }
       else {
-        menuID = 5;
+        menuID = 0;
         return;
       }
     }
     if (inputManager::isButtonBPressed()) {
       debounceDelay();
-      menuID = 5;
+      menuID = 0;
       return;
     }
     #else
@@ -7692,7 +7804,7 @@ void drawAttackMode(){
         if (answer == 0) {
           // Start attack
           drawInfoBox("Starting", "Initializing attack system...", "Please wait...", false, false);
-          if (n_pwnagotchi::begin()) {
+          if (pwn::begin()) {
           } else {
             drawInfoBox("Error", "Failed to start", "Check logs", true, false);
           }
@@ -7700,7 +7812,7 @@ void drawAttackMode(){
         else if (answer == 1) {
           // Stop attack
           drawInfoBox("Stopping", "Stopping attack system...", "Please wait...", false, false);
-          if (n_pwnagotchi::end()) {
+          if (pwn::end()) {
             drawInfoBox("Success", "Attack system stopped", "Results saved", true, false);
           } else {
             drawInfoBox("Error", "Failed to stop", "Check logs", true, false);
@@ -7721,7 +7833,7 @@ void drawAttackMode(){
     // Check for escape key or menu toggle
     if(M5Cardputer.Keyboard.isKeyPressed('`')) {
       debounceDelay();
-      menuID = 5;
+      menuID = 0;
       return;
     }
     #endif
