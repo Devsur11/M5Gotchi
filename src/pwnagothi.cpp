@@ -18,7 +18,7 @@
 #define EAPOL_KEY_TYPE_OFFSET   4
 #define EAPOL_KEY_INFO_HI       5
 #define EAPOL_KEY_INFO_LO       6
-#define EAPOL_NONCE_OFFSET     17   // Key Nonce field offset (ANonce in Msg1, SNonce in Msg2)
+#define EAPOL_NONCE_OFFSET     17
 #define EAPOL_MIC_OFFSET       81
 #define CHANEL_HOP_INTERVAL_MS 100
 
@@ -57,12 +57,9 @@ struct FileWriteRequest {
 static uint8_t *beaconFrame    = nullptr;
 static uint16_t beaconFrameLen = 0;
 static bool     beaconDetected = false;
-
 static bool    targetAPSet = false;
 static uint8_t targetBSSID[6];
 static bool    eapolMsg[5] = {false};
-
-// Nonce / MIC capture (for hashcat output)
 static uint8_t capturedANonce[32];
 static uint8_t capturedSNonce[32];
 static uint8_t capturedMIC[16];
@@ -70,7 +67,6 @@ static uint8_t capturedClientMac[6];
 static bool    hasANonce = false;
 static bool    hasSNonce = false;
 static bool    hasMIC    = false;
-
 QueueHandle_t packetQueue    = nullptr;
 QueueHandle_t fileWriteQueue = nullptr;
 TaskHandle_t  pwnagotchiTaskHandle = nullptr;
@@ -84,7 +80,6 @@ std::vector<String> failedClients;
 static uint8_t targetClientMAC[6];
 static bool    clientLocked = false;
 
-// PCAP structures
 struct pcap_hdr_s {
     uint32_t magic_number;
     uint16_t version_major;
@@ -104,8 +99,6 @@ struct pcaprec_hdr_s {
 
 File file;
 bool pwnagothiModeEnabled;
-
-// maximum entries accepted from the JSON whitelist to avoid OOM
 static const size_t MAX_WHITELIST = 200;
 uint8_t wifiCheckInt = 0;
 String lastBlocked = "";
@@ -179,13 +172,12 @@ void speedScan(){
     logMessage("Starting speed scan...");
     g_speedScanResults.clear();
     g_speedScanResults.shrink_to_fit();
-    //go quickly through channels 1-13
     xSemaphoreTake(wifiMutex, portMAX_DELAY);
     esp_wifi_set_promiscuous_rx_cb(speedScanCallback);
     esp_wifi_set_promiscuous(true);
     for(int ch = 1; ch <= 13; ch++){
         esp_wifi_set_channel(ch, WIFI_SECOND_CHAN_NONE);
-        delay(120); // dwell time on each channel - adjust as needed
+        delay(120);
     }
     esp_wifi_set_promiscuous(false);
     xSemaphoreGive(wifiMutex);
@@ -203,7 +195,7 @@ std::vector<String> parseWhitelist() {
     DeserializationError err = deserializeJson(doc, whitelist);
     if (err) {
         logMessage(String("Failed to parse whitelist JSON: ") + err.c_str());
-        return std::vector<String>(); // empty vector
+        return std::vector<String>();
     }
 
     JsonArray arr = doc.as<JsonArray>();
@@ -215,14 +207,14 @@ std::vector<String> parseWhitelist() {
     }
 
     std::vector<String> result;
-    result.reserve(actualSize); // reduce fragmentation / reallocation
+    result.reserve(actualSize);
 
     size_t i = 0;
     for (JsonVariant v : arr) {
         if (i++ >= actualSize) break;
         const char* s = v.as<const char*>();
         if (s) result.emplace_back(String(s));
-        else result.emplace_back(String()); // keep index consistent
+        else result.emplace_back(String());
     }
 
     return result;
@@ -232,13 +224,10 @@ void addToWhitelist(const String &valueToAdd) {
     JsonDocument oldDoc;
     DeserializationError err = deserializeJson(oldDoc, whitelist);
     if (err) {
-        // treat as empty array if parse fails
         oldDoc.to<JsonArray>();
     }
 
     JsonArray oldArr = oldDoc.as<JsonArray>();
-
-    // make new doc sized for old + one more (rough estimate)
     JsonDocument newDoc;
     JsonArray newArr = newDoc.to<JsonArray>();
 
@@ -607,7 +596,6 @@ void wifiRTScanCallback(void *buf, wifi_promiscuous_pkt_type_t type) {
     uint8_t        bssid[6];
     memcpy(bssid, payload + 10, 6);
 
-    // ---- MGMT frames: scan & beacon detection ----
     if (type == WIFI_PKT_MGMT) {
         uint8_t ap_channel = channel;
         if (pkt->rx_ctrl.sig_len > 36) {
@@ -642,9 +630,6 @@ void wifiRTScanCallback(void *buf, wifi_promiscuous_pkt_type_t type) {
         wifiRTResults newResult = { ssid, rssi, channel, secure,
             {bssid[0],bssid[1],bssid[2],bssid[3],bssid[4],bssid[5]}, millis() };
 
-        // Use timeout=0 (non-blocking) consistently throughout this callback —
-        // the promiscuous CB runs in WiFi task context (not a hard ISR), so
-        // xSemaphoreTake with timeout=0 is safe and avoids priority inversion.
         if (wifiResultsMutex && xSemaphoreTake(wifiResultsMutex, 0) == pdTRUE) {
             bool dup = false;
             for (auto &entry : g_wifiRTResults) {
@@ -669,7 +654,6 @@ void wifiRTScanCallback(void *buf, wifi_promiscuous_pkt_type_t type) {
         uint8_t  fsubtype = (fc >> 4) & 0xF;
 
         if (ftype == 0 && fsubtype == 8 && !beaconDetected) {
-            // Only capture beacon once the target has been set and it matches
             if (!targetAPSet) return;
             if (memcmp(payload + 16, targetBSSID, 6) != 0) return;
 
@@ -1172,9 +1156,7 @@ void wardrivingTask(void *parameter) {
 
                 logMessage("Wardriving: found " + String(networksToLog.size()) + " networks.");
                 uint32_t gpsTimeout = n_pwnagotchi_personality.gps_timeout_ms;
-                trigger(1);
                 wardriveStatus wd = wardrive(networksToLog, gpsTimeout);
-                trigger(2);
 
                 if (wd.success && wd.gpsFixAcquired) {
                     logMessage("Wardrive logged " + String(wd.networksLogged) + " networks @ " +

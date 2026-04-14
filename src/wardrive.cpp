@@ -177,25 +177,6 @@ static int channelToFrequency(int ch) {
     return 5000 + ch * 5; // rough 5GHz mapping (approx)
 }
 
-// ---- first-seen persistence ----
-static void ensureWardrivingDir() {
-    // ensure directory exists; FSYS.mkdir returns true if directory created or already exists
-    SD_LOCK();
-    if (!FSYS.exists("/M5Gotchi/wardriving")) {
-        FSYS.mkdir("/M5Gotchi/wardriving");
-    }
-    SD_UNLOCK();
-}
-
-// Public helper: manually set filename (if user wants to override)
-void setWardriveFilename(const String& path) {
-    ensureWardrivingDir();
-    currentWardrivePath = path;
-    filenameLocked = true;
-}
-
-// Public: start session and attempt to get GPS timestamp to build filename.
-// If it fails, fallback to millis() style filename.
 void startWardriveSession(unsigned long gpsTimeoutMs) {
     // attempt quick GPS read to get ISO timestamp
     if(!useCustomGPSPins){
@@ -232,7 +213,6 @@ void startWardriveSession(unsigned long gpsTimeoutMs) {
         delay(5);
     }
 
-    ensureWardrivingDir();
     String fname;
     if (bestFix.valid && bestFix.timeIso.length() >= 10) {
         // construct YYYYMMDD_HHMMSS
@@ -336,16 +316,6 @@ bool waitForGpsLock(int rxPin, int txPin, unsigned long timeoutMs){
     return false;
 }
 
-// ---- upload to Wigle ----
-// Wigle accepts Basic-auth style API name/token. The "Encoded for use" token you get from your
-// account page is a base64-encoded credential and can be used directly in an Authorization header.
-// See community references on Wigle token usage. :contentReference[oaicite:1]{index=1}
-//
-// This function opens `csvPath`, reads the contents, and POSTs it to an upload endpoint with
-// Authorization: Basic <encodedToken>. If Wigle API endpoint requires different path/params,
-// change the URL below.
-//
-// Returns true on HTTP 2xx. If outHttpCode provided, filled with returned HTTP code.
 bool uploadToWigle(const String& encodedToken, const char* csvPath, int* outHttpCode) {
     if (!FSYS.exists(csvPath)) {
         fLogMessage("uploadToWigle: file does not exist: %s", csvPath);
@@ -380,7 +350,6 @@ bool uploadToWigle(const String& encodedToken, const char* csvPath, int* outHttp
     int lastSlash = filename.lastIndexOf('/');
     if (lastSlash >= 0) filename = filename.substring(lastSlash + 1);
 
-    // Create a reasonably-unique boundary
     String boundary = "----WiGLEBoundary" + String(millis());
 
     String preamble = String("--") + boundary + "\r\n";
@@ -389,15 +358,10 @@ bool uploadToWigle(const String& encodedToken, const char* csvPath, int* outHttp
 
     String closing = String("\r\n--") + boundary + "--\r\n";
 
-    // Compute total content length: preamble + file + closing
     size_t contentLength = preamble.length() + (size_t)fileSize + closing.length();
 
     client.print(String("POST /api/v2/file/upload HTTP/1.1\r\n"));
     client.print(String("Host: ") + host + "\r\n");
-    // Normalize the provided API key/token. Users may provide either:
-    // - a plain "name:token" pair (we will base64-encode it),
-    // - a base64-encoded credential (as provided by Wigle's "Encoded for use" token), or
-    // - a bare token (less likely to work; we send it as-is and log a warning).
     String authHeaderB64;
     String key = encodedToken;
     key.trim();
@@ -517,10 +481,6 @@ wardriveStatus wardrive(const std::vector<wifiSpeedScan>& networks, unsigned lon
         xSemaphoreGive(wardriveMutex);
         return {false, false, 0.0, 0.0, 0.0, 0.0, String(), 0, 0};
     }
-    // trigger(11);
-    // ensureWardrivingDir();
-    // trigger(12);
-
 
     //chack if serial2 already initialized - if not, initialize with appropriate pins and baudrate
     if(Serial2) {

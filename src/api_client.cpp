@@ -24,7 +24,7 @@ extern const char pwngid_root_ca_pem_end[] asm("_binary_certs_pwngrid_root_ca_pe
 
 bool timeInitialized = false;
 bool inited = false;
-static String g_apiInitParam; // used only for passing keysPath to the init task
+static String g_apiInitParam;
 
 void api_client::initTime() {
     if (timeInitialized) return;   // stop f***ing reinitializing 
@@ -111,49 +111,42 @@ bool api_client::sub_init(const String &keysPath) {
 }
 
 bool api_client::init(const String &keysPath) {
-    // initDone = xSemaphoreCreateBinary();
-    // if (!initDone) return false;
+    initDone = xSemaphoreCreateBinary();
+    if (!initDone) return false;
+    g_apiInitParam = keysPath;
 
-    // // ---------- FIX: use static global instead of allocating String on heap ----------
-    // g_apiInitParam = keysPath;
+    xTaskCreatePinnedToCore(
+        apiInitTask,
+        "apiInitTask",
+        16384,
+        &g_apiInitParam,
+        2,
+        &initTaskHandle,
+        0
+    );
 
-    // xTaskCreatePinnedToCore(
-    //     apiInitTask,
-    //     "apiInitTask",
-    //     16384,   // increased stack: HTTPClient + mbedtls can require significantly more stack
-    //     &g_apiInitParam,
-    //     2,       // slightly higher priority to avoid preemption during heavy init
-    //     &initTaskHandle,
-    //     0
-    // );
+    if (!initTaskHandle) {
+        return false;
+    }
 
-    // if (!initTaskHandle) {
-    //     // nothing allocated on heap here to free
-    //     return false;
-    // }
+    // wait for up to timeout
+    if (xSemaphoreTake(initDone, pdMS_TO_TICKS(60000)) == pdTRUE) {
+        // finished normally
+        vSemaphoreDelete(initDone);
+        initDone = nullptr;
+        g_apiInitParam = String();
+        return initResult;
+    }
 
-    // // wait for up to timeout
-    // if (xSemaphoreTake(initDone, pdMS_TO_TICKS(60000)) == pdTRUE) {
-    //     // finished normally
-    //     vSemaphoreDelete(initDone);
-    //     initDone = nullptr;
-    //     // clear global param (not strictly required, but tidy)
-    //     g_apiInitParam = String();
-    //     return initResult;
-    // }
-
-    // // timeout... kill the init task (task may be using stack/mbedtls; this is last resort)
-    // vTaskDelete(initTaskHandle);
-    // initTaskHandle = nullptr;
-    // vSemaphoreDelete(initDone);
-    // initDone = nullptr;
-    // // clear global param
-    // g_apiInitParam = String();
-    return api_client::sub_init(keysPath);
+    // timeout... kill the init task (task may be using stack/mbedtls; this is last resort)
+    vTaskDelete(initTaskHandle);
+    initTaskHandle = nullptr;
+    vSemaphoreDelete(initDone);
+    initDone = nullptr;
+    g_apiInitParam = String();
+    return false;
 }
 
-
-// helper: http POST json -> returns body string or empty on error
 static String httpPostJson(const String &url, const String &json, bool auth) {
     xSemaphoreTake(wifiMutex, portMAX_DELAY);
     size_t free_heap = esp_get_free_heap_size();
@@ -163,7 +156,6 @@ static String httpPostJson(const String &url, const String &json, bool auth) {
         return String();
     }
 
-    // allocate client and free it after https.end()
     WiFiClientSecure *client = new WiFiClientSecure();
     client->setCACert(pwngid_root_ca_pem_start);
 
@@ -245,8 +237,6 @@ static String sha256Hex(const String &s) {
     return hex;
 }
 
-
-
 bool api_client::enrollWithGrid() {
     if(!((uint64_t)time(nullptr) > (lastTokenRefresh+(30*60)))){
         logMessage("Token refresh skipped, 30 minutes not passed." + String((uint64_t)time(nullptr)) + " > " + String((lastTokenRefresh+(30*60))));
@@ -259,15 +249,10 @@ bool api_client::enrollWithGrid() {
         return false;
     }
 
-    // normalize (make sure header/footer and exactly one trailing newline for base64)
     String pubNorm = normalizePublicPEM(pubPEM);
-
-    // identity must hash the exact bytes the server hashes: use trimmed PEM (python .strip())
     String pubTrim = trimString(pubNorm);
     String fingerprint = sha256Hex(pubTrim);
     String identity = hostname + "@" + fingerprint;
-
-    // sign identity (raw bytes, no newline)
     std::vector<uint8_t> idBytes(identity.c_str(), identity.c_str() + identity.length());
     logMessage("Signing: " + identity);
     std::vector<uint8_t> signature;
@@ -400,23 +385,18 @@ String api_client::getNameFromFingerprint(String fingerprint){
     return senderFingerprint;
 }
 
-// Converts "2019-10-06T22:56:06Z" -> unix timestamp (UTC)
 uint32_t api_client::isoToUnix(const String &iso) {
     // Expected format: YYYY-MM-DDTHH:MM:SSZ
     if (iso.length() < 20) return 0;
 
     struct tm t;
     memset(&t, 0, sizeof(t));
-
     t.tm_year = iso.substring(0, 4).toInt() - 1900;
     t.tm_mon  = iso.substring(5, 7).toInt() - 1;
     t.tm_mday = iso.substring(8, 10).toInt();
-
     t.tm_hour = iso.substring(11, 13).toInt();
     t.tm_min  = iso.substring(14, 16).toInt();
     t.tm_sec  = iso.substring(17, 19).toInt();
-
-    // This gives seconds since epoch **in UTC**
     time_t ts = timegm(&t);
     return (uint32_t)ts;
 }
@@ -585,7 +565,6 @@ bool api_client::pollInbox() {
     return true;
 }
 
-// helper: ensures /pwngrid dir exists and returns cache file path
 static String getPwngridCachePath() {
     const char *p = "/M5Gotchi/pwngrid";
     SD_LOCK();
@@ -641,7 +620,6 @@ bool api_client::queueAPForUpload(const String &essid, const String &bssid) {
     return true;
 }
 
-// Upload cached APs to /unit/report/aps. On success, clears the cache file.
 bool api_client::uploadCachedAPs() {
     enrollWithGrid();
     String path = getPwngridCachePath();
@@ -681,8 +659,6 @@ bool api_client::uploadCachedAPs() {
         logMessage("uploadCachedAPs: no entries to upload");
         return true;
     }
-
-    // Build request body as array of objects with essid and bssid
     String body;
     serializeJson(arr, body);
 

@@ -445,8 +445,6 @@ void setup() {
   M5.Display.setTextSize(2);
   M5.Display.setCursor(10, 10);
   M5.Display.println("Initializing...");
-  M5.Display.println("Storage Manager:");
-  M5.Display.println("LittleFS");
   M5.Display.println("Please wait...");
   M5.Display.pushState();
   #endif
@@ -486,11 +484,6 @@ void setup() {
     #endif
   }
   logMessage("Heap after vars init:");
-SD_LOCK();
-  if (!FSYS.exists("/M5Gotchi/wardriving")) {
-      FSYS.mkdir("/M5Gotchi/wardriving");
-  }
-  SD_UNLOCK();
   printHeapInfo();
   M5.Display.setBrightness(brightness);
   initColorSettings();
@@ -499,12 +492,16 @@ SD_LOCK();
   initPersonality();
   initNewPersonality();
   
-  // Ensure mood text/face files exist and load them from SD
   if (!initMoodsFromSD()) {
     logMessage("Moods: failed to initialize from SD, using defaults");
   } else {
     logMessage("Moods: initialized from SD");
   }
+  SD_LOCK();
+  if (!FSYS.exists("/M5Gotchi/wardriving")) {
+      FSYS.mkdir("/M5Gotchi/wardriving");
+  }
+  SD_UNLOCK();
   
   setMoodToStartup();
   updateUi(false, false);
@@ -745,23 +742,22 @@ SD_LOCK();
 
 void loop() {
   M5.update();
-  
   #ifdef BUTTON_ONLY_INPUT
   inputManager::update();
+  #else
+  M5Cardputer.update();
   #endif
   
   updateUi(true);
   #ifndef BUTTON_ONLY_INPUT
   M5Cardputer.update();
   if(M5Cardputer.Keyboard.isKeyPressed(KEY_OPT) && M5Cardputer.Keyboard.isKeyPressed(KEY_LEFT_CTRL) && M5Cardputer.Keyboard.isKeyPressed(KEY_FN)){
-    // Toggle dev menu instead of crashing the device
     drawInfoBox("DevTools", "Opening developer tools...", "", false, false);
     delay(200);
     runApp(99);
   }
   #else
-  if(inputManager::isButtonALongPressed()){
-    // Toggle dev menu instead of crashing the device
+  if(inputManager::isButtonALongPressed() && inputManager::isButtonBLongPressed()){
     drawInfoBox("DevTools", "Opening developer tools...", "", false, false);
     delay(200);
     runApp(99);
@@ -775,32 +771,4 @@ void Sound(int frequency, int duration, bool sound){
 
 void fontSetup(){
   downloadFonts();
-  return;
-  // if(FSYS.exists("/fonts/big.vlw") && FSYS.exists("/fonts/small.vlw")){
-  //   logMessage("Fonts folder already exists, skipping download");
-  //   return;
-  // }
-  // //lets check if wifi is connected
-  // if(WiFi.status() != WL_CONNECTED){
-  //   logMessage("WiFi not connected, cannot download fonts");
-  //   if(drawQuestionBox("Setup fonts?", "Fonts not present, install them now? WiFi is not connected, connect now?", "", "This will take a few seconds")){
-  //     logMessage("User opted to connect to WiFi for font download");
-  //     drawInfoBox("WiFi Setup", "Please connect to WiFi to download fonts.", "", false, false);
-  //     runApp(43); //WiFi setup app
-  //     setToMainMenu();
-  //   }
-  // }
-  // if(WiFi.status() != WL_CONNECTED){
-  //   logMessage("WiFi still not connected, aborting font download");
-  //   drawInfoBox("Font Download", "WiFi not connected, cannot download fonts.", "", false, true);
-  //   return;
-  // }
-  // //now lets check if fonts folder exists, if not create it
-  // if(!FSYS.exists("fonts")){
-  //   if(drawQuestionBox("Setup fonts?", "Fonts not present, install them now? If not installed, moods will not display correctly.", "", "This will take a few seconds")){
-  //     drawInfoBox("Downloading...", "Downloading fonts, please wait...", "", false, false);
-  //     downloadFonts();
-  //     drawInfoBox("Download complete", "Fonts downloaded successfully.", "", false, false);
-  //   }
-  // }
 }
