@@ -507,7 +507,9 @@ void initUi() {
   }
   attachInterrupt(digitalPinToInterrupt(0), handleInterrupt, FALLING);
   xTaskCreate(buttonTask, "ButtonTask", 4096, NULL, 1, NULL);
+  SD_LOCK();
   crackedList = FSYS.exists("/M5Gotchi/pwngrid/cracks.conf");
+  SD_UNLOCK();
   M5.Display.setRotation(1);
   M5.Display.setTextSize(1);
   M5.Display.fillScreen(bg_color_rgb565);
@@ -590,6 +592,28 @@ File toUpload;
 
 void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
   // Process pending file write requests from pwnagotchi task (SD card I/O)
+  // First, process any wardrive save requests queued by tasks on the other core
+  WardriveSaveRequest* wreq = nullptr;
+  if (wardriveSaveQueue && xQueueReceive(wardriveSaveQueue, &wreq, 0) == pdTRUE) {
+    if (wreq) {
+      SD_LOCK();
+      File wf = FSYS.open(wreq->filename, FILE_APPEND);
+      if (wf) {
+        if (wf.size() == 0 && wreq->ensureWigleHeader) {
+          wf.println("WigleWifi-1.4,appRelease=M5Gotchi,model=M5Gotchi,release=1");
+          wf.println("\"BSSID\",\"SSID\",\"Capabilities\",\"First timestamp seen\",\"Channel\",\"Frequency\",\"RSSI\",\"Latitude\",\"Longitude\",\"Altitude\",\"Accuracy\",\"RCOIs\",\"MfgId\",\"Type\"");
+        }
+        wf.print(wreq->body);
+        wf.close();
+        fLogMessage("Wardrive: saved %s (len=%u)", wreq->filename, (unsigned)wreq->body.length());
+      } else {
+        fLogMessage("Wardrive: cannot open for append: %s", wreq->filename);
+      }
+      SD_UNLOCK();
+      delete wreq;
+    }
+  }
+
   FileWriteRequest* writeReq = nullptr;
   if (fileWriteQueue && xQueueReceive(fileWriteQueue, &writeReq, 0) == pdTRUE) {
     if (writeReq) {
@@ -690,7 +714,9 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
     prevMID = 7;
   }
   else if (menuID == 8){
+    SD_LOCK();
     if(!(prevMID == 8)){toUpload = FSYS.open("/M5Gotchi/pwngrid/cracks.conf");}
+    SD_UNLOCK();
     if((toUpload && toUpload.size() > 5) && (pwngrid_indentity.length()>10)){ 
       drawMenuList(pwngrid_menu_to_send, 8, 8);
     }
@@ -955,6 +981,7 @@ void drawMood(String face, String phrase) {
         // Safe VLW Loading for Face
         // 1. Reset TextSize before loading VLW to prevent metric calculation errors
         canvas_main.setTextSize(1.0); 
+        SD_LOCK();
         canvas_main.loadFont(FSYS, "/M5Gotchi/fonts/big.vlw");
         delay(50);
         
@@ -968,6 +995,7 @@ void drawMood(String face, String phrase) {
         canvas_main.unloadFont(); 
         canvas_main.setFont(&fonts::Font0); // Force fallback to internal font
         canvas_main.setTextSize(1.0); // Reset size
+        SD_UNLOCK();
         delay(50);
     }
 
@@ -982,7 +1010,9 @@ void drawMood(String face, String phrase) {
     if(getPwngridTotalPeers() > 0){
         // Safe VLW Loading for Peers
         canvas_main.setTextSize(1.0); // Reset size BEFORE loading
+        SD_LOCK();
         canvas_main.loadFont(FSYS, "/M5Gotchi/fonts/small.vlw");
+        
         
         canvas_main.setTextSize(0.35); 
         
@@ -991,6 +1021,7 @@ void drawMood(String face, String phrase) {
         
         canvas_main.unloadFont();
         canvas_main.setFont(&fonts::Font0); // Safety reset
+        SD_UNLOCK();
         canvas_main.setTextSize(1.0);
     }
     if (displayMutex) xSemaphoreGive(displayMutex);
@@ -1203,20 +1234,22 @@ bool registerNewMessage(message newMess) {
   String path = String(BASE_DIR) + "/" + newMess.fromOrTo;
 
   // load file or create new JSON
-  JsonDocument doc;
-  File f = FSYS.open(path, FILE_READ);
-  if (f) {
+    JsonDocument doc;
+    SD_LOCK();
+    File f = FSYS.open(path, FILE_READ);
+    if (f) {
       DeserializationError err = deserializeJson(doc, f);
       f.close();
       if (err) {
-          // file exists but broken, reset to empty array
-          doc.clear();
-          doc.to<JsonArray>();
+        // file exists but broken, reset to empty array
+        doc.clear();
+        doc.to<JsonArray>();
       }
-  } else {
+    } else {
       // file missing, create array
       doc.to<JsonArray>();
-  }
+    }
+    SD_UNLOCK();
 
   JsonArray arr = doc.as<JsonArray>();
   JsonObject obj = arr.add<JsonObject>();
@@ -1229,10 +1262,12 @@ bool registerNewMessage(message newMess) {
   obj["outgoing"] = newMess.outgoing;
 
   // write back
+  SD_LOCK();
   File w = FSYS.open(path, FILE_WRITE);
-  if (!w) return false;
+  if (!w) { SD_UNLOCK(); return false; }
   serializeJson(doc, w);
   w.close();
+  SD_UNLOCK();
 
   return true;
 }
@@ -1247,26 +1282,32 @@ std::vector<message> loadMessageHistory(const String &unitName) {
     // Construct path safely
     String path = "/M5Gotchi/pwngrid/chats/" + unitName; // Hardcoded path is safer than String(BASE_DIR) + ...
     
-    if (!FSYS.exists(path)) return out;
+     SD_LOCK();
+     bool exists = FSYS.exists(path);
+     SD_UNLOCK();
+     if (!exists) return out;
 
-    File f = FSYS.open(path, FILE_READ);
-    if (!f) return out;
+     SD_LOCK();
+     File f = FSYS.open(path, FILE_READ);
+     if (!f) { SD_UNLOCK(); return out; }
 
-    // SAFETY: Don't try to load massive files into RAM
-    if (f.size() > 15000) { 
+     // SAFETY: Don't try to load massive files into RAM
+     if (f.size() > 15000) { 
        // Optionally: Read only last X bytes or handle error
        f.close();
+       SD_UNLOCK();
        return out; 
-    }
+     }
 
-    // Use Filter to save RAM? (Only load fields we need)
-    // JsonDocument filter; filter["fromOrTo"] = true; ...
+     // Use Filter to save RAM? (Only load fields we need)
+     // JsonDocument filter; filter["fromOrTo"] = true; ...
     
-    JsonDocument doc;
-    DeserializationError error = deserializeJson(doc, f);
+     JsonDocument doc;
+     DeserializationError error = deserializeJson(doc, f);
     
-    // Always close file immediately after parsing
-    f.close(); 
+     // Always close file immediately after parsing
+     f.close(); 
+     SD_UNLOCK();
 
     if (error) {
         return out;
@@ -1379,11 +1420,16 @@ String resolveChatFingerprint(const String &chatName, const std::vector<message>
   if (fp.length() > 10) return fp;
 
   // 2. Fall back to contacts.json (slow path, but only once)
+  SD_LOCK();
   File contacts = FSYS.open(ADDRES_BOOK_FILE, FILE_READ, false);
-  if (!contacts) return String();
+  if (!contacts) { SD_UNLOCK(); return String(); }
 
   JsonDocument doc;
-  if (deserializeJson(doc, contacts)) return String();
+  DeserializationError __err = deserializeJson(doc, contacts);
+  contacts.close();
+  SD_UNLOCK();
+
+  if (__err) return String();
 
   for (JsonObject obj : doc.as<JsonArray>()) {
     String name = obj["name"] | "";
@@ -1413,7 +1459,9 @@ void pwngridMessenger() {
   }
 
   // 2. Setup Directory
+  SD_LOCK();
   if (!FSYS.exists("/M5Gotchi/pwngrid/chats")) FSYS.mkdir("/M5Gotchi/pwngrid/chats");
+  SD_UNLOCK();
 
   drawInfoBox("Please wait", "Syncing inbox", "with pwngrid...", false, false);
 
@@ -1427,25 +1475,27 @@ void pwngridMessenger() {
 
   // 3. Load Chat List (Safe Method)
   std::vector<String> chats;
-  {
+    {
+      SD_LOCK();
       File dir = FSYS.open("/M5Gotchi/pwngrid/chats");
+      SD_UNLOCK();
       if (dir) {
-          dir.rewindDirectory();
-          while (true) {
-            String name = dir.getNextFileName();
-            if (!name.length()) break;
+        dir.rewindDirectory();
+        while (true) {
+        String name = dir.getNextFileName();
+        if (!name.length()) break;
             
-            // FIX: Prevent crash if getNextFileName returns only the filename
-            if (name.startsWith("/M5Gotchi/pwngrid/chats/")) {
-                chats.push_back(name.substring(24)); // Extract just the chat name
-            } else {
-                // Ignore hidden files like .DS_Store
-                if (!name.startsWith(".")) chats.push_back(name);
-            }
-          }
-          dir.close(); // FIX: Explicit close
+        // FIX: Prevent crash if getNextFileName returns only the filename
+        if (name.startsWith("/M5Gotchi/pwngrid/chats/")) {
+          chats.push_back(name.substring(24)); // Extract just the chat name
+        } else {
+          // Ignore hidden files like .DS_Store
+          if (!name.startsWith(".")) chats.push_back(name);
+        }
+        }
+        dir.close(); // FIX: Explicit close
       }
-  }
+    }
   chats.push_back("New chat");
 
   // FIX: Use Vector data instead of Stack Array (VLA)
@@ -1460,20 +1510,17 @@ void pwngridMessenger() {
 
   // 4. Handle New Chat Creation
   if (result == (int)chats.size() - 1) {
+    SD_LOCK();
     File contacts = FSYS.open(ADDRES_BOOK_FILE, FILE_READ, false);
-    
+    if (!contacts) { SD_UNLOCK(); drawInfoBox("Info", "No friends found.", "Touch grass.", true, false); stopPwngridInboxTask(); menuID = 8; return; }
+
     // FIX: Check validity and size, close if invalid
-    if (!contacts || contacts.size() < 5) {
-      if(contacts) contacts.close();
-      drawInfoBox("Info", "No friends found.", "Touch grass.", true, false);
-      stopPwngridInboxTask();
-      menuID = 8;
-      return;
-    }
+    if (contacts.size() < 5) { contacts.close(); SD_UNLOCK(); drawInfoBox("Info", "No friends found.", "Touch grass.", true, false); stopPwngridInboxTask(); menuID = 8; return; }
 
     JsonDocument contacts_json;
     DeserializationError err = deserializeJson(contacts_json, contacts);
     contacts.close(); // FIX: Explicit close immediately after use
+    SD_UNLOCK();
 
     if (err) {
       drawInfoBox("ERROR", "Contacts load failed!", "SD is mad.", true, false);
@@ -1507,8 +1554,10 @@ void pwngridMessenger() {
     }
 
     // Create file safely
+    SD_LOCK();
     File newChat = FSYS.open("/M5Gotchi/pwngrid/chats/" + names[result], FILE_WRITE, true);
     if(newChat) newChat.close();
+    SD_UNLOCK();
     
     chats.push_back(names[result]);
     result = chats.size() - 1;
@@ -1601,7 +1650,9 @@ void pwngridMessenger() {
       if (inputManager::isButtonALongPressed()) {
         // Delete chat
         if(drawQuestionBox("Delete chat?", "Are you sure?", "")){
+          SD_LOCK();
           FSYS.remove("/M5Gotchi/pwngrid/chats/" + chats[result]);
+          SD_UNLOCK();
           drawInfoBox("Info", "Chat deleted.", "", true, false);
           menuID = 8;
           debounceDelay();
@@ -1693,7 +1744,9 @@ void pwngridMessenger() {
           
           if (c == 'd') {
             if(drawQuestionBox("Delete chat?", "Are you sure?", "")){
+              SD_LOCK();
               FSYS.remove("/M5Gotchi/pwngrid/chats/" + chats[result]);
+              SD_UNLOCK();
               drawInfoBox("Info", "Chat deleted.", "", true, false);
               menuID = 8;
               debounceDelay();
@@ -1766,15 +1819,14 @@ String isoTimestampToDateTimeString(String isoTimestamp) {
 }
 
 bool addUnitToAddressBook(const unit u) {
+    SD_LOCK();
     File file = FSYS.open(ADDRES_BOOK_FILE, FILE_READ);
-    if (!file) {
-        logMessage("Failed to open address book for reading.");
-        return false;
-    }
+    if (!file) { SD_UNLOCK(); logMessage("Failed to open address book for reading."); return false; }
 
     JsonDocument doc;
     DeserializationError err = deserializeJson(doc, file);
     file.close();
+    SD_UNLOCK();
     if (err) {
         logMessage("Failed to parse address book: " + String(err.c_str()));
         return false;
@@ -1796,14 +1848,13 @@ bool addUnitToAddressBook(const unit u) {
     serializeUnit(u, newObj);
 
     // Write back to file
+    SD_LOCK();
     file = FSYS.open(ADDRES_BOOK_FILE, FILE_WRITE);
-    if (!file) {
-        logMessage("Failed to open address book for writing.");
-        return false;
-    }
+    if (!file) { SD_UNLOCK(); logMessage("Failed to open address book for writing."); return false; }
 
     serializeJson(doc, file);
     file.close();
+    SD_UNLOCK();
 
     logMessage("Added unit to address book: " + u.name);
     return true;
@@ -1916,12 +1967,13 @@ void runApp(uint8_t appID){
         }
       }
       api_client::init(KEYS_FILE);
+      SD_LOCK();
       File contacts = FSYS.open(ADDRES_BOOK_FILE, FILE_READ);
-      if(!FSYS.open(ADDRES_BOOK_FILE)){
-        drawInfoBox("ERROR", "No frends found.", "Meet and add one.", true, false);
-      }
+      if (!contacts) { SD_UNLOCK(); drawInfoBox("ERROR", "No frends found.", "Meet and add one.", true, false); }
       JsonDocument contacts_json;
       DeserializationError err = deserializeJson(contacts_json, contacts);
+      contacts.close();
+      SD_UNLOCK();
 
       if (err) {
           logMessage("Failed to parse contacts: " + String(err.c_str()));
@@ -1973,13 +2025,13 @@ void runApp(uint8_t appID){
       }
       drawHintBox("Depending on network and device speed, enrollment may take several minutes or even fail.", 10);
       drawInfoBox("Init", "Initializing keys...", "This may take a while.", false, false);
+      SD_LOCK();
       FSYS.mkdir("/M5Gotchi/pwngrid");
       FSYS.mkdir("/M5Gotchi/pwngrid/keys");
       FSYS.mkdir("/M5Gotchi/pwngrid/chats");
       File cont = FSYS.open(ADDRES_BOOK_FILE, FILE_WRITE);
-      cont.print("[]");
-      cont.flush();
-      cont.close();
+      if (cont) { cont.print("[]"); cont.flush(); cont.close(); }
+      SD_UNLOCK();
 
       if(api_client::init(KEYS_FILE)){
         if(!(WiFi.status() == WL_CONNECTED)){
@@ -2175,6 +2227,7 @@ void runApp(uint8_t appID){
         canvas_main.drawString("Deletion in progress, please wait...", canvas_center_x, (canvas_h*6)/7);
         pushAll();
         //TODO: Deletion of all pwngrid files
+        SD_LOCK();
         FSYS.remove("/M5Gotchi/pwngrid/keys/id_rsa");
         FSYS.remove("/M5Gotchi/pwngrid/keys/id_rsa.pub");
         FSYS.remove("/M5Gotchi/pwngrid/token.json");
@@ -2194,6 +2247,7 @@ void runApp(uint8_t appID){
         }
         chatsDis.close();
         FSYS.rmdir("/M5Gotchi/pwngrid");
+        SD_UNLOCK();
         lastTokenRefresh = 0;
 
         delay(5000);
@@ -2234,7 +2288,9 @@ void runApp(uint8_t appID){
       canvas_main.clear(bg_color_rgb565);
       canvas_main.setTextSize(0.4);
       canvas_main.setTextDatum(middle_center);
+      SD_LOCK();
       canvas_main.loadFont(FSYS, "/M5Gotchi/fonts/small.vlw");
+      SD_UNLOCK();
       canvas_main.drawString(peers_list[choice].face, canvas_center_x, canvas_h / 8);
       canvas_main.unloadFont();
       canvas_main.setTextSize(1.5);
@@ -2286,12 +2342,15 @@ void runApp(uint8_t appID){
           if(current_option == 0){
             debounceDelay();
             // Open contacts file for reading and parse JSON into a vector
+            SD_LOCK();
             File contactsFile = FSYS.open(ADDRES_BOOK_FILE, FILE_READ);
             unit newPeer = {peers_list[choice].name, peers_list[choice].identity};
                   
             if (contactsFile) {
               JsonDocument doc;  // Use JsonDocument instead of DynamicJsonDocument (since DynamicJsonDocument is deprecated)
               DeserializationError err = deserializeJson(doc, contactsFile);
+              contactsFile.close();
+              SD_UNLOCK();
 
               if (!err) {
                 JsonArray arr = doc.as<JsonArray>();
@@ -2303,13 +2362,10 @@ void runApp(uint8_t appID){
                 // Write updated JSON to file
                 String out;
                 serializeJsonPretty(doc, out);
-                contactsFile.close();  // Close the file first
-              
-                // Reopen the file in write mode to overwrite
-                contactsFile = FSYS.open(ADDRES_BOOK_FILE, FILE_WRITE);
-                contactsFile.print(out); 
-                contactsFile.flush();
-                contactsFile.close();
+                SD_LOCK();
+                File writeFile = FSYS.open(ADDRES_BOOK_FILE, FILE_WRITE);
+                if (writeFile) { writeFile.print(out); writeFile.flush(); writeFile.close(); }
+                SD_UNLOCK();
               } else {
                 logMessage("Failed to parse contacts file: " + String(err.c_str()));
               }
@@ -2325,10 +2381,11 @@ void runApp(uint8_t appID){
               // Write the new JSON to file
               String out;
               serializeJsonPretty(doc, out);
-              contactsFile = FSYS.open(ADDRES_BOOK_FILE, FILE_WRITE);
-              contactsFile.print(out);
-              contactsFile.flush();
-              contactsFile.close();
+              SD_UNLOCK();
+              SD_LOCK();
+              File writeFile = FSYS.open(ADDRES_BOOK_FILE, FILE_WRITE);
+              if (writeFile) { writeFile.print(out); writeFile.flush(); writeFile.close(); }
+              SD_UNLOCK();
             }
             drawInfoBox("Sucess", "Unit added to frend", "list, text to it now!", true, false);
             menuID = 8;
@@ -2373,23 +2430,17 @@ void runApp(uint8_t appID){
     if(appID == 17){
       debounceDelay();
 
-      File contacts = FSYS.open(ADDRES_BOOK_FILE, FILE_READ, true);
-      if (!contacts) {
-          logMessage("Failed to open contacts file");
-          menuID = 8;
-          return;
-      }
+        SD_LOCK();
+        File contacts = FSYS.open(ADDRES_BOOK_FILE, FILE_READ, true);
+        if (!contacts) { SD_UNLOCK(); logMessage("Failed to open contacts file"); menuID = 8; return; }
 
-      // one single fixed allocation instead of heap soup
-      StaticJsonDocument<16384> contacts_json;
-      DeserializationError err = deserializeJson(contacts_json, contacts);
-      contacts.close();
+        // one single fixed allocation instead of heap soup
+        StaticJsonDocument<16384> contacts_json;
+        DeserializationError err = deserializeJson(contacts_json, contacts);
+        contacts.close();
+        SD_UNLOCK();
 
-      if (err) {
-          logMessage("Failed to parse contacts: " + String(err.c_str()));
-          menuID = 8;
-          return;
-      }
+        if (err) { logMessage("Failed to parse contacts: " + String(err.c_str())); menuID = 8; return; }
 
       JsonArray contacts_arr = contacts_json.as<JsonArray>();
       uint16_t arrSize = contacts_arr.size();
@@ -2503,28 +2554,28 @@ void runApp(uint8_t appID){
         }
         debounceDelay();
         // Open contacts file for reading and parse JSON into a vector
+        SD_LOCK();
         File contactsFile = FSYS.open(ADDRES_BOOK_FILE, FILE_READ);
         unit newPeer = {name, fingerprint};
-              
         if (contactsFile) {
           JsonDocument doc;  // Use JsonDocument instead of DynamicJsonDocument (since DynamicJsonDocument is deprecated)
           DeserializationError err = deserializeJson(doc, contactsFile);
+          contactsFile.close();
+          SD_UNLOCK();
+
           if (!err) {
             JsonArray arr = doc.as<JsonArray>();
-          
             // Serialize the newPeer struct into a JsonObject
             JsonObject obj = arr.add<JsonObject>();
             serializeUnit(newPeer, obj);  // Custom serialization function
+
             // Write updated JSON to file
             String out;
             serializeJsonPretty(doc, out);
-            contactsFile.close();  // Close the file first
-          
-            // Reopen the file in write mode to overwrite
-            contactsFile = FSYS.open(ADDRES_BOOK_FILE, FILE_WRITE);
-            contactsFile.print(out); 
-            contactsFile.flush();
-            contactsFile.close();
+            SD_LOCK();
+            File writeFile = FSYS.open(ADDRES_BOOK_FILE, FILE_WRITE);
+            if (writeFile) { writeFile.print(out); writeFile.flush(); writeFile.close(); }
+            SD_UNLOCK();
           } else {
             logMessage("Failed to parse contacts file: " + String(err.c_str()));
           }
@@ -2532,18 +2583,17 @@ void runApp(uint8_t appID){
           // If the file doesn't exist, create it and add the newPeer
           JsonDocument doc;
           JsonArray arr = doc.to<JsonArray>();
-        
           // Serialize the newPeer struct into a JsonObject
           JsonObject obj = arr.add<JsonObject>();
           serializeUnit(newPeer, obj);  // Custom serialization function
-        
           // Write the new JSON to file
           String out;
           serializeJsonPretty(doc, out);
-          contactsFile = FSYS.open(ADDRES_BOOK_FILE, FILE_WRITE);
-          contactsFile.print(out);
-          contactsFile.flush();
-          contactsFile.close();
+          SD_UNLOCK();
+          SD_LOCK();
+          File writeFile = FSYS.open(ADDRES_BOOK_FILE, FILE_WRITE);
+          if (writeFile) { writeFile.print(out); writeFile.flush(); writeFile.close(); }
+          SD_UNLOCK();
         }
         drawInfoBox("Sucess", "Unit added to frend", "list, text to it now!", true, false);
         menuID = 8;
@@ -2603,38 +2653,41 @@ void runApp(uint8_t appID){
           if (current_option == 0) {
             debounceDelay();
 
+            SD_LOCK();
             File contactsFile = FSYS.open(ADDRES_BOOK_FILE, FILE_READ);
             unit peerToDelete = {contacts_vector[result].name, contacts_vector[result].fingerprint};
 
             if (contactsFile) {
-                JsonDocument doc;
-                DeserializationError err = deserializeJson(doc, contactsFile);
-                contactsFile.close();
-            
-                if (!err) {
-                    JsonArray arr = doc.as<JsonArray>();
-                
-                    // delete by index like a normal person
-                    for (size_t i = 0; i < arr.size(); i++) {
-                        JsonObject peer = arr[i];
-                        String name = peer["name"] | "";
-                        String fp = peer["fingerprint"] | "";
-                    
-                        if (name == peerToDelete.name && fp == peerToDelete.fingerprint) {
-                            arr.remove(i);
-                            break; 
-                        }
-                    }
-                  
-                    // write back
-                    File outFile = FSYS.open(ADDRES_BOOK_FILE, FILE_WRITE);
-                    if (outFile) {
-                        serializeJsonPretty(doc, outFile);
-                        outFile.close();
-                    }
-                } else {
-                    logMessage("Failed to parse contacts file: " + String(err.c_str()));
+              JsonDocument doc;
+              DeserializationError err = deserializeJson(doc, contactsFile);
+              contactsFile.close();
+              SD_UNLOCK();
+
+              if (!err) {
+                JsonArray arr = doc.as<JsonArray>();
+                // delete by index like a normal person
+                for (size_t i = 0; i < arr.size(); i++) {
+                  JsonObject peer = arr[i];
+                  String name = peer["name"] | "";
+                  String fp = peer["fingerprint"] | "";
+                  if (name == peerToDelete.name && fp == peerToDelete.fingerprint) {
+                    arr.remove(i);
+                    break; 
+                  }
                 }
+                // write back
+                SD_LOCK();
+                File outFile = FSYS.open(ADDRES_BOOK_FILE, FILE_WRITE);
+                if (outFile) {
+                  serializeJsonPretty(doc, outFile);
+                  outFile.close();
+                }
+                SD_UNLOCK();
+              } else {
+                logMessage("Failed to parse contacts file: " + String(err.c_str()));
+              }
+            } else {
+              SD_UNLOCK();
             }
           
             drawInfoBox("Sucess", "Unit deleted", "bye bye", true, false);
@@ -2752,12 +2805,15 @@ void runApp(uint8_t appID){
       }
       if(fileChoice == 0){
         selectedPath = sdmanager::selectFile(".csv");
+        SD_LOCK();
         csvFile = FSYS.open(selectedPath, FILE_READ);
       }
       else {
+        SD_LOCK();
         csvFile = FSYS.open("/M5Gotchi/wardriving/first_seen.csv", FILE_READ);
       }
       if (!csvFile) {
+        SD_UNLOCK();
         drawInfoBox("Error", "File not found", "Wrong selection?", true, false);
         menuID = 9;
         return;
@@ -2774,6 +2830,7 @@ void runApp(uint8_t appID){
       }
       if (csvFile.size() > 0 && c != '\n') totalLines++; // Account for last line without newline
       csvFile.close();
+      SD_UNLOCK();
 
       if (totalLines < 3) {
         drawInfoBox("Info", "CSV file is empty or invalid", "", true, false);
@@ -2784,9 +2841,10 @@ void runApp(uint8_t appID){
       // Function to read a specific line from file without storing all lines
       auto readLineAtIndex = [&](uint32_t lineIndex) -> String {
         String result = "";
+        SD_LOCK();
         File f = FSYS.open(selectedPath, FILE_READ);
-        if (!f) return result;
-        
+        if (!f) { SD_UNLOCK(); return result; }
+
         uint32_t currentLine = 0;
         char c;
         while (f.available() && currentLine <= lineIndex) {
@@ -2802,6 +2860,7 @@ void runApp(uint8_t appID){
           }
         }
         f.close();
+        SD_UNLOCK();
         return result;
       };
 
@@ -2929,6 +2988,7 @@ void runApp(uint8_t appID){
             lowerSearch.toLowerCase();
             
             // Optimized: Read file once and parse line by line
+            SD_LOCK();
             File csvFile = FSYS.open("/M5Gotchi/wardrive.csv", FILE_READ);
             if (csvFile) {
               uint32_t currentLine = 0;
@@ -2970,6 +3030,7 @@ void runApp(uint8_t appID){
               
               csvFile.close();
             }
+            SD_UNLOCK();
             
             displayIndex = 0;
             selectedIndex = 0;
@@ -3912,10 +3973,20 @@ void runApp(uint8_t appID){
         String txs = userInput("GPS TX Pin", "Enter TX pin number", 3);
         String rxs = userInput("GPS RX Pin", "Enter RX pin number", 3);
         if(txs.length() && rxs.length()){
-          gpsTx = txs.toInt();
-          gpsRx = rxs.toInt();
-          useCustomGPSPins = true;
-          if(saveSettings()) drawInfoBox("Saved", "Custom GPS pins set", "", true, false);
+          int newTx = txs.toInt();
+          int newRx = rxs.toInt();
+          drawInfoBox("Please wait", "Checking GPS lock (60s)...", "", false, false);
+          bool ok = waitForGpsLock(newRx, newTx, 60000);
+          if(ok){
+            gpsTx = newTx;
+            gpsRx = newRx;
+            useCustomGPSPins = true;
+            if(saveSettings()) drawInfoBox("Saved", "Custom GPS pins set", "", true, false);
+            else drawInfoBox("ERROR", "Failed to save settings", "Check SD card", true, false);
+          }
+          else{
+            drawInfoBox("ERROR", "No GPS lock within 60s", "Pins not saved", true, false);
+          }
         }
       }
       menuID = 6;
@@ -4123,8 +4194,9 @@ void runApp(uint8_t appID){
     }
     if(appID == 112){
       // Mood Font Tester: enumerate faces from /moods/faces.txt and display them using the custom mood font/size
+      SD_LOCK();
       File f = FSYS.open("/M5Gotchi/moods/faces.txt", FILE_READ);
-      if(!f){
+      if(!f){ SD_UNLOCK();
         drawInfoBox("Error", "faces.txt not found", "Ensure /moods/faces.txt exists", true, false);
         return;
       }
@@ -4138,6 +4210,7 @@ void runApp(uint8_t appID){
         faces.push_back(line);
       }
       f.close();
+      SD_UNLOCK();
       if(faces.empty()){
         drawInfoBox("Info", "No faces found in /moods/faces.txt", "Add faces and retry", true, false);
         return;
@@ -4150,12 +4223,17 @@ void runApp(uint8_t appID){
         canvas_main.setColor(tx_color_rgb565);
         canvas_main.setTextDatum(middle_center);
         // load custom font used in drawMood for faces
+        SD_LOCK();
         if(FSYS.exists("/M5Gotchi/fonts/big.vlw")){
-          canvas_main.loadFont(SD, "/M5Gotchi/fonts/big.vlw");
+          canvas_main.loadFont(FSYS, "/M5Gotchi/fonts/big.vlw");
         }
+        SD_UNLOCK();
         canvas_main.setTextSize(0.35);
         canvas_main.drawString(faces[idx], canvas_center_x, canvas_h/2);
+        SD_LOCK();
         if(FSYS.exists("/M5Gotchi/fonts/big.vlw")) canvas_main.unloadFont();
+        SD_UNLOCK();
+        
         // show index
         canvas_main.setTextDatum(top_left);
         canvas_main.setTextSize(1);
@@ -4311,8 +4389,10 @@ void runApp(uint8_t appID){
     }
     if(appID == 39){
       drawInfoBox("Info", "Reading SD card...", "Please wait", false, false);
+      SD_LOCK();
       File root = FSYS.open("/M5Gotchi/handshake");
       if (!root || !root.isDirectory()) {
+      SD_UNLOCK();
       drawInfoBox("Error", "Cannot open \"/M5Gotchi/handshake\" folder.", "Check SD card!", true, true);
       menuID = 5;
       return;
@@ -4330,6 +4410,7 @@ void runApp(uint8_t appID){
       file = root.openNextFile();
       }
       root.close();
+      SD_UNLOCK();
       
       if (fileCount == 0) {
       drawInfoBox("Info", "No handshakes found", "", true, false);
@@ -4405,10 +4486,12 @@ void runApp(uint8_t appID){
             debounceDelay();
             break;
           }
-          if (inputManager::isButtonBLongPressed()) {
+            if (inputManager::isButtonBLongPressed()) {
             debounceDelay();
             if (drawQuestionBox("Delete", "Remove handshake?", fileList[fileChoice])) {
+            SD_LOCK();
             FSYS.remove(filePaths[fileChoice]);
+            SD_UNLOCK();
             drawInfoBox("Deleted", fileList[fileChoice], "removed", true, false);
             debounceDelay();
             break;
@@ -4425,7 +4508,9 @@ void runApp(uint8_t appID){
             if (c == 'd' || c == 'D') {
             debounceDelay();
             if (drawQuestionBox("Delete", "Remove handshake?", fileList[fileChoice])) {
+              SD_LOCK();
               FSYS.remove(filePaths[fileChoice]);
+              SD_UNLOCK();
               drawInfoBox("Deleted", fileList[fileChoice], "removed", true, false);
               debounceDelay();
               break;
@@ -4889,6 +4974,7 @@ void runApp(uint8_t appID){
       drawInfoBox("Factory Reset", "Deleting config data...", "", false, false);
       runApp(15);
       if (true) {
+        SD_LOCK();
         FSYS.remove(NEW_CONFIG_FILE);
         FSYS.remove("/M5Gotchi/uploaded.json");
         FSYS.remove("/M5Gotchi/cracked.json");
@@ -4924,7 +5010,7 @@ void runApp(uint8_t appID){
           handshakeDir.close();
           FSYS.rmdir("/M5Gotchi/handshake");
         }
-
+        SD_UNLOCK();
 
         drawInfoBox("Success", "Data deleted", "Restarting...", false, false);
         delay(1000);
@@ -4959,21 +5045,21 @@ void runApp(uint8_t appID){
       return;
     }    
     if(appID == 53){
-      if(FSYS.exists("/M5Gotchi/cracked.json")){
-        File crackedFile = FSYS.open("/M5Gotchi/cracked.json", FILE_READ);
-        if (!crackedFile) {
-          drawInfoBox("Error", "Failed to open cracked.json", "Check SD card!", true, false);
-          menuID = 7;
-          return;
-        }
-        crackedFile.close();
-        std::vector<CrackedEntry> entries = getCrackedEntries();
-        if (entries.empty()) {
-          drawInfoBox("Info", "No cracked entries found", "Try syncing", true, false);
+      SD_LOCK();
+      bool hasCracked = FSYS.exists("/M5Gotchi/cracked.json");
+      SD_UNLOCK();
+      if (hasCracked) {
+          SD_LOCK();
+          File crackedFile = FSYS.open("/M5Gotchi/cracked.json", FILE_READ);
+          if (!crackedFile) { SD_UNLOCK(); drawInfoBox("Error", "Failed to open cracked.json", "Check SD card!", true, false); menuID = 7; return; }
           crackedFile.close();
-          menuID = 7;
-          return;
-        }
+          SD_UNLOCK();
+          std::vector<CrackedEntry> entries = getCrackedEntries();
+          if (entries.empty()) {
+            drawInfoBox("Info", "No cracked entries found", "Try syncing", true, false);
+            menuID = 7;
+            return;
+          }
         String displayList[entries.size()];
         if(true){ //just placeholder
             // Build list of SSIDs with page tracking
@@ -5476,28 +5562,29 @@ void runApp(uint8_t appID){
       uint16_t currentField = 0;
       
       while(editingPersonality){
-        // Build timing options strings dynamically
+        // Build timing options strings dynamically (add wardrive scan interval)
         String timing_options[] = {
           "EAPOL Timeout (ms): " + String(n_pwnagotchi_personality.eapol_timeout),
           "Deauth Packet Interval (ms): " + String(n_pwnagotchi_personality.deauth_packet_interval),
           "PMKID Attack Timeout (ms): " + String(n_pwnagotchi_personality.pmkid_attack_timeout),
           "Delay Between Attacks (ms): " + String(n_pwnagotchi_personality.delay_between_attacks),
           "GPS Timeout (ms): " + String(n_pwnagotchi_personality.gps_timeout_ms),
+          "Wardrive Scan Interval (ms): " + String(n_pwnagotchi_personality.wardrive_scan_interval_ms),
           "Back"
         };
-        
-        int8_t choice = drawMultiChoice("Timing Settings", timing_options, 6, 6, 0);
-        
-        if(choice == 5 || choice == -1){
+
+        int8_t choice = drawMultiChoice("Timing Settings", timing_options, 7, 6, 0);
+
+        if(choice == 6 || choice == -1){
           saveNewPersonality();
           menuID = 6;
           editingPersonality = false;
           return;
         }
-        
-        if(choice >= 0 && choice < 5){
+
+        if(choice >= 0 && choice < 6){
           int16_t valueToSet = getNumberfromUser(timing_options[choice], "Enter new value", 60000);
-          
+
           if(valueToSet != -1){
             switch(choice){
               case 0:
@@ -5514,6 +5601,9 @@ void runApp(uint8_t appID){
                 break;
               case 4:
                 n_pwnagotchi_personality.gps_timeout_ms = valueToSet;
+                break;
+              case 5:
+                n_pwnagotchi_personality.wardrive_scan_interval_ms = valueToSet;
                 break;
             }
             saveNewPersonality();
@@ -5842,11 +5932,10 @@ void runApp(uint8_t appID){
     }
     else if (appID == 128){
       drawInfoBox("GPS locking", "Waiting for GPS lock...", "This may take a while.", false, false); 
-      startWardriveSession(30000);
+      waitUntillLock();
       if(pwn::begin()){
         logMessage("Auto mode started successfully");
         if(pwn::beginWardriving()){
-          drawInfoBox("Success", "Pwnagotchi + Wardriving", "enabled and running.", true, false);
           logMessage("Wardriving task started successfully");
         }
         else{
@@ -8159,10 +8248,12 @@ void drawStorageInfo() {
     
     canvas_main.drawString("SD Card:", 6, y);
     
-    uint64_t card_size = FSYS.cardSize();
+    uint64_t card_size = 0;
     uint64_t used_size = 0;
     
     // Calculate used space (rough estimate)
+    SD_LOCK();
+    card_size = FSYS.cardSize();
     File root = FSYS.open("/M5Gotchi/");
     if (root) {
       // Simple dir traversal for used space
@@ -8175,6 +8266,7 @@ void drawStorageInfo() {
       }
       root.close();
     }
+    SD_UNLOCK();
     
     float percent_used = (card_size > 0) ? ((float)used_size / card_size * 100.0f) : 0;
     String sd_used_mb = String((float)used_size / 1024.0f / 1024.0f, 1);

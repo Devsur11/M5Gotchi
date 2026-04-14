@@ -4,6 +4,9 @@
 #include <Arduino.h>
 #include <vector>
 #include "pwnagothi.h"
+#include "freertos/FreeRTOS.h"
+
+extern SemaphoreHandle_t wardriveMutex;
 
 struct wardriveStatus{
     bool success;
@@ -34,6 +37,15 @@ struct WigleEntry {
     String type;
 };
 
+// Request structure for delegating wardrive CSV saves to the main UI (core 0)
+struct WardriveSaveRequest {
+    char filename[128];   // target file path (workspace-relative, starts with /)
+    String body;          // CSV rows (one or multiple lines) to append
+    bool ensureWigleHeader; // if true, write Wigle CSV header when creating new file
+};
+
+extern QueueHandle_t wardriveSaveQueue;
+
 // Append one CSV row per network to an SD file using a recent GPS fix read from Serial2.
 // - networks: vector of wifiSpeedScan seen at this moment
 // - timeoutMs: how long to wait for a valid GPS fix (reads Serial2)
@@ -45,4 +57,10 @@ void startWardriveSession(unsigned long gpsTimeoutMs);
 
 bool uploadToWigle(const String& encodedToken, const char* csvPath, int* outHttpCode = nullptr);
 
+void waitUntillLock();
+
+// Wait for a GPS fix on the provided RX/TX pins. Returns true if a valid fix
+// was seen within timeoutMs milliseconds, false otherwise. This is intended
+// for validating user-provided GPS pin settings before persisting them.
+bool waitForGpsLock(int rxPin, int txPin, unsigned long timeoutMs);
 #endif // ESPBLASTER_WARDRIVE_H

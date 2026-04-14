@@ -10,6 +10,10 @@
 #include <vector>
 #include "pwngrid.h"
 
+// FreeRTOS semaphore for SD access serialization
+#include "freertos/FreeRTOS.h"
+#include "freertos/semphr.h"
+
 #ifdef USE_LITTLEFS
   #define FSYS ::LittleFS 
 #else
@@ -17,6 +21,11 @@
 #endif
 
 SemaphoreHandle_t wifiMutex = NULL;
+extern SemaphoreHandle_t sdMutex; // protects FSYS/SD operations
+
+// Helpers to lock/unlock SD access
+#define SD_LOCK() if (sdMutex) xSemaphoreTake(sdMutex, portMAX_DELAY)
+#define SD_UNLOCK() if (sdMutex) xSemaphoreGive(sdMutex)
 
 extern "C" {
   #include "esp_heap_caps.h"
@@ -115,6 +124,7 @@ struct n_personality{
     int8_t rssi_threshold;  // Minimum RSSI to attack (-100 to 0 dBm)
     bool enable_wardriving;
     uint16_t gps_timeout_ms;
+    uint16_t wardrive_scan_interval_ms; // ms between wardrive scan cycles
     bool enable_pmkid_attack;  // Enable/disable PMKID attack
 };
 

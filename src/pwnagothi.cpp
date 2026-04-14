@@ -84,9 +84,6 @@ std::vector<String> failedClients;
 static uint8_t targetClientMAC[6];
 static bool    clientLocked = false;
 
-// Wardriving mode config
-static unsigned long wardrive_scan_interval_ms = 30000;
-
 // PCAP structures
 struct pcap_hdr_s {
     uint32_t magic_number;
@@ -864,6 +861,7 @@ static void writeHashcatFile(FileWriteRequest *req) {
 }
 
 void handleFileWrite(FileWriteRequest *req) {
+    xSemaphoreTake(wardriveMutex, portMAX_DELAY); //TODO: StickS3 support
     if (!req) return;
     logMessage("[FileWriter] Writing PCAP for: " + req->ssid);
 
@@ -875,6 +873,7 @@ void handleFileWrite(FileWriteRequest *req) {
     File f = FSYS.open(req->filename, FILE_WRITE, true);
     if (!f) {
         logMessage("[FileWriter] ERROR: Failed to open: " + String(req->filename));
+        xSemaphoreGive(wardriveMutex);
         goto cleanup;
     }
 
@@ -916,6 +915,7 @@ void handleFileWrite(FileWriteRequest *req) {
     }
 
     writeHashcatFile(req);
+    xSemaphoreGive(wardriveMutex);
 
 cleanup:
     if (req->beaconFrame) free(req->beaconFrame);
@@ -1073,6 +1073,11 @@ bool pwn::end() {
         FileWriteRequest *req = nullptr;
         while (xQueueReceive(fileWriteQueue, &req, 0) == pdTRUE) {
             if (req != nullptr) {
+                // create wardrive save queue for inter-core delegation
+                if (wardriveSaveQueue == nullptr) {
+                    wardriveSaveQueue = xQueueCreate(5, sizeof(WardriveSaveRequest *));
+                    if (!wardriveSaveQueue) { logMessage("Failed to create wardriveSaveQueue!\n"); /* non-fatal */ }
+                }
                 if (req->beaconFrame != nullptr) {
                     free(req->beaconFrame);
                     req->beaconFrame = nullptr;
@@ -1167,7 +1172,9 @@ void wardrivingTask(void *parameter) {
 
                 logMessage("Wardriving: found " + String(networksToLog.size()) + " networks.");
                 uint32_t gpsTimeout = n_pwnagotchi_personality.gps_timeout_ms;
+                trigger(1);
                 wardriveStatus wd = wardrive(networksToLog, gpsTimeout);
+                trigger(2);
 
                 if (wd.success && wd.gpsFixAcquired) {
                     logMessage("Wardrive logged " + String(wd.networksLogged) + " networks @ " +
@@ -1185,7 +1192,7 @@ void wardrivingTask(void *parameter) {
                 lastSessionTime = millis();
             }
 
-            vTaskDelay(wardrive_scan_interval_ms / portTICK_PERIOD_MS);
+            vTaskDelay(n_pwnagotchi_personality.wardrive_scan_interval_ms / portTICK_PERIOD_MS);
         } else {
             vTaskDelay(100 / portTICK_PERIOD_MS);
         }
@@ -1221,7 +1228,6 @@ void task(void *parameter) {
                 clientLocked = false;
                 memset(targetClientMAC, 0, sizeof(targetClientMAC));
                 attackTask(nullptr);
-                logMessage("Attack on " + network.ssid + " done in " + String(millis()-t0) + "ms");
                 ap = {"", 0, 0, false};
             }
 
@@ -1233,7 +1239,6 @@ void task(void *parameter) {
                 ch = (ch % 13) + 1;
                 esp_wifi_set_channel(ch, WIFI_SECOND_CHAN_NONE);
                 xSemaphoreGive(wifiMutex);
-                logMessage("Hopped to channel " + String(ch));
                 lastHopTime = millis();}
             }
         }
@@ -1260,8 +1265,6 @@ void attackTask(void *parameter) {
     }
 
     if (ap.rssi < n_pwnagotchi_personality.rssi_threshold) {
-        logMessage("Network " + ap.ssid + " RSSI (" + String(ap.rssi) + ") below threshold (" +
-                   String(n_pwnagotchi_personality.rssi_threshold) + "), skipping.");
         setMoodLooking(0);
         return;
     }
@@ -1513,6 +1516,15 @@ void attackTask(void *parameter) {
             delete req;
             targetAPSet = false;
             return;
+        }
+
+        // If wardriving is enabled and auto mode is on, also enqueue a CSV entry request
+        if (n_pwnagotchi_personality.enable_wardriving && pwnagothiMode) {
+            // Build a networks vector with single entry (we already have currentNetwork earlier)
+            std::vector<wifiSpeedScan> singleNet;
+            singleNet.push_back({ap.ssid, ap.rssi, ap.channel, ap.secure, {ap.bssid[0],ap.bssid[1],ap.bssid[2],ap.bssid[3],ap.bssid[4],ap.bssid[5]}});
+            wardriveStatus wd = wardrive(singleNet, n_pwnagotchi_personality.gps_timeout_ms);
+            (void)wd; // ignore result here; wardrive will delegate writes to UI if needed
         }
 
         pwned_ap++;

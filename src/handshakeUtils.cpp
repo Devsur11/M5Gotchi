@@ -500,11 +500,10 @@ HandshakeInfo validateHandshake(const String &filePath)
     HandshakeInfo info = {};
     memset(&info.hs, 0, sizeof(WPA2Handshake));
 
+    SD_LOCK();
     File file = FSYS.open(filePath, FILE_READ);
-    if (!file) {
-        logMessage("[Handshake] Failed to open: " + filePath);
-        return info;
-    }
+    if (!file) { SD_UNLOCK(); logMessage("[Handshake] Failed to open: " + filePath); return info; }
+    SD_UNLOCK();
 
     info.fileSize = file.size();
     logMessage("[Handshake] Opened: " + filePath + " (" + String(info.fileSize) + " bytes)");
@@ -583,7 +582,9 @@ std::vector<String> loadWordlist(const String &wordlistPath, uint16_t maxWords)
     std::vector<String> words;
     words.reserve(std::min((int)maxWords, 512));
 
+    SD_LOCK();
     File file = FSYS.open(wordlistPath, FILE_READ);
+    SD_UNLOCK();
     if (!file || file.isDirectory()) {
         logMessage("[Wordlist] Failed to open: " + wordlistPath);
         return words;
@@ -1000,7 +1001,9 @@ String convertToHashcatFormat(const String &pcapPath, const String &outputPath)
     hashLine += "\n"; // hc22000 files are newline-terminated
 
     // ---- Write the output file ----
+    SD_LOCK();
     File out = FSYS.open(outputPath, FILE_WRITE);
+    SD_UNLOCK();
     if (!out) {
         String err = "ERR: Could not open output file: " + outputPath;
         logMessage("[hc22000] " + err);

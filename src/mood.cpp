@@ -184,20 +184,28 @@ static std::map<String, std::vector<String>> textsMap;
 
 // Helper: write a file with given content
 static bool writeTextFile(const String &path, const String &content) {
+  SD_LOCK();
   File f = FSYS.open(path.c_str(), FILE_WRITE);
   if (!f) {
+    SD_UNLOCK();
     logMessage("Failed to open " + path + " for writing");
     return false;
   }
   f.print(content);
   f.close();
+  SD_UNLOCK();
   return true;
 }
 
 // Create default faces.txt and texts.txt under /moods
 bool createDefaultMoodFiles() {
-  if (!FSYS.exists("/M5Gotchi/moods")) {
+  SD_LOCK();
+  bool _moods_exists = FSYS.exists("/M5Gotchi/moods");
+  SD_UNLOCK();
+  if (!_moods_exists) {
+    SD_LOCK();
     FSYS.mkdir("/M5Gotchi/moods");
+    SD_UNLOCK();
   }
 
   // Faces
@@ -258,8 +266,9 @@ bool createDefaultMoodFiles() {
 
 // Parse simple INI-like file with [section] and lines
 static bool parseSectionedFile(const String &path, std::map<String, std::vector<String>> &out) {
+  SD_LOCK();
   File f = FSYS.open(path.c_str(), FILE_READ);
-  if (!f) return false;
+  if (!f) { SD_UNLOCK(); return false; }
   String section = "";
   while (f.available()) {
     String line = f.readStringUntil('\n');
@@ -275,6 +284,7 @@ static bool parseSectionedFile(const String &path, std::map<String, std::vector<
     out[section].push_back(line);
   }
   f.close();
+  SD_UNLOCK();
   return true;
 }
 
@@ -358,7 +368,13 @@ void debugPrintMoods() {
 
 bool initMoodsFromSD() {
   // ensure files exist
-  if (!FSYS.exists("/M5Gotchi/moods/faces.txt") || !FSYS.exists("/M5Gotchi/moods/texts.txt")) {
+  SD_LOCK();
+  bool f1 = FSYS.exists("/M5Gotchi/moods/faces.txt");
+  SD_UNLOCK();
+  SD_LOCK();
+  bool f2 = FSYS.exists("/M5Gotchi/moods/texts.txt");
+  SD_UNLOCK();
+  if (!f1 || !f2) {
     createDefaultMoodFiles();
   }
   initedMoods = true;

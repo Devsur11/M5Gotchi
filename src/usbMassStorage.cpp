@@ -677,32 +677,35 @@ namespace USBMassStorage {
     doc["success"] = true;
     JsonArray filesArray = doc.createNestedArray("files");
     
-    File dir = FSYS.open(path);
-    if (!dir || !dir.isDirectory()) {
-      doc["success"] = false;
-      doc["error"] = "Directory not found";
-      String response;
-      serializeJson(doc, response);
-      request->send(200, "application/json", response);
-      return;
-    }
+        SD_LOCK();
+        File dir = FSYS.open(path);
+        if (!dir || !dir.isDirectory()) {
+            SD_UNLOCK();
+            doc["success"] = false;
+            doc["error"] = "Directory not found";
+            String response;
+            serializeJson(doc, response);
+            request->send(200, "application/json", response);
+            return;
+        }
 
-    File file = dir.openNextFile();
-    while (file) {
-      JsonObject fileObj = filesArray.createNestedObject();
-      fileObj["name"] = file.name();
-      fileObj["isDir"] = file.isDirectory();
-      fileObj["size"] = file.size();
-      file = dir.openNextFile();
-    }
+        File file = dir.openNextFile();
+        while (file) {
+            JsonObject fileObj = filesArray.createNestedObject();
+            fileObj["name"] = file.name();
+            fileObj["isDir"] = file.isDirectory();
+            fileObj["size"] = file.size();
+            file = dir.openNextFile();
+        }
 
-    // Add storage info
-    JsonObject storage = doc.createNestedObject("storage");
-    uint32_t totalBytes = FSYS.totalBytes();
-    uint32_t usedBytes = FSYS.usedBytes();
-    storage["total"] = totalBytes;
-    storage["used"] = usedBytes;
-    storage["percent"] = (usedBytes * 100) / totalBytes;
+        // Add storage info
+        JsonObject storage = doc.createNestedObject("storage");
+        uint32_t totalBytes = FSYS.totalBytes();
+        uint32_t usedBytes = FSYS.usedBytes();
+        storage["total"] = totalBytes;
+        storage["used"] = usedBytes;
+        storage["percent"] = (usedBytes * 100) / totalBytes;
+        SD_UNLOCK();
 
     String response;
     serializeJson(doc, response);
@@ -720,11 +723,13 @@ namespace USBMassStorage {
       logMessage("Starting upload: " + filePath);
     }
 
-    File file = FSYS.open(filePath, index == 0 ? "w" : "a");
-    if (file) {
-      file.write(data, len);
-      file.close();
-    }
+        SD_LOCK();
+        File file = FSYS.open(filePath, index == 0 ? "w" : "a");
+        if (file) {
+            file.write(data, len);
+            file.close();
+        }
+        SD_UNLOCK();
 
     if (final) {
       logMessage("Upload complete: " + filePath);
@@ -756,46 +761,53 @@ namespace USBMassStorage {
     if (!fullPath.endsWith("/")) fullPath += "/";
     fullPath += name;
 
-    if (FSYS.mkdir(fullPath)) {
-      logMessage("Folder created: " + fullPath);
-      DynamicJsonDocument doc(256);
-      doc["success"] = true;
-      String response;
-      serializeJson(doc, response);
-      request->send(200, "application/json", response);
-    } else {
-      DynamicJsonDocument doc(256);
-      doc["success"] = false;
-      doc["error"] = "Failed to create folder";
-      String response;
-      serializeJson(doc, response);
-      request->send(400, "application/json", response);
-    }
+        SD_LOCK();
+        bool created = FSYS.mkdir(fullPath);
+        SD_UNLOCK();
+
+        if (created) {
+            logMessage("Folder created: " + fullPath);
+            DynamicJsonDocument doc(256);
+            doc["success"] = true;
+            String response;
+            serializeJson(doc, response);
+            request->send(200, "application/json", response);
+        } else {
+            DynamicJsonDocument doc(256);
+            doc["success"] = false;
+            doc["error"] = "Failed to create folder";
+            String response;
+            serializeJson(doc, response);
+            request->send(400, "application/json", response);
+        }
   }
 
   // API: Read file
   static void handleReadFile(AsyncWebServerRequest *request) {
     String path = request->hasParam("path") ? request->getParam("path")->value() : "/";
     
-    File file = FSYS.open(path, "r");
-    if (!file) {
-      DynamicJsonDocument doc(256);
-      doc["success"] = false;
-      doc["error"] = "File not found";
-      String response;
-      serializeJson(doc, response);
-      request->send(404, "application/json", response);
-      return;
-    }
+        SD_LOCK();
+        File file = FSYS.open(path, "r");
+        if (!file) {
+            SD_UNLOCK();
+            DynamicJsonDocument doc(256);
+            doc["success"] = false;
+            doc["error"] = "File not found";
+            String response;
+            serializeJson(doc, response);
+            request->send(404, "application/json", response);
+            return;
+        }
 
-    DynamicJsonDocument doc(JSON_BUFFER_SIZE);
-    doc["success"] = true;
-    doc["content"] = file.readString();
+        DynamicJsonDocument doc(JSON_BUFFER_SIZE);
+        doc["success"] = true;
+        doc["content"] = file.readString();
+        file.close();
+        SD_UNLOCK();
     
-    String response;
-    serializeJson(doc, response);
-    request->send(200, "application/json", response);
-    file.close();
+        String response;
+        serializeJson(doc, response);
+        request->send(200, "application/json", response);
   }
 
   // API: Write file
@@ -813,45 +825,51 @@ namespace USBMassStorage {
     String path = json["path"];
     String content = json["content"];
 
-    File file = FSYS.open(path, "w");
-    if (!file) {
-      DynamicJsonDocument doc(256);
-      doc["success"] = false;
-      doc["error"] = "Failed to open file";
-      String response;
-      serializeJson(doc, response);
-      request->send(400, "application/json", response);
-      return;
-    }
+        SD_LOCK();
+        File file = FSYS.open(path, "w");
+        if (!file) {
+            SD_UNLOCK();
+            DynamicJsonDocument doc(256);
+            doc["success"] = false;
+            doc["error"] = "Failed to open file";
+            String response;
+            serializeJson(doc, response);
+            request->send(400, "application/json", response);
+            return;
+        }
 
-    file.print(content);
-    file.close();
+        file.print(content);
+        file.close();
+        SD_UNLOCK();
     
-    logMessage("File saved: " + path);
-    DynamicJsonDocument doc(256);
-    doc["success"] = true;
-    String response;
-    serializeJson(doc, response);
-    request->send(200, "application/json", response);
+        logMessage("File saved: " + path);
+        DynamicJsonDocument doc(256);
+        doc["success"] = true;
+        String response;
+        serializeJson(doc, response);
+        request->send(200, "application/json", response);
   }
 
   // API: Download file
   static void handleDownload(AsyncWebServerRequest *request) {
     String path = request->hasParam("path") ? request->getParam("path")->value() : "/";
     
-    File file = FSYS.open(path, "r");
-    if (!file) {
-      request->send(404, "text/plain", "File not found");
-      return;
-    }
+        SD_LOCK();
+        File file = FSYS.open(path, "r");
+        if (!file) {
+            SD_UNLOCK();
+            request->send(404, "text/plain", "File not found");
+            return;
+        }
+        SD_UNLOCK();
 
-    String filename = path;
-    int lastSlash = filename.lastIndexOf('/');
-    if (lastSlash != -1) {
-      filename = filename.substring(lastSlash + 1);
-    }
+        String filename = path;
+        int lastSlash = filename.lastIndexOf('/');
+        if (lastSlash != -1) {
+            filename = filename.substring(lastSlash + 1);
+        }
 
-    request->send(file, path, "application/octet-stream", true);
+        request->send(file, path, "application/octet-stream", true);
   }
 
   // API: Delete item
@@ -859,12 +877,14 @@ namespace USBMassStorage {
     String path = request->hasParam("path") ? request->getParam("path")->value() : "/";
     bool isDir = request->hasParam("isDir") ? request->getParam("isDir")->value() == "true" : false;
 
-    bool success = false;
-    if (isDir) {
-      success = FSYS.rmdir(path);
-    } else {
-      success = FSYS.remove(path);
-    }
+        bool success = false;
+        SD_LOCK();
+        if (isDir) {
+            success = FSYS.rmdir(path);
+        } else {
+            success = FSYS.remove(path);
+        }
+        SD_UNLOCK();
 
     DynamicJsonDocument doc(256);
     if (success) {

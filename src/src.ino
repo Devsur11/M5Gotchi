@@ -486,6 +486,11 @@ void setup() {
     #endif
   }
   logMessage("Heap after vars init:");
+SD_LOCK();
+  if (!FSYS.exists("/M5Gotchi/wardriving")) {
+      FSYS.mkdir("/M5Gotchi/wardriving");
+  }
+  SD_UNLOCK();
   printHeapInfo();
   M5.Display.setBrightness(brightness);
   initColorSettings();

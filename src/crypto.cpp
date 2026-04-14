@@ -79,7 +79,13 @@ void keygenTask(void *arg) {
     size_t free_before = esp_get_free_heap_size();
     fLogMessage("[crypto] free heap before keygen: %u\n", (unsigned)free_before);
 
-    if (!FSYS.exists(privPath.c_str()) || !FSYS.exists(pubPath.c_str())) {
+    SD_LOCK();
+    bool _priv_exists = FSYS.exists(privPath.c_str());
+    SD_UNLOCK();
+    SD_LOCK();
+    bool _pub_exists = FSYS.exists(pubPath.c_str());
+    SD_UNLOCK();
+    if (!(_priv_exists && _pub_exists)) {
         logMessage("[crypto] keys not found on FSYS. Generating RSA keypair (this will take a while)...");
 
         mbedtls_pk_context pk;
@@ -156,7 +162,10 @@ void keygenTask(void *arg) {
         {
             // Scope String usage to free heap before cleanup
             String dir = g_keysPath;
-            if (!FSYS.exists(dir.c_str())) FSYS.mkdir(dir.c_str());
+            SD_LOCK();
+            bool _keys_dir_exists = FSYS.exists(dir.c_str());
+            SD_UNLOCK();
+            if (!_keys_dir_exists) { SD_LOCK(); FSYS.mkdir(dir.c_str()); SD_UNLOCK(); }
 
             bool ok1 = writeFileSD(privPath, (const uint8_t*)prv_buf, prv_len);
             
@@ -188,7 +197,9 @@ cleanup:
 
 // ---------- SD helpers ----------
 static bool writeFileSD(const String &path, const uint8_t *data, size_t len) {
+    SD_LOCK();
     File f = FSYS.open(path.c_str(), FILE_WRITE);
+    SD_UNLOCK();
     if (!f) {
         fLogMessage("[crypto] writeFileSD: open failed %s\n", path.c_str());
         return false;
@@ -198,8 +209,13 @@ static bool writeFileSD(const String &path, const uint8_t *data, size_t len) {
     return w == len;
 }
 static bool readFileSD(const String &path, std::vector<uint8_t> &out) {
-    if (!FSYS.exists(path.c_str())) return false;
+    SD_LOCK();
+    bool _exists = FSYS.exists(path.c_str());
+    SD_UNLOCK();
+    if (!_exists) return false;
+    SD_LOCK();
     File f = FSYS.open(path.c_str(), FILE_READ);
+    SD_UNLOCK();
     if (!f) return false;
     out.clear();
     while (f.available()) out.push_back((uint8_t)f.read());

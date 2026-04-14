@@ -19,8 +19,9 @@ extern uint16_t tx_color_rgb565;
 static bool parseSectionedFileLocal(const String &path, std::map<String, std::vector<String>> &out, std::vector<String> &order) {
   out.clear();
   order.clear();
-  File f = FSYS.open(path.c_str(), FILE_READ);
-  if (!f) return false;
+    SD_LOCK();
+    File f = FSYS.open(path.c_str(), FILE_READ);
+    if (!f) { SD_UNLOCK(); return false; }
   String section = "";
   while (f.available()) {
     String line = f.readStringUntil('\n');
@@ -37,15 +38,18 @@ static bool parseSectionedFileLocal(const String &path, std::map<String, std::ve
     out[section].push_back(line);
   }
   f.close();
+    SD_UNLOCK();
   return true;
 }
 
 static bool saveSectionedFileLocal(const String &path, const std::map<String, std::vector<String>> &mapIn, const std::vector<String> &order) {
-  if (!FSYS.remove(path.c_str())) {
-    // ignore remove failure
-  }
-  File f = FSYS.open(path.c_str(), FILE_WRITE);
-  if (!f) return false;
+    SD_LOCK();
+    FSYS.remove(path.c_str()); // ignore remove failure
+    SD_UNLOCK();
+
+    SD_LOCK();
+    File f = FSYS.open(path.c_str(), FILE_WRITE);
+    if (!f) { SD_UNLOCK(); return false; }
   for (size_t i = 0; i < order.size(); ++i) {
     String section = order[i];
     f.print("["); f.print(section); f.print("]\n");
@@ -60,6 +64,7 @@ static bool saveSectionedFileLocal(const String &path, const std::map<String, st
   }
   f.flush();
   f.close();
+    SD_UNLOCK();
   return true;
 }
 

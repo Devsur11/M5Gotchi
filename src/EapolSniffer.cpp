@@ -257,11 +257,18 @@ void SnifferLoop() {
             snprintf(filename, sizeof(filename), "/M5Gotchi/handshake/%s_%s_ID_%i.pcap",
                      bssidStr, apName, random(999));
 
-            if (!FSYS.exists("/M5Gotchi/handshake")) {
+            SD_LOCK();
+            bool _hs_exists = FSYS.exists("/M5Gotchi/handshake");
+            SD_UNLOCK();
+            if (!_hs_exists) {
+                SD_LOCK();
                 FSYS.mkdir("/M5Gotchi/handshake");
+                SD_UNLOCK();
             }
 
+            SD_LOCK();
             file = FSYS.open(filename, FILE_WRITE, true);
+            SD_UNLOCK();
             if (!file) {
                 logMessage("[ERROR] fopen failed: " + String(filename));
                 free(packet->data);

@@ -198,6 +198,7 @@ n_personality n_pwnagotchi_personality = {
     -75,     // rssi_threshold (dBm) - minimum RSSI to attack (-100 to 0)
     false,   // enable_wardriving - enable GPS logging during attacks
     5000,    // gps_timeout_ms - timeout for GPS fix
+    100,     // wardrive_scan_interval_ms - default ms between wardrive cycles
     false     // enable_pmkid_attack - enable PMKID attack
 };
 
@@ -342,6 +343,10 @@ bool initPersonality(){
     return true;
 }
 
+// SD mutex definition
+SemaphoreHandle_t sdMutex = NULL;
+
+
 bool savePersonality(){
     JsonDocument personalityDoc;
     personalityDoc["nap_time"] = pwnagotchi.nap_time;
@@ -444,6 +449,9 @@ bool initNewPersonality(){
         if (personalityDoc["gps_timeout_ms"].is<uint16_t>()) n_pwnagotchi_personality.gps_timeout_ms = personalityDoc["gps_timeout_ms"];
         else personalityChanged = true;
 
+        if (personalityDoc["wardrive_scan_interval_ms"].is<uint16_t>()) n_pwnagotchi_personality.wardrive_scan_interval_ms = personalityDoc["wardrive_scan_interval_ms"];
+        else personalityChanged = true;
+
         if (personalityDoc["enable_pmkid_attack"].is<bool>()) n_pwnagotchi_personality.enable_pmkid_attack = personalityDoc["enable_pmkid_attack"];
         else personalityChanged = true;
     }
@@ -463,6 +471,7 @@ bool initNewPersonality(){
     personalityDoc["rssi_threshold"] = n_pwnagotchi_personality.rssi_threshold;
     personalityDoc["enable_wardriving"] = n_pwnagotchi_personality.enable_wardriving;
     personalityDoc["gps_timeout_ms"] = n_pwnagotchi_personality.gps_timeout_ms;
+    personalityDoc["wardrive_scan_interval_ms"] = n_pwnagotchi_personality.wardrive_scan_interval_ms;
     personalityDoc["enable_pmkid_attack"] = n_pwnagotchi_personality.enable_pmkid_attack;
     
     if (personalityChanged) {
@@ -493,6 +502,7 @@ bool saveNewPersonality(){
     personalityDoc["sound_on_pmkid"] = n_pwnagotchi_personality.sound_on_pmkid;
     personalityDoc["rssi_threshold"] = n_pwnagotchi_personality.rssi_threshold;
     personalityDoc["enable_wardriving"] = n_pwnagotchi_personality.enable_wardriving;
+    personalityDoc["wardrive_scan_interval_ms"] = n_pwnagotchi_personality.wardrive_scan_interval_ms;
     personalityDoc["gps_timeout_ms"] = n_pwnagotchi_personality.gps_timeout_ms;
     personalityDoc["enable_pmkid_attack"] = n_pwnagotchi_personality.enable_pmkid_attack;
 
@@ -517,6 +527,14 @@ bool configChanged = false;
 uint8_t menu_display_mode = 0;  // 0=list, 1=grid
 
 bool initVars() {
+    // create SD mutex to protect FSYS operations
+    if (sdMutex == NULL) {
+        sdMutex = xSemaphoreCreateMutex();
+        if (sdMutex == NULL) {
+            logMessage("Failed to create SD mutex");
+            return false;
+        }
+    }
     #ifdef USE_LITTLEFS
     if (!FSYS.begin()) {
         logMessage("LittleFS init failed");

@@ -62,9 +62,17 @@ esp_err_t ota_http_event_handler(esp_http_client_event_t *evt) {
 
 static bool ensure_temp_dir() {
   if (!FSYS.exists(TEMP_DIR)) {
-    if (!FSYS.mkdir(TEMP_DIR)) {
-      logMessage("Failed to create temp directory on SD card");
-      return false;
+    SD_LOCK();
+    bool _temp_exists = FSYS.exists(TEMP_DIR);
+    SD_UNLOCK();
+    if (!_temp_exists) {
+      SD_LOCK();
+      if (!FSYS.mkdir(TEMP_DIR)) {
+        SD_UNLOCK();
+        logMessage("Failed to create temp directory on SD card");
+        return false;
+      }
+      SD_UNLOCK();
     }
   }
   return true;
@@ -88,7 +96,9 @@ static bool download_file(const char* url, const char* dest_path) {
   }
   int status = esp_http_client_fetch_headers(client);
   logMessage(String("HTTP status: ") + esp_http_client_get_status_code(client));
+  SD_LOCK();
   File f = FSYS.open(dest_path, FILE_WRITE, true);
+  SD_UNLOCK();
   if (!f) {
     logMessage("Failed to open file for writing");
     esp_http_client_cleanup(client);
@@ -113,7 +123,12 @@ static bool download_file(const char* url, const char* dest_path) {
   f.flush();
   f.close();
   logMessage(String("Downloaded ") + total + " bytes to " + dest_path);
-  logMessage(String("Actual file size on disk: ") + String(FSYS.open(dest_path).size()));
+  SD_LOCK();
+  File __tmpf = FSYS.open(dest_path);
+  size_t __sz = __tmpf ? __tmpf.size() : 0;
+  if (__tmpf) __tmpf.close();
+  SD_UNLOCK();
+  logMessage(String("Actual file size on disk: ") + String(__sz));
   logMessage(String("Downloaded ") + total + " bytes to " + dest_path);
   esp_http_client_cleanup(client);
   return true;
@@ -179,7 +194,7 @@ bool check_for_new_firmware_version(bool lite) {
   char remote_version[32] = {0};
   char bin_url[256] = {0};
   if (!parse_json_version_and_file(TEMP_JSON_PATH, remote_version, sizeof(remote_version), bin_url, sizeof(bin_url))) {
-    FSYS.remove(TEMP_JSON_PATH);
+    SD_LOCK(); FSYS.remove(TEMP_JSON_PATH); SD_UNLOCK();
     return false;
   }
 
@@ -187,6 +202,7 @@ bool check_for_new_firmware_version(bool lite) {
 
   bool update_needed = strcmp(CURRENT_VERSION, remote_version) < 0;
   FSYS.remove(TEMP_JSON_PATH);
+  SD_LOCK(); FSYS.remove(TEMP_JSON_PATH); SD_UNLOCK();
   return update_needed;
 }
 
@@ -203,13 +219,14 @@ bool ota_update_from_url(bool lite) {
   char remote_version[32] = {0};
   char bin_url[256] = {0};
   if (!parse_json_version_and_file(TEMP_JSON_PATH, remote_version, sizeof(remote_version), bin_url, sizeof(bin_url))) {
-    FSYS.remove(TEMP_JSON_PATH);
+    SD_LOCK(); FSYS.remove(TEMP_JSON_PATH); SD_UNLOCK();
     return false;
   }
 
   if (strcmp(CURRENT_VERSION, remote_version) >= 0) {
     logMessage("No update needed");
     FSYS.remove(TEMP_JSON_PATH);
+    SD_LOCK(); FSYS.remove(TEMP_JSON_PATH); SD_UNLOCK();
     return false;
   }
 
@@ -221,6 +238,7 @@ bool ota_update_from_url(bool lite) {
   }
   FSYS.remove(TEMP_JSON_PATH);
 
+  SD_LOCK(); FSYS.remove(TEMP_JSON_PATH); SD_UNLOCK();
   esp_http_client_config_t config = {
     .url = bin_url,
     .cert_pem = github_root_cert_pem_start,
@@ -235,6 +253,7 @@ bool ota_update_from_url(bool lite) {
 
   esp_err_t ret = esp_https_ota(&config);
   FSYS.remove(TEMP_BIN_PATH);
+  SD_LOCK(); FSYS.remove(TEMP_BIN_PATH); SD_UNLOCK();
 
   if (ret == ESP_OK) {
     logMessage("OTA update successful, restarting...");

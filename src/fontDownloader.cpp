@@ -12,9 +12,11 @@ extern const uint8_t small_vlw_start[] asm("_binary_fonts_small_vlw_start");
 extern const uint8_t small_vlw_end[] asm("_binary_fonts_small_vlw_end");
 
 bool fileExists(const char* path) {
+    SD_LOCK();
     File file = FSYS.open(path);
     bool exists = file;
     if (file) file.close();
+    SD_UNLOCK();
     return exists;
 }
 
@@ -26,8 +28,10 @@ bool copyEmbeddedFont(const uint8_t* fontStart, const uint8_t* fontEnd, const ch
         return true;
     }
 
+    SD_LOCK();
     File file = FSYS.open(fontPath.c_str(), FILE_WRITE);
     if (!file) {
+        SD_UNLOCK();
         fLogMessage("Failed to create font file: %s\n", fontPath.c_str());
         return false;
     }
@@ -35,11 +39,14 @@ bool copyEmbeddedFont(const uint8_t* fontStart, const uint8_t* fontEnd, const ch
     size_t fontSize = fontEnd - fontStart;
     size_t written = file.write(fontStart, fontSize);
     file.close();
+    SD_UNLOCK();
 
     if (written != fontSize) {
         fLogMessage("Failed to write complete font file: %s (wrote %u of %u bytes)\n", 
                     fontPath.c_str(), written, fontSize);
+        SD_LOCK();
         FSYS.remove(fontPath.c_str());
+        SD_UNLOCK();
         return false;
     }
 

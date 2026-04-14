@@ -19,12 +19,15 @@ static String lastPath;
 
 void *jpegOpenFile(const char *filename, int32_t *size) {
     logMessage("jpegOpenFile called for: " + lastPath);
+    SD_LOCK();
     jpegFile = FSYS.open(lastPath.c_str(), FILE_READ);
     if (!jpegFile) {
+        SD_UNLOCK();
         logMessage("jpegOpenFile: FAILED to open " + lastPath);
         return nullptr;
     }
     *size = jpegFile.size();
+    SD_UNLOCK();
     logMessage("jpegOpenFile: success, size=" + String(*size));
     return &jpegFile;
 }
@@ -66,11 +69,10 @@ int jpegRenderCallback(JPEGDRAW *pDraw) {
 
 // --- Preload moods ---
 void preloadMoods() {
+    SD_LOCK();
     File dir = FSYS.open("/M5Gotchi/moods");
-    if (!dir) {
-        logMessage("Failed to open /moods directory");
-        return;
-    }
+    if (!dir) { SD_UNLOCK(); logMessage("Failed to open /moods directory"); return; }
+    SD_UNLOCK();
 
     while (File f = dir.openNextFile()) {
         if (f.isDirectory() || !String(f.name()).endsWith(".jpg")) {

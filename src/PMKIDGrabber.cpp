@@ -403,8 +403,13 @@ bool runPMKIDAttack(const uint8_t *apBSSID, int channel) {
     hexPMKID[32] = '\0';
 
     // Ensure directory exists — use the same filesystem handle for both checks and writes
-    if (!FSYS.exists("/M5Gotchi/pmkid")) {
+    SD_LOCK();
+    bool _pmkid_dir_exists = FSYS.exists("/M5Gotchi/pmkid");
+    SD_UNLOCK();
+    if (!_pmkid_dir_exists) {
+        SD_LOCK();
         FSYS.mkdir("/M5Gotchi/pmkid");
+        SD_UNLOCK();
     }
 
     char filename[64];
@@ -412,7 +417,9 @@ bool runPMKIDAttack(const uint8_t *apBSSID, int channel) {
              bssidBuf[readIdx][0], bssidBuf[readIdx][1], bssidBuf[readIdx][2],
              bssidBuf[readIdx][3], bssidBuf[readIdx][4], bssidBuf[readIdx][5]);
 
+    SD_LOCK();
     File f = FSYS.open(filename, FILE_APPEND);
+    SD_UNLOCK();
     if (f) {
         // hashcat format: PMKID*BSSID*ClientMAC*SSID(hex)
         char ssidHex[65] = {0};

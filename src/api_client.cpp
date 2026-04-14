@@ -50,17 +50,24 @@ bool saveToken(const String &t) {
     doc["token"] = t;
     String s;
     serializeJson(doc, s);
+    SD_LOCK();
     File f = FSYS.open(tokenPath, "w");
-    if (!f) return false;
+    if (!f) { SD_UNLOCK(); return false; }
     f.print(s);
     f.close();
+    SD_UNLOCK();
     token = t;
     return true;
 }
 
 bool loadToken() {
-    if (!FSYS.exists(tokenPath)) return false;
+    SD_LOCK();
+    bool _tok_exists = FSYS.exists(tokenPath);
+    SD_UNLOCK();
+    if (!_tok_exists) return false;
+    SD_LOCK();
     File f = FSYS.open(tokenPath, "r");
+    SD_UNLOCK();
     if (!f) return false;
     String s = f.readString(); f.close();
     DynamicJsonDocument doc(256);
@@ -581,7 +588,10 @@ bool api_client::pollInbox() {
 // helper: ensures /pwngrid dir exists and returns cache file path
 static String getPwngridCachePath() {
     const char *p = "/M5Gotchi/pwngrid";
-    if (!FSYS.exists(p)) FSYS.mkdir(p);
+    SD_LOCK();
+    bool _pwngrid_exists = FSYS.exists(p);
+    SD_UNLOCK();
+    if (!_pwngrid_exists) { SD_LOCK(); FSYS.mkdir(p); SD_UNLOCK(); }
     return String("/M5Gotchi/pwngrid/cracks.conf");
 }
 
@@ -592,8 +602,13 @@ bool api_client::queueAPForUpload(const String &essid, const String &bssid) {
     DynamicJsonDocument doc(2048);
     JsonArray arr = doc.to<JsonArray>();
 
-    if (FSYS.exists(path)) {
+    SD_LOCK();
+    bool _path_exists = FSYS.exists(path);
+    SD_UNLOCK();
+    if (_path_exists) {
+        SD_LOCK();
         File f = FSYS.open(path, FILE_READ);
+        SD_UNLOCK();
         if (f) {
             String s = f.readString();
             f.close();
@@ -613,7 +628,9 @@ bool api_client::queueAPForUpload(const String &essid, const String &bssid) {
     // write back
     String out;
     serializeJson(arr, out);
+    SD_LOCK();
     File wf = FSYS.open(path, FILE_WRITE);
+    SD_UNLOCK();
     if (!wf) {
         logMessage("queueAP: could not open cache for writing");
         return false;
@@ -628,12 +645,17 @@ bool api_client::queueAPForUpload(const String &essid, const String &bssid) {
 bool api_client::uploadCachedAPs() {
     enrollWithGrid();
     String path = getPwngridCachePath();
-    if (!FSYS.exists(path)) {
+    SD_LOCK();
+    bool _cache_exists = FSYS.exists(path);
+    SD_UNLOCK();
+    if (!_cache_exists) {
         logMessage("uploadCachedAPs: nothing to upload");
         return true; // nothing to do
     }
 
+    SD_LOCK();
     File f = FSYS.open(path, FILE_READ);
+    SD_UNLOCK();
     if (!f) {
         logMessage("uploadCachedAPs: failed to open cache");
         return false;
@@ -675,7 +697,9 @@ bool api_client::uploadCachedAPs() {
     
 
     // On success, clear cache file
+    SD_LOCK();
     File wf = FSYS.open(path, FILE_WRITE);
+    SD_UNLOCK();
     if (wf) {
         wf.print("[]");
         wf.close();

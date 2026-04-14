@@ -126,12 +126,17 @@ struct CrackedEntry {
 std::vector<CrackedEntry> getCrackedEntries() {
     std::vector<CrackedEntry> entries;
 
-    if (!FSYS.exists("/M5Gotchi/cracked.json")) {
+    SD_LOCK();
+    bool _cracked_exists = FSYS.exists("/M5Gotchi/cracked.json");
+    SD_UNLOCK();
+    if (!_cracked_exists) {
         logMessage("No cracked.json found on SD card.");
         return entries; // empty
     }
 
+    SD_LOCK();
     File file = FSYS.open("/M5Gotchi/cracked.json", FILE_READ);
+    SD_UNLOCK();
     if (!file) {
         logMessage("Failed to open cracked.json for reading.");
         return entries;
@@ -177,7 +182,9 @@ bool isAlreadyUploaded(const char* fileName, JsonDocument &doc) {
 
 // Helper: save uploaded.json back to SD (pretty)
 void saveUploadedList(JsonDocument &doc) {
+    SD_LOCK();
     File jsonFile = FSYS.open("/M5Gotchi/uploaded.json", FILE_WRITE);
+    SD_UNLOCK();
     if (!jsonFile) {
         logMessage("Failed to open /uploaded.json for writing");
         return;
@@ -190,8 +197,13 @@ void saveUploadedList(JsonDocument &doc) {
 // Append single filename to /uploaded.json safely (no duplicate)
 static void appendToUploadedList(const char* fileName) {
     DynamicJsonDocument doc(2048);
-    if (FSYS.exists("/M5Gotchi/uploaded.json")) {
+    SD_LOCK();
+    bool _uploaded_exists = FSYS.exists("/M5Gotchi/uploaded.json");
+    SD_UNLOCK();
+    if (_uploaded_exists) {
+        SD_LOCK();
         File upf = FSYS.open("/M5Gotchi/uploaded.json", FILE_READ);
+        SD_UNLOCK();
         if (upf) {
             DeserializationError err = deserializeJson(doc, upf);
             upf.close();
@@ -218,12 +230,17 @@ static void appendToUploadedList(const char* fileName) {
 
 // Upload single PCAP to wpa-sec via HTTPS (raw request)
 bool uploadToWpaSec(const char* apiKey, const char* pcapPath, const char* fileName, uint32_t timeoutMs = 30000) {
-    if (!FSYS.exists(pcapPath)) {
+    SD_LOCK();
+    bool _pcap_exists = FSYS.exists(pcapPath);
+    SD_UNLOCK();
+    if (!_pcap_exists) {
         logMessage("File not found: " + String(pcapPath));
         return false;
     }
 
+    SD_LOCK();
     File f = FSYS.open(pcapPath, FILE_READ);
+    SD_UNLOCK();
     if (!f) {
         logMessage("Failed to open " + String(pcapPath));
         return false;
@@ -491,7 +508,9 @@ void processWpaSec(const char* apiKey) {
 
     // Scan handshake folder: collect paths to upload while keeping uploadedDoc in scope
     std::vector<String> toUpload;
+    SD_LOCK();
     File dir = FSYS.open("/M5Gotchi/handshake");
+    SD_UNLOCK();
     if (!dir || !dir.isDirectory()) {
         logMessage("No /handshake folder");
     } else {
