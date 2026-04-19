@@ -8,6 +8,8 @@
 #include "Arduino.h"
 #include <ArduinoJson.h>
 #include "ui.h"
+#include "achievements.h"
+#include "achievementsUI.h"
 #include <FS.h>
 #include "SD.h"
 #include <WiFi.h>
@@ -145,6 +147,7 @@ menu main_menu[] = {
     {"Wardriving", 8},            // Wardriving companion
     {"Files", 70},                // File manager
     {"Statistics", 5},            // Stats
+    {"Achievements", 41},
     {"Settings", 6},               // Config
     {"Web file manager", 73},         // Web file manager
     {"Back", 255}
@@ -252,6 +255,7 @@ menu devtools_menu[] = {
   {"Skip File Checks", 107},  
   {"Scan Speed Test", 109},   
   {"Coordinate Picker", 110}, 
+  {"Unlock Achievement", 113}, 
   {"Mood Font Tester", 112},  
   {"Crash Test", 111},
   {"Back", 255}
@@ -478,6 +482,14 @@ uint16_t hexToRGB565(String hex) {
   return RGBToRGB565(r, g, b);
 }
 
+uint32_t simpleHash(const String& str) {
+  uint32_t hash = 5381;
+  for (char c : str) {
+    hash = ((hash << 5) + hash) + c;  // hash * 33 + c
+  }
+  return hash;
+}
+
 void initColorSettings(){
   bg_color_rgb565 = hexToRGB565(bg_color);
   tx_color_rgb565 = hexToRGB565(tx_color);
@@ -537,6 +549,9 @@ void initUi() {
   
   logMessage("UI initialized");
   loggerSetOverlayEnabled(serial_overlay);
+  
+  // Initialize achievements system
+  achievements_init();
 }
 
 uint8_t returnBrightness(){return currentBrightness;}
@@ -673,17 +688,40 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
   if(overrideDelay){
     redrawUi(show_toolbars);
   }
+  
+  // Secret terminal hook: ENTER in mood view opens secret terminal
+  if (menuID == 0 && isOkPressed()) {
+    debounceDelay();
+    String out = userInput("???", "??????????????????", 20);
+    drawNewAchUnlock(ACH_TERMINAL);
+    uint32_t outHash = simpleHash(out);
+    if (outHash == 2088325554UL) {
+      achievements_register(ACH_PAPIEZOWO);
+      drawNewAchUnlock(ACH_PAPIEZOWO);
+      drawInfoBox("Easter Egg", "Pan, kiedyś stanął nad brzegiem...", "", true, false);
+    } else if (outHash == 5861746UL) {
+      achievements_register(ACH_CHILD);
+      drawNewAchUnlock(ACH_CHILD);
+      drawInfoBox("Easter Egg", "YOU KNOW WHAT YOU DID!", "", true, false);
+    } else if (out.length() > 40) {
+      achievements_register(ACH_CHEATER);
+      drawNewAchUnlock(ACH_CHEATER);
+      drawInfoBox("Cheater", "You unlocked an achievement!", "", true, false);
+    }
+  }
   if(show_toolbars)
-  {  
+  {
     drawTopCanvas();
     drawBottomCanvas();
   }
   
+  
+
   if (menuID == 1) {
     #ifdef M5STICKS3_ENV
-    drawMenuList(main_menu, 1, 10);
+    drawMenuList(main_menu, 1, 11);
     #else
-    drawMenuList(main_menu, 1, 9);
+    drawMenuList(main_menu, 1, 10);
     #endif
     prevMID = 1;
   } 
@@ -728,7 +766,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
   }
   else if (menuID == 99) {
     if(dev_mode){
-      drawMenuList(devtools_menu, 99, 13);
+      drawMenuList(devtools_menu, 99, 14);
     }
     else{
       drawMenuList(devtools_locked_menu, 99, 2);
@@ -747,7 +785,71 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
       redrawUi(show_toolbars);
       lastRedrawTime = currentTime;
       needsUiRedraw = false;
+    }else if(setupDone){
+      if(CURRENT_VERSION == "dev"){
+        drawNewAchUnlock(ACH_DEV_VER);
+      }
+      if(dev_mode){
+        drawNewAchUnlock(ACH_DEV_MODE);
+      }
+      if(pwngrid_indentity.length()>10){
+        drawNewAchUnlock(ACH_ENROLL_PWNGRID);
+      }
+      if(pwned_ap > 0){
+        drawNewAchUnlock(ACH_FIRST_PWN);
+      }
+      if(getPwngridTotalPeers() > 0 && getPwngridTotalPeers() < 5){
+        drawNewAchUnlock(ACH_FIRST_MEETING);
+      }
+      if(getPwngridTotalPeers() >= 5){
+        drawNewAchUnlock(ACH_FAMILY);
+      }
+      if(allTimeDeauths > 1000){
+        drawNewAchUnlock(ACH_1000_DEAUTH);
+      }
+      if(allTimeDeauths > 10000){
+        drawNewAchUnlock(ACH_10000_DEAUTH);
+      }
+      if(allTimePeers>=10){
+        drawNewAchUnlock(ACH_10_PEERS);
+      }
+      if(allTimePeers>=50){
+        drawNewAchUnlock(ACH_50_PEERS);
+      }
+      if(allTimePeers>=100){
+        drawNewAchUnlock(ACH_100_PEERS);
+      }
+      // Wardrive achievement - only when auto mode is active
+      if(wardrive_achievement_flag && pwnagotchiTaskHandle != nullptr){
+        drawNewAchUnlock(ACH_WARDRIVE);
+        wardrive_achievement_flag = false;
+      }
+      // Epoch achievements
+      if(allTimeEpochs >= 100){
+        drawNewAchUnlock(ACH_100_EPOCH);
+      }
+      if(allTimeEpochs >= 1000){
+        drawNewAchUnlock(ACH_1000_EPOCH);
+      }
+      if(allTimeEpochs >= 10000){
+        drawNewAchUnlock(ACH_10000_EPOCH);
+      }
+      // Session time achievements (convert milliseconds to hours)
+      long sessionHours = lastSessionTime / (1000 * 60 * 60);
+      if(sessionHours >= 1){
+        drawNewAchUnlock(ACH_1_HOUR_SESSION);
+      }
+      if(sessionHours >= 6){
+        drawNewAchUnlock(ACH_6_HOUR_SESSION);
+      }
     }
+  }
+
+  if(pwnagotchiTaskHandle != nullptr && menuID != 10 && menuID != 0){
+    menuID = 0;
+    menu_current_opt = 0;
+    menu_current_page = 1;
+    needsUiRedraw = true;
   }
   
   M5.Display.startWrite();
@@ -921,6 +1023,18 @@ void drawMood(String face, String phrase) {
     canvas_main.setTextSize(1.5);
     
     String lvlText = hostname + ">  Lvl " + String(level);
+    if(level >=1){
+      drawNewAchUnlock(ACH_1ST_LVL);
+    }
+    if(level >=10){
+      drawNewAchUnlock(ACH_10_LVL);
+    }
+    if(level >=50){
+      drawNewAchUnlock(ACH_50_LVL);
+    }
+    if(level >=100){
+      drawNewAchUnlock(ACH_100_LVL);
+    }
     int textW = canvas_main.textWidth(lvlText);
     canvas_main.println(lvlText);
     int barWidth = 240 - textW - 10;
@@ -1232,6 +1346,11 @@ bool registerNewMessage(message newMess) {
   serializeJson(doc, w);
   w.close();
   SD_UNLOCK();
+
+  // Unlock achievement when receiving a message
+  if (!newMess.outgoing) {
+    drawNewAchUnlock(ACH_GOT_MAIL);
+  }
 
   return true;
 }
@@ -2006,9 +2125,25 @@ void runApp(uint8_t appID){
         drawInfoBox("Info", "Enroling with pwngrid...", "This may take a while", false, false);
         if(api_client::enrollWithGrid()){
           drawInfoBox("Info", "Succesfully enrolled.", "All pwngrid functions enabled.", true, false);
+          // Check if this is a successful enrollment after a previous failure + reboot
+          if (FSYS.exists(PWNGRID_ENROLL_FAIL_FLAG)) {
+            // We had failed before and now succeeded after reboot
+            drawNewAchUnlock(ACH_HAVE_YOU_TRIED_TURNING_IT_OFF_ON_AGAIN);
+            SD_LOCK();
+            FSYS.remove(PWNGRID_ENROLL_FAIL_FLAG);
+            SD_UNLOCK();
+          }
         }
         else{
           drawInfoBox("Error", "Something went wrong", "Try again later.", true, false);
+          // Save the failed enrollment flag for next reboot
+          SD_LOCK();
+          File fail_flag = FSYS.open(PWNGRID_ENROLL_FAIL_FLAG, FILE_WRITE);
+          if (fail_flag) {
+            fail_flag.print("1");
+            fail_flag.close();
+          }
+          SD_UNLOCK();
         }
         menuID = 8;
         return;
@@ -2352,6 +2487,7 @@ void runApp(uint8_t appID){
               SD_UNLOCK();
             }
             drawInfoBox("Sucess", "Unit added to frend", "list, text to it now!", true, false);
+            achievements_register(ACH_FRIENDS);
             menuID = 8;
             return;
           }
@@ -4047,15 +4183,22 @@ void runApp(uint8_t appID){
       }
       menuID = 6; return;
     }
+    if(appID == 41){
+      // Draw achievements
+      debounceDelay();
+      drawAchievements();
+      menuID = 6;
+      return;
+    }
     if(appID == 99){
       debounceDelay();
       drawMenuList(devtools_menu, 99, 9);
       return;
     }
     if(appID == 100){
-      //pin protection
-      String dev_mode_pin = "2147";
-      if(userInput("Dev Mode PIN", "Enter PIN to toggle dev mode", 10) != dev_mode_pin){
+      uint32_t dev_mode_pin_hash = 2088298528UL;  // Hash of "1998"
+      String pinInput = userInput("Dev Mode PIN", "Enter PIN to toggle dev mode", 10);
+      if(simpleHash(pinInput) != dev_mode_pin_hash){
         drawInfoBox("Error", "Wrong PIN", "First learn how to code!!!", true, false);
         return;
       }
@@ -4233,6 +4376,44 @@ void runApp(uint8_t appID){
 #endif
         delay(80);
       }
+    }
+    if(appID == 113){
+      // Unlock Achievement: pick from list
+      if(!dev_mode){ drawInfoBox("Dev only", "Enable dev mode to run.", "", true, false); return; }
+      
+      std::vector<String> ach_names;
+      std::vector<uint8_t> ach_ids;
+      
+      // Build list of achievements
+      for(uint8_t i = 0; i < ACH_COUNT; i++){
+        const AchievementData* data = achievements_get_data((AchievementID)i);
+        if(!data) continue;
+        
+        String display_name = String(data->name);
+        ach_names.push_back(display_name);
+        ach_ids.push_back(i);
+      }
+      
+      // Create array of C-strings for drawMultiChoice
+      int choice = drawMultiChoice("Unlock Achievement", (String*)ach_names.data(), ach_names.size(), 99, 0);
+      
+      if(choice >= 0 && choice < ach_ids.size()){
+        uint8_t ach_id = ach_ids[choice];
+        const AchievementData* data = achievements_get_data((AchievementID)ach_id);
+        
+        if(data){
+          // Unlock the achievement
+          if(achievements_register((AchievementID)ach_id)){
+            drawNewAchUnlock((AchievementID)ach_id);
+            // Unlock test achievement as well
+            achievements_register(ACH_TEST);
+            drawNewAchUnlock(ACH_TEST);
+          }else{
+            drawInfoBox("Error", "Failed to unlock", "Check logs", true, false);
+          }
+        }
+      }
+      return;
     }
     if(appID == 108){
       // Freeform setter: type var name and value
@@ -4613,7 +4794,9 @@ void runApp(uint8_t appID){
       String name = userInput("New value", "Change Hostname to:", 18);
       if(name != ""){
         hostname = name;
+        if(name == "Pwnagotchi" || name == "pwnagotchi") achievements_register(ACH_SECRET_NAME);
         if(saveSettings()){
+          drawNewAchUnlock(ACH_NAME_CHANGE);
           menuID = 6;
           return;
         }
@@ -4621,7 +4804,6 @@ void runApp(uint8_t appID){
         menuID = 6;
         return;
       }
-      drawInfoBox("Name invalid", "Null inputed,", "operation abort", true, false);
       menuID = 6;
       return;
     }
@@ -4650,6 +4832,8 @@ void runApp(uint8_t appID){
         }
         else if(choice == 1){
           pwnagotchi.sound_on_events = !pwnagotchi.sound_on_events;
+          n_pwnagotchi_personality.sound_on_pmkid = pwnagotchi.sound_on_events;
+          n_pwnagotchi_personality.sound_on_handshake = pwnagotchi.sound_on_events;
           if(savePersonality()) drawInfoBox("Saved", "Event sounds updated", "", true, false);
           else drawInfoBox("ERROR", "Save personality failed!", "Check SD Card", true, false);
         }
@@ -5882,7 +6066,8 @@ void runApp(uint8_t appID){
     }
     else if (appID == 125){
       if(pwn::begin()){
-        drawInfoBox("Pwnagotchi started", "Pwnagotchi is now running.", "Press enter to continue", true, false);
+        menuID = 0;
+        return;
       }
       else{
         drawInfoBox("Error", "Failed to start Pwnagotchi", "Check logs!", true, false);

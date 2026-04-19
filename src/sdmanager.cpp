@@ -9,6 +9,7 @@
 #include <vector>
 #include "logger.h"
 #include "inputManager.h"
+#include "achievementsUI.h"
 
 extern M5Canvas canvas_main;
 extern int canvas_top_h;
@@ -63,6 +64,7 @@ static bool isPathProtected(const String &path) {
   // Check protected files
   for (int i = 0; i < NUM_PROTECTED_FILES; i++) {
     if (name.equals(PROTECTED_FILES[i])) {
+      drawNewAchUnlock(ACH_DAVE);
       return true;
     }
   }
@@ -70,6 +72,7 @@ static bool isPathProtected(const String &path) {
   // Check protected folders
   for (int i = 0; i < NUM_PROTECTED_FOLDERS; i++) {
     if (name.equals(PROTECTED_FOLDERS[i])) {
+      drawNewAchUnlock(ACH_DAVE);
       return true;
     }
   }

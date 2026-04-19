@@ -423,6 +423,8 @@ void initM5() {
   #endif
 }
 
+bool setupDone = false;
+
 void setup() {
   Serial.begin(115200);
   printHeapInfo();
@@ -585,6 +587,7 @@ void setup() {
   }
 
   fontSetup();
+  achievements_load();
   printHeapInfo();
 
   //
@@ -597,10 +600,8 @@ void setup() {
   }
   // ^ please leave this as it is, dont change its position, otherwise heap will corrupt(HOW!!?)
 
-  
-
   esp_task_wdt_deinit();
-  esp_task_wdt_init(60, false); 
+  esp_task_wdt_init(60, false);  //for avoiding crash when enrolling to pwngrid
 
   //inbox check
   if(check_inbox_at_startup && WiFi.isConnected()){
@@ -660,7 +661,7 @@ void setup() {
   } else {
     logMessage("Coredump partition not found");
   }
-  
+  setupDone = true;
   //Generic:
   //Partition layout detection:
   //App0 size: 330000
@@ -749,6 +750,7 @@ void loop() {
   #endif
   
   updateUi(true);
+  if(CURRENT_VERSION != "dev") return; //lets block dev mode for production
   #ifndef BUTTON_ONLY_INPUT
   M5Cardputer.update();
   if(M5Cardputer.Keyboard.isKeyPressed(KEY_OPT) && M5Cardputer.Keyboard.isKeyPressed(KEY_LEFT_CTRL) && M5Cardputer.Keyboard.isKeyPressed(KEY_FN)){

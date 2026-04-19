@@ -845,7 +845,8 @@ static void writeHashcatFile(FileWriteRequest *req) {
 }
 
 void handleFileWrite(FileWriteRequest *req) {
-    xSemaphoreTake(wardriveMutex, portMAX_DELAY); //TODO: StickS3 support
+    
+    if(wardriveMutex)xSemaphoreTake(wardriveMutex, portMAX_DELAY);
     if (!req) return;
     logMessage("[FileWriter] Writing PCAP for: " + req->ssid);
 
@@ -899,7 +900,7 @@ void handleFileWrite(FileWriteRequest *req) {
     }
 
     writeHashcatFile(req);
-    xSemaphoreGive(wardriveMutex);
+    if(wardriveMutex)xSemaphoreGive(wardriveMutex);
 
 cleanup:
     if (req->beaconFrame) free(req->beaconFrame);
@@ -912,9 +913,9 @@ cleanup:
 }
 
 bool pwn::begin() {
-    allTimeDeauths = lastSessionDeauths;
-    allSessionTime = lastSessionTime;
-    allTimePeers = lastSessionPeers;
+    allTimeDeauths += lastSessionDeauths;
+    allSessionTime += lastSessionTime;
+    allTimePeers += lastSessionPeers;
     lastSessionDeauths = 0;
     lastSessionCaptures = 0;
     lastSessionPeers = 0;
@@ -978,7 +979,7 @@ bool pwn::begin() {
     if(stealth_mode){
         return true;
     }
-    BaseType_t r = xTaskCreatePinnedToCore(task, "PwnagotchiTask", 8192*6, NULL, 1, &pwnagotchiTaskHandle, 1);
+    BaseType_t r = xTaskCreatePinnedToCore(task, "PwnTask", 8192*4, NULL, 1, &pwnagotchiTaskHandle, 1);
     if (r != pdPASS) {
         logMessage("Failed to create Pwnagotchi task!");
         pwnagotchiRunning = false;
@@ -1015,8 +1016,6 @@ bool pwn::end() {
     logMessage("Stopping Pwnagotchi/Wardriving...");
     lastSessionTime     = millis();
     lastSessionCaptures = sessionCaptures;
-    lastSessionPeers    = 0; //TODO
-    lastSessionDeauths  = 0; //TODO
     setMoodToStatus();
 
     pwnagotchiRunning = false;
@@ -1206,11 +1205,9 @@ void task(void *parameter) {
                     tot_sad_epochs++;
                     continue;
                 }
-                unsigned long t0 = millis();
                 clientLocked = false;
                 memset(targetClientMAC, 0, sizeof(targetClientMAC));
                 attackTask(nullptr);
-                ap = {"", 0, 0, false};
             }
 
             if (wifiMutex) {
@@ -1251,7 +1248,9 @@ void attackTask(void *parameter) {
         return;
     }
 
-    for (const auto &s : pwnedAPs) if (s == ap.ssid) return;
+    for (const auto &s : pwnedAPs) if (s == ap.ssid) {
+        return;
+    }
 
     if (!networkStillExists(ap.ssid, ap.channel)) {
         logMessage("Network " + ap.ssid + " gone before attack.");
@@ -1535,8 +1534,7 @@ void attackTask(void *parameter) {
         targetAPSet         = false;
         beaconDetected      = false;
         logMessage("Handshake timeout for: " + ap.ssid + ", deauth count: " + String(deauthCount));
-        if (std::find(failedClients.begin(), failedClients.end(), ap.ssid) == failedClients.end())
-            failedClients.push_back(ap.ssid);
+        if (std::find(failedClients.begin(), failedClients.end(), ap.ssid) == failedClients.end()) failedClients.push_back(ap.ssid);
         setMoodToAttackFailed(ap.ssid);
     }
 

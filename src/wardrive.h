@@ -6,6 +6,7 @@
 #include "freertos/FreeRTOS.h"
 
 extern SemaphoreHandle_t wardriveMutex;
+extern bool wardrive_achievement_flag;  // Set by wardrive when successful with GPS lock
 struct wardriveStatus{
     bool success;
     bool gpsFixAcquired;

@@ -290,6 +290,7 @@ void SnifferLoop() {
 
             apFiles[apKey] = {apKey, file};
             logMessage("New handshake file created: " + String(filename));
+            drawNewAchUnlock(ACH_MANUAL_GRAB);
 
             if (packetCount < 100) {
                 memcpy(packetInfoTable[packetCount].srcMac, packet->data + 10, 6);

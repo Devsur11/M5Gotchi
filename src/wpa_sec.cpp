@@ -6,6 +6,8 @@
 #include <ArduinoJson.h>
 #include "Arduino.h"
 #include "logger.h"
+#include "achievements.h"
+#include "ui.h"
 #include <vector>
 #include <WiFi.h>
 #include <freertos/FreeRTOS.h>
@@ -350,6 +352,7 @@ bool uploadToWpaSec(const char* apiKey, const char* pcapPath, const char* fileNa
         }
         if (response.indexOf("OK") >= 0 || response.indexOf("uploaded") >= 0) {
             logMessage("Successfully uploaded: " + String(fileName));
+            drawNewAchUnlock(ACH_WPA_SEC_API);
             return true;
         }
         // Some servers return 200 with a different body

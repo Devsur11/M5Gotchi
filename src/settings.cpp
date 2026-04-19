@@ -514,6 +514,7 @@ bool saveNewPersonality(){
         FConf.print(output);
         FConf.close();
         logMessage("New personality saved successfully");
+        drawNewAchUnlock(ACH_PERSONALITY_CHANGE);
         return true;
     } else {
         logMessage("Failed to open new personality file for writing");

@@ -305,6 +305,7 @@ void runTextsEditor() {
             if (M5Cardputer.Keyboard.isKeyPressed('s')) {
                 saveSectionedFileLocal(path, texts, order);
                 reloadMoodFiles();
+                drawNewAchUnlock(ACH_CUSTOMIZATION_GOD);
                 drawInfoBox("Saved", "Changes written", "", true, false);
                 debounceDelay();
             }

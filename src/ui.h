@@ -1,6 +1,8 @@
 #pragma once
 #include "settings.h"
 #include "logger.h"
+#include "achievements.h"
+#include "achievementsUI.h"
 
 // Manual Control icon (WiFi logo - 80x29)
 static const uint8_t ICON_MANUAL_CONTROL_BITMAP[] = {	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
@@ -237,6 +239,14 @@ struct unit {
 extern QueueHandle_t unitQueue;
 extern uint16_t bg_color_rgb565;
 extern uint16_t tx_color_rgb565;
+extern M5Canvas canvas_main;
+extern int32_t canvas_center_x;
+extern int32_t canvas_center_y;
+extern int32_t display_w;
+extern int32_t display_h;
+extern bool keyboard_changed;
+extern uint8_t menuID;
+extern int32_t canvas_h;
 
 // A tiny in-memory message struct
 struct message {

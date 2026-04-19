@@ -6,6 +6,8 @@
 #include "logger.h"
 #include "settings.h"
 #include "PMKIDGrabber.h"
+#include "achievements.h"
+#include "ui.h"
 
 // --- Settings & Globals ---
 #define ATTACK_TIMEOUT   3000
@@ -435,6 +437,7 @@ bool runPMKIDAttack(const uint8_t *apBSSID, int channel) {
             ssidHex);
         f.close();
         logMessage("[PMKID] Saved: " + String(filename));
+        drawNewAchUnlock(ACH_PMKID_GRABBER);
     } else {
         logMessage("[PMKID] ERROR: Could not open file for writing.");
     }

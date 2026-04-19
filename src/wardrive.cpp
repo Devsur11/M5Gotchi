@@ -8,6 +8,8 @@
 #include "wardrive.h"
 #include "logger.h"
 #include "crypto.h"
+#include "achievements.h"
+#include "ui.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 
@@ -16,6 +18,10 @@ static const int GPS_RX_PIN = 15; // AT6H TX -> ESP RX
 static const int GPS_TX_PIN = 13; // AT6H RX <- ESP TX
 static const int GPS_BAUD_DEFAULT = 115200;
 int tot_observed_networks = 0;
+
+// Flag for achievement unlock - set when wardrive succeeds with GPS lock
+// UI main loop checks this when auto mode is active
+bool wardrive_achievement_flag = false;
 
 // Mutex for thread-safe wardrive operations
 SemaphoreHandle_t wardriveMutex = nullptr;
@@ -451,7 +457,11 @@ bool uploadToWigle(const String& encodedToken, const char* csvPath, int* outHttp
         fLogMessage("uploadToWigle: response body: %s", snippet.c_str());
     }
 
-    return (httpCode >= 200 && httpCode < 300);
+    bool success = (httpCode >= 200 && httpCode < 300);
+    if (success) {
+        drawNewAchUnlock(ACH_WIGLE_NET);
+    }
+    return success;
 }
 
 #include "ui.h"
@@ -711,6 +721,12 @@ wardriveStatus wardrive(const std::vector<wifiSpeedScan>& networks, unsigned lon
 
         // Release mutex before returning
         xSemaphoreGive(wardriveMutex);
+
+        // Set flag if wardrive was successful with GPS lock
+        // UI main loop will check this flag when auto mode is active
+        if (written > 0 && bestFix.valid) {
+          wardrive_achievement_flag = true;
+        }
 
         return {written > 0, bestFix.valid, bestFix.lat, bestFix.lon, bestFix.hdop, bestFix.alt, bestFix.timeIso, tot_observed_networks, (uint8_t)written};}
 }
