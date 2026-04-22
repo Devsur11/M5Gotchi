@@ -4015,7 +4015,7 @@ void runApp(uint8_t appID){
       }
       menuID = 6; return;
     }
-    if(appID == 41){
+    if(appID == 150){
       // Draw achievements
       debounceDelay();
       drawAchievements();
