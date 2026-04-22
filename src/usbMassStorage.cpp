@@ -463,10 +463,9 @@ namespace USBMassStorage {
             const file = fileInput.files[0];
             const formData = new FormData();
             formData.append('file', file);
-            formData.append('path', currentPath);
 
             try {
-                const response = await fetch('/api/upload', {
+                const response = await fetch(`/api/upload?path=${encodeURIComponent(currentPath)}`, {
                     method: 'POST',
                     body: formData
                 });
@@ -601,7 +600,7 @@ namespace USBMassStorage {
         // Initial load
         loadFiles();
         loadSettings();
-        setInterval(updateStorageInfo, 5000);
+        setInterval(loadFiles, 5000);
 
         function hexToRGB(hex) {
             // Remove # if present
@@ -614,10 +613,41 @@ namespace USBMassStorage {
             return { r, g, b };
         }
 
+        function colorDistance(rgb1, rgb2) {
+            const dr = rgb1.r - rgb2.r;
+            const dg = rgb1.g - rgb2.g;
+            const db = rgb1.b - rgb2.b;
+            return Math.sqrt(dr*dr + dg*dg + db*db);
+        }
+
         function isColorWhite(hexColor) {
             const rgb = hexToRGB(hexColor);
             // Consider it white if all components are > 240
             return rgb.r > 240 && rgb.g > 240 && rgb.b > 240;
+        }
+
+        function hasContrast(bgColor, txColor) {
+            const bgRGB = hexToRGB(bgColor);
+            const txRGB = hexToRGB(txColor);
+            // Minimum distance of 150 on RGB scale to ensure readability
+            return colorDistance(bgRGB, txRGB) > 150;
+        }
+
+        function getBestContrastColor(bgColor) {
+            const { r, g, b } = hexToRGB(bgColor);
+
+            // Convert to linear light values
+            const toLinear = c => {
+                c /= 255;
+                return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+            };
+
+            // WCAG relative luminance
+            const luminance = 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+
+            // Use white for dark backgrounds, black for light ones
+            // Threshold 0.179 is the WCAG-recommended midpoint
+            return luminance > 0.179 ? '#000000' : '#ffffff';
         }
 
         function createGradient(hexColor) {
@@ -638,11 +668,15 @@ namespace USBMassStorage {
                 if (data.bg_color) {
                     const gradient = createGradient(data.bg_color);
                     document.documentElement.style.setProperty('--bg-gradient', gradient);
-                }
-                if (data.tx_color && !isColorWhite(data.tx_color)) {
-                    // Only apply text color if it's not white
-                    document.documentElement.style.setProperty('--tx-color', data.tx_color);
-                    document.documentElement.style.setProperty('color', data.tx_color);
+                    
+                    // Determine text color: use provided color if it has good contrast, otherwise auto-select
+                    let textColor = data.tx_color;
+                    if (!textColor || !hasContrast(data.bg_color, textColor)) {
+                        // Auto-select white or black based on what contrasts better
+                        textColor = getBestContrastColor(data.bg_color);
+                    }
+                    
+                    document.documentElement.style.setProperty('--text-color', textColor);
                 }
             } catch (error) {
                 console.log('Could not load settings');
@@ -714,7 +748,12 @@ namespace USBMassStorage {
 
   // API: Upload file
   static void handleUpload(AsyncWebServerRequest *request, const String& filename, size_t index, uint8_t *data, size_t len, bool final) {
-    String path = request->hasParam("path") ? request->getParam("path")->value() : "/";
+    // Get path from query parameter (not form field, as form fields aren't accessible in file upload callback)
+    String path = "/";
+    if (request->hasParam("path")) {
+      path = request->getParam("path")->value();
+    }
+    
     String filePath = path;
     if (!filePath.endsWith("/")) filePath += "/";
     filePath += filename;
@@ -724,6 +763,14 @@ namespace USBMassStorage {
     }
 
         SD_LOCK();
+        // Ensure directory exists before opening file
+        String dirPath = filePath.substring(0, filePath.lastIndexOf('/'));
+        if (dirPath.length() > 0 && !dirPath.equals("/")) {
+            if (!FSYS.exists(dirPath)) {
+                FSYS.mkdir(dirPath);
+            }
+        }
+        
         File file = FSYS.open(filePath, index == 0 ? "w" : "a");
         if (file) {
             file.write(data, len);

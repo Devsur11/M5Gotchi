@@ -5,8 +5,6 @@
 #include "src.h"
 #include "inputManager.h"
 
-#define BUTTON_ONLY_INPUT
-
 void drawAchievements() {
     debounceDelay();
     
@@ -141,7 +139,7 @@ void drawAchievements() {
         }
         
         if (inputManager::isButtonBLongPressed()) {
-            menuID = 6;  // Return to settings
+            menuID = 0;
             return;
         }
         
