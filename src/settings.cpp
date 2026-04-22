@@ -80,7 +80,7 @@ bool decryptStatsValue16(const String &encrypted, const String &macAddress, uint
     return _decryptSensitiveData16(encrypted, macAddress, outValue);
 }
 
-String hostname = "M5Gotchi";
+String hostname = "M5Gotchi EDU";
 bool sound = false;
 int brightness = 150;
 bool autoDimEnabled = true;
@@ -90,12 +90,12 @@ SPIClass sdSPI;
 String savedApSSID;
 String savedAPPass;
 std::vector<SavedNetwork> savedNetworks;
-bool connectWiFiOnStartup = true;
+bool connectWiFiOnStartup = false;
 String whitelist;
 File FConf;
-bool pwnagothiMode = false;
+bool pwnagothiMode = true;
 uint8_t sessionCaptures;
-bool pwnagothiModeEnabled = false;
+bool pwnagothiModeEnabled = true;
 String bg_color = "#ffffffff";
 String tx_color = "#00000000";
 bool skip_eapol_check = false;
@@ -112,7 +112,7 @@ uint64_t lastTokenRefresh;
 String wiggle_api_key = "";
 bool cardputer_adv = false;
 bool limitFeatures = false;
-bool checkUpdatesAtNetworkStart = true;
+bool checkUpdatesAtNetworkStart = false;
 uint8_t gpsTx;
 uint8_t gpsRx;
 bool useCustomGPSPins = false;
@@ -133,6 +133,7 @@ bool randomise_mac_at_boot = true;
 bool add_new_units_to_friends = false;
 bool check_inbox_at_startup = false;
 String originalMacAddress;
+uint8_t halfScore = 0; //this will be 0-10 range
 
 // Keep track of which hints have been displayed using bitmask
 // Each bit represents a different hint

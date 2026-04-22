@@ -13,7 +13,6 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 
-
 static const int GPS_RX_PIN = 15; // AT6H TX -> ESP RX
 static const int GPS_TX_PIN = 13; // AT6H RX <- ESP TX
 static const int GPS_BAUD_DEFAULT = 115200;
@@ -29,11 +28,8 @@ SemaphoreHandle_t wardriveMutex = nullptr;
 QueueHandle_t wardriveSaveQueue = nullptr;
 
 // Session filename state
-static String currentWardrivePath = "/M5Gotchi/wardriving/first_seen.csv";
+static String currentWardrivePath = "/M5Gotchi/wardriving/wardrive.csv";
 static bool filenameLocked = false; // once set by startWardriveSession, stays until explicitly changed
-
-// First-seen map (persistent on SD)
-static const char* FIRST_SEEN_PATH = "/M5Gotchi/wardriving/first_seen.csv";
 
 // Internal representation of a parsed fix
 struct GpsFix {
@@ -194,7 +190,7 @@ void startWardriveSession(unsigned long gpsTimeoutMs) {
     GpsFix bestFix;
     unsigned long start = millis();
     String lineBuf;
-    while (millis() - start < gpsTimeoutMs) {
+    while (true) {
         while (Serial2.available()) {
             char c = (char)Serial2.read();
             if (c == '\r') continue;
@@ -288,6 +284,40 @@ void waitUntillLock(){
         if (bestFix.valid && bestFix.timeIso.length() >= 16) break;
         delay(5);
     }
+
+    String fname;
+    if (bestFix.valid && bestFix.timeIso.length() >= 10) {
+        // construct YYYYMMDD_HHMMSS
+        String ts = bestFix.timeIso; // maybe "YYYY-MM-DDTHH:MM:SSZ" or "T..." fallback
+        // try to extract date/time components
+        int year = 1970, month = 1, day = 1, hour = 0, min = 0, sec = 0;
+        if (ts.startsWith("T")) {
+            // no date, fallback to millis-based name
+        } else {
+            // parse "YYYY-MM-DDTHH:MM:SSZ"
+            year = ts.substring(0,4).toInt();
+            month = ts.substring(5,7).toInt();
+            day = ts.substring(8,10).toInt();
+            hour = ts.substring(11,13).toInt();
+            min = ts.substring(14,16).toInt();
+            sec = ts.substring(17,19).toInt();
+            char buf[64];
+            snprintf(buf, sizeof(buf), "wardriving/wardrive_%04d%02d%02d_%02d%02d%02d.csv",
+                     year, month, day, hour, min, sec);
+            fname = String(buf);
+        }
+    }
+    if (fname.length() == 0) {
+        // fallback: use millis timestamp
+        unsigned long t = millis();
+        char buf[64];
+        snprintf(buf, sizeof(buf), "wardriving/wardrive_millis_%lu.csv", t);
+        fname = String(buf);
+    }
+    currentWardrivePath = "/M5Gotchi/" + fname; // ensure leading slash
+    filenameLocked = true;
+
+    fLogMessage("Wardrive session file set to: %s", currentWardrivePath.c_str());
 }
 
 bool waitForGpsLock(int rxPin, int txPin, unsigned long timeoutMs){

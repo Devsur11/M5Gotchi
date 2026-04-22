@@ -216,44 +216,4 @@ void drawAchievements() {
 }
 
 void drawNewAchUnlock(AchievementID id){
-    const AchievementData* d_ach = achievements_get_data(id);
-    if(achievements_is_unlocked(id)){
-        return; //already unlocked, no need to show
-    }
-    achievements_register(id);
-    canvas_main.clear();
-    canvas_main.fillScreen(bg_color_rgb565);
-    canvas_main.setTextColor(tx_color_rgb565);
-    canvas_main.setTextSize(2);
-    canvas_main.setTextDatum(middle_center);
-    canvas_main.drawString("New achievement!", canvas_center_x, 20);
-    canvas_main.setTextSize(1);
-    canvas_main.drawString(String(d_ach->name), canvas_center_x, 40);
-    canvas_main.drawBitmap(canvas_center_x - 20, 60, unlock, UNLOCK_WIDTH, UNLOCK_HEIGHT, tx_color_rgb565);
-    canvas_main.drawString("Press any button to continue or wait 10s", canvas_center_x, 100);
-    pushAll();
-    delay(3000);
-    if(pwnagotchi.sound_on_events){
-        Sound(2000, 50, true);
-        delay(100);
-        Sound(3000, 100, true);
-        delay(100);
-        Sound(4000, 150, true);
-    }
-    long start = millis();
-    while(millis() - start < 10000){
-        #ifdef BUTTON_ONLY_INPUT
-        inputManager::update();
-        if (inputManager::isButtonAPressed() || inputManager::isButtonBPressed()) {
-            break; 
-        }
-        #else
-        M5.update();
-        M5Cardputer.update();
-        if(M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER) || M5Cardputer.Keyboard.isKeyPressed('`')){
-            debounceDelay();
-            break;
-        }
-        #endif
-    }
 }

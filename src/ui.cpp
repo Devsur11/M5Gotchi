@@ -140,28 +140,23 @@ static const char * const broken_ssids[]{
 
 // menuID 1
 menu main_menu[] = {
-    {"Manual Control", 1},        // Manual mode
-    {"Auto Mode", 4},             // Auto mode (original pwnagotchi)
-    {"WPA-SEC", 55},              // WPA-SEC companion
-    {"Pwngrid", 7},               // Pwngrid companion
-    {"Wardriving", 8},            // Wardriving companion
-    {"Files", 70},                // File manager
-    {"Statistics", 5},            // Stats
-    {"Achievements", 41},
-    {"Settings", 6},               // Config
-    {"Web file manager", 73},         // Web file manager
-    {"Back", 255}
+  {"Manual Control", 1},        // Manual mode
+  {"Enable Auto Mode", 125},         
+  {"Pwngrid", 7},               // Pwngrid companion
+  {"Wardriving", 8},            // Wardriving companion
+  {"Files", 70},                // File manager
+  {"Statistics", 5},            // Stats
+  {"Settings", 6},               // Config
+  {"Web file manager", 73},         // Web file manager
+  {"Back", 255}
 };
 
 // menuID 2
 menu wifi_menu[] = {
-    {"Networks selector", 20},
-    {"Clone / Details", 21},  
-    {"PMKID Capture", 61},  
-    {"Access Point", 22}, 
-    {"Deauthentication", 23}, 
-    {"Packet Sniffing", 24},  
-    {"Back", 255}
+  {"Networks selector", 20},
+  {"Details", 21},
+  {"Packet Sniffing", 24},
+  {"Back", 255}
 };
 
 // menuID 7
@@ -179,18 +174,10 @@ menu wpasec_setup_menu[] = {
 
 // menuID 5
 menu pwngotchi_menu[] = {
-  {"Enable Auto Mode", 125},      
-  {"Auto + Wardriving", 128},     
-  {"Debug views", 92},
-  {"Whitelist", 38},             
-  {"Handshakes", 39},            
-  {"Back", 255}
 };
 
 menu auto_menu[] = {
-  {"Switch to manual mode", 126},
-  {"Debug views", 92},
-  {"Back", 255}
+  {"Switch to manual mode", 126}
 };
 
 // menuID 6
@@ -199,14 +186,11 @@ menu settings_menu[] = {
   {"Startup / Boot", 160},               
   {"Network / WiFi", 161},               
   {"Interface / Display", 162},          
-  {"User / Device", 163},                
-  {"Personality Settings", 150},         
+  {"User / Device", 163},   
   {"Logging / Storage", 164},
   {"System / Maintenance", 165},
-  {"Advanced", 166},
   {"Back", 255}
 };
-
 
 menu gps_pins_menu[] = {
   {"Default Pins", 30},
@@ -244,21 +228,6 @@ menu pwngrid_not_enrolled_menu[] = {
 
 // devtools menu
 menu devtools_menu[] = {
-  {"Dev Mode", 100},          
-  {"Set Variable", 101},      
-  {"Set Variable (Raw)", 108},
-  {"Run App by ID", 102},     
-  {"BG Color Picker", 103},   
-  {"Text Color Picker", 104}, 
-  {"Coords Overlay", 105},    
-  {"Serial Overlay", 106},    
-  {"Skip File Checks", 107},  
-  {"Scan Speed Test", 109},   
-  {"Coordinate Picker", 110}, 
-  {"Unlock Achievement", 113}, 
-  {"Mood Font Tester", 112},  
-  {"Crash Test", 111},
-  {"Back", 255}
 };
 
 menu devtools_locked_menu[] = {
@@ -620,13 +589,6 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
     }
   }
 
-  FileWriteRequest* writeReq = nullptr;
-  if (fileWriteQueue && xQueueReceive(fileWriteQueue, &writeReq, 0) == pdTRUE) {
-    if (writeReq) {
-      handleFileWrite(writeReq);
-      saveSettings();
-    }
-  }
 
   if(triggerPwnagothi && buttonDirty){
     if(pwnagotchiModeFromButton && !pwnagothiMode){
@@ -689,58 +651,23 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
     redrawUi(show_toolbars);
   }
   
-  // Secret terminal hook: ENTER in mood view opens secret terminal
-  if (menuID == 0 && isOkPressed()) {
-    debounceDelay();
-    String out = userInput("???", "??????????????????", 20);
-    drawNewAchUnlock(ACH_TERMINAL);
-    uint32_t outHash = simpleHash(out);
-    if (outHash == 2088325554UL) {
-      achievements_register(ACH_PAPIEZOWO);
-      drawNewAchUnlock(ACH_PAPIEZOWO);
-      drawInfoBox("Easter Egg", "Pan, kiedyś stanął nad brzegiem...", "", true, false);
-    } else if (outHash == 5861746UL) {
-      achievements_register(ACH_CHILD);
-      drawNewAchUnlock(ACH_CHILD);
-      drawInfoBox("Easter Egg", "YOU KNOW WHAT YOU DID!", "", true, false);
-    } else if (out.length() > 40) {
-      achievements_register(ACH_CHEATER);
-      drawNewAchUnlock(ACH_CHEATER);
-      drawInfoBox("Cheater", "You unlocked an achievement!", "", true, false);
-    }
-  }
-  if(show_toolbars)
-  {
+  if(show_toolbars){
     drawTopCanvas();
     drawBottomCanvas();
   }
   
-  
-
   if (menuID == 1) {
-    #ifdef M5STICKS3_ENV
-    drawMenuList(main_menu, 1, 11);
-    #else
-    drawMenuList(main_menu, 1, 10);
-    #endif
+    drawMenuList(main_menu, 1, 9);
     prevMID = 1;
   } 
   else if (menuID == 2){
-    drawMenuList( wifi_menu , 2, 7);
+    drawMenuList( wifi_menu , 2, 4);
     prevMID = 2;
   }
-  else if (menuID == 5){
-    drawMenuList( pwngotchi_menu , 5, 6);
-    prevMID = 5;
-  }
   else if (menuID == 6){
-    drawMenuList(settings_menu, 6, 9);
+    drawMenuList(settings_menu, 6, 7);
     prevMID = 6;
   }  
-  else if (menuID == 7){
-    (wpa_sec_api_key.length()>5)?drawMenuList(wpasec_menu, 7, 4):drawMenuList(wpasec_setup_menu, 7, 2);
-    prevMID = 7;
-  }
   else if (menuID == 8){
     SD_LOCK();
     if(!(prevMID == 8)){toUpload = FSYS.open("/M5Gotchi/pwngrid/cracks.conf");}
@@ -761,23 +688,14 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
     prevMID = 9;
   }
   else if (menuID == 10){
-    drawMenuList(auto_menu, 10, 3);
+    drawMenuList(auto_menu, 10, 1);
     prevMID = 10;
-  }
-  else if (menuID == 99) {
-    if(dev_mode){
-      drawMenuList(devtools_menu, 99, 14);
-    }
-    else{
-      drawMenuList(devtools_locked_menu, 99, 2);
-    }
-    prevMID = 99;
   }
   else if (menuID == 0)
   {
-    //redraw only in 5 seconds intervals
+    //redraw only in 3 seconds intervals
     unsigned long currentTime = millis();
-    if ((currentTime - lastRedrawTime >= 5000 )|| needsUiRedraw) {
+    if ((currentTime - lastRedrawTime >= 3000 )|| needsUiRedraw) {
       if(prevMID){
         drawInfoBox("", "Refreshing data...", "", false, false);
         prevMID=0;
@@ -785,63 +703,6 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
       redrawUi(show_toolbars);
       lastRedrawTime = currentTime;
       needsUiRedraw = false;
-    }else if(setupDone){
-      if(CURRENT_VERSION == "dev"){
-        drawNewAchUnlock(ACH_DEV_VER);
-      }
-      if(dev_mode){
-        drawNewAchUnlock(ACH_DEV_MODE);
-      }
-      if(pwngrid_indentity.length()>10){
-        drawNewAchUnlock(ACH_ENROLL_PWNGRID);
-      }
-      if(pwned_ap > 0){
-        drawNewAchUnlock(ACH_FIRST_PWN);
-      }
-      if(getPwngridTotalPeers() > 0 && getPwngridTotalPeers() < 5){
-        drawNewAchUnlock(ACH_FIRST_MEETING);
-      }
-      if(getPwngridTotalPeers() >= 5){
-        drawNewAchUnlock(ACH_FAMILY);
-      }
-      if(allTimeDeauths > 1000){
-        drawNewAchUnlock(ACH_1000_DEAUTH);
-      }
-      if(allTimeDeauths > 10000){
-        drawNewAchUnlock(ACH_10000_DEAUTH);
-      }
-      if(allTimePeers>=10){
-        drawNewAchUnlock(ACH_10_PEERS);
-      }
-      if(allTimePeers>=50){
-        drawNewAchUnlock(ACH_50_PEERS);
-      }
-      if(allTimePeers>=100){
-        drawNewAchUnlock(ACH_100_PEERS);
-      }
-      // Wardrive achievement - only when auto mode is active
-      if(wardrive_achievement_flag && pwnagotchiTaskHandle != nullptr){
-        drawNewAchUnlock(ACH_WARDRIVE);
-        wardrive_achievement_flag = false;
-      }
-      // Epoch achievements
-      if(allTimeEpochs >= 100){
-        drawNewAchUnlock(ACH_100_EPOCH);
-      }
-      if(allTimeEpochs >= 1000){
-        drawNewAchUnlock(ACH_1000_EPOCH);
-      }
-      if(allTimeEpochs >= 10000){
-        drawNewAchUnlock(ACH_10000_EPOCH);
-      }
-      // Session time achievements (convert milliseconds to hours)
-      long sessionHours = lastSessionTime / (1000 * 60 * 60);
-      if(sessionHours >= 1){
-        drawNewAchUnlock(ACH_1_HOUR_SESSION);
-      }
-      if(sessionHours >= 6){
-        drawNewAchUnlock(ACH_6_HOUR_SESSION);
-      }
     }
   }
 
@@ -863,14 +724,6 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
   }
   canvas_main.pushSprite(0, canvas_top_h);
   M5.Display.endWrite();
-  if(pwnagothiMode && triggerPwnagothi){
-    if(!stealth_mode){
-      //nothing - this will be a task
-    }
-    else{
-      legacyLoop();
-    }
-  }
 }
 
 void setToMainMenu(){
@@ -880,28 +733,7 @@ void setToMainMenu(){
 }
 
 void redrawUi(bool show_toolbars) {
-  // draw developer overlays on canvas_main before pushing to display
-  // NOTE: removed recursive call to updateUi to avoid stack overflow (updateUi -> redrawUi -> updateUi ...)
-  if (coords_overlay) {
-    // approximate coordinates of selected menu item
-    if (menuID != 0) {
-      int lineH = 18;
-      int x = 18; // where entries are drawn
-      int y = menu_current_opt * lineH + 2;
-      // draw crosshair and text
-      canvas_main.setTextSize(1);
-      canvas_main.setTextColor(tx_color_rgb565);
-      canvas_main.drawLine(x - 4, y, x + 20, y, tx_color_rgb565);
-      canvas_main.drawLine(x, y - 4, x, y + 12, tx_color_rgb565);
-      canvas_main.drawString("X:" + String(x) + " Y:" + String(y), x + 24, y);
-    }
-  }
-
-  
-  if(serial_overlay){
-    loggerTask();
-    delay(100);
-  } 
+  saveSettings();
   String mood_face = getCurrentMoodFace();
   String mood_phrase = getCurrentMoodPhrase();
   drawMood(mood_face, mood_phrase);
@@ -6065,6 +5897,7 @@ void runApp(uint8_t appID){
       return;
     }
     else if (appID == 125){
+      
       if(pwn::begin()){
         menuID = 0;
         return;
@@ -8477,14 +8310,13 @@ const uint8_t* getMenuIconBitmap(uint8_t menuIndex) {
     switch (menuIndex) {
       case 0: return ICON_MANUAL_CONTROL_BITMAP;   // Manual Control
       case 1: return ICON_AUTO_MODE_BITMAP;        // Auto Mode
-      case 2: return ICON_WPA_SEC_BITMAP;          // WPA-SEC
-      case 3: return ICON_PWNGRID_BITMAP;          // Pwngrid
-      case 4: return ICON_WARDRIVING_BITMAP;       // Wardriving
-      case 5: return ICON_FILES_BITMAP;            // Files
-      case 6: return ICON_STATISTICS_BITMAP;       // Statistics
-      case 7: return ICON_SETTINGS_BITMAP;         // Settings
-      case 8: return ICON_WEB_MANAGER_BITMAP;      // Web file manager
-      case 9: return ICON_BACK_BITMAP;             // Back
+      case 2: return ICON_PWNGRID_BITMAP;          // Pwngrid
+      case 3: return ICON_WARDRIVING_BITMAP;       // Wardriving
+      case 4: return ICON_FILES_BITMAP;            // Files
+      case 5: return ICON_STATISTICS_BITMAP;       // Statistics
+      case 6: return ICON_SETTINGS_BITMAP;         // Settings
+      case 7: return ICON_WEB_MANAGER_BITMAP;      // Web file manager
+      case 8: return ICON_BACK_BITMAP;             // Back
       default: return nullptr;
     }
   }

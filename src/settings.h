@@ -46,7 +46,7 @@ bool wifion(){
     return true;
 }
 #ifndef CURRENT_VERSION
-#define CURRENT_VERSION "dev"
+#define CURRENT_VERSION "EDU"
 #endif
 
 #define NORMAL_JSON_URL UPDATE_URL
@@ -213,6 +213,7 @@ extern bool check_inbox_at_startup;
 extern String originalMacAddress;
 extern bool configChanged;
 extern uint8_t menu_display_mode;  // 0=list, 1=grid
+extern uint8_t halfScore;
 
 // Helper functions to encrypt/decrypt sensitive stat values using MAC address as key
 String encryptStatsValue(uint64_t value, const String &macAddress);

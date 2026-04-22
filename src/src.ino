@@ -750,21 +750,6 @@ void loop() {
   #endif
   
   updateUi(true);
-  if(CURRENT_VERSION != "dev") return; //lets block dev mode for production
-  #ifndef BUTTON_ONLY_INPUT
-  M5Cardputer.update();
-  if(M5Cardputer.Keyboard.isKeyPressed(KEY_OPT) && M5Cardputer.Keyboard.isKeyPressed(KEY_LEFT_CTRL) && M5Cardputer.Keyboard.isKeyPressed(KEY_FN)){
-    drawInfoBox("DevTools", "Opening developer tools...", "", false, false);
-    delay(200);
-    runApp(99);
-  }
-  #else
-  if(inputManager::isButtonALongPressed() && inputManager::isButtonBLongPressed()){
-    drawInfoBox("DevTools", "Opening developer tools...", "", false, false);
-    delay(200);
-    runApp(99);
-  }
-  #endif
 }
 
 void Sound(int frequency, int duration, bool sound){

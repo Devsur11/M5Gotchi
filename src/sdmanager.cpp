@@ -49,11 +49,12 @@ static const char* PROTECTED_FOLDERS[] = {
   "wardriving",
   "temp",
   "moods",
-  "m5gotchi"
+  "m5gotchi",
+  "M5Gotchi"
 };
 
 static const int NUM_PROTECTED_FILES = 14;
-static const int NUM_PROTECTED_FOLDERS = 9;
+static const int NUM_PROTECTED_FOLDERS = 10;
 
 // Check if a file/folder path is protected
 static bool isPathProtected(const String &path) {
