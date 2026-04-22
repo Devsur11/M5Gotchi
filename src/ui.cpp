@@ -147,7 +147,7 @@ menu main_menu[] = {
     {"Wardriving", 8},            // Wardriving companion
     {"Files", 70},                // File manager
     {"Statistics", 5},            // Stats
-    {"Achievements", 41},
+    {"Achievements", 200},
     {"Settings", 6},               // Config
     {"Web file manager", 73},         // Web file manager
     {"Back", 255}
@@ -4183,7 +4183,7 @@ void runApp(uint8_t appID){
       }
       menuID = 6; return;
     }
-    if(appID == 41){
+    if(appID == 200){
       // Draw achievements
       debounceDelay();
       drawAchievements();
