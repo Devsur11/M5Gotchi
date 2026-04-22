@@ -270,15 +270,15 @@ menu devtools_locked_menu[] = {
 menu wardrivingMenuWithWiggle[] = {
   {"Start Wardriving", 18},   
   {"View Logs", 19},          
-  {"Upload to Wiggle", 28},   
-  {"Reset Wiggle Config", 27},
+  {"Upload to Wigle", 28},   
+  {"Reset Wigle Config", 27},
   {"Back", 255}
 };
 
 menu wardrivingMenuWithWiggleUnsett[] = {
   {"Start Wardriving", 18},  
   {"View Logs", 19},         
-  {"Set Wiggle API Key", 25},
+  {"Set Wigle API Key", 25},
   {"Back", 255}
 };
 
