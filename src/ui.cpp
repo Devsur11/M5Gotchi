@@ -601,23 +601,23 @@ File toUpload;
 void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
   WardriveSaveRequest* wreq = nullptr;
   if (wardriveSaveQueue && xQueueReceive(wardriveSaveQueue, &wreq, 0) == pdTRUE) {
-    if (wreq) {
-      SD_LOCK();
-      File wf = FSYS.open(wreq->filename, FILE_APPEND);
-      if (wf) {
-        if (wf.size() == 0 && wreq->ensureWigleHeader) {
-          wf.println("WigleWifi-1.4,appRelease=M5Gotchi,model=M5Gotchi,release=1");
-          wf.println("\"BSSID\",\"SSID\",\"Capabilities\",\"First timestamp seen\",\"Channel\",\"Frequency\",\"RSSI\",\"Latitude\",\"Longitude\",\"Altitude\",\"Accuracy\",\"RCOIs\",\"MfgId\",\"Type\"");
-        }
-        wf.print(wreq->body);
-        wf.close();
-        fLogMessage("Wardrive: saved %s (len=%u)", wreq->filename, (unsigned)wreq->body.length());
-      } else {
-        fLogMessage("Wardrive: cannot open for append: %s", wreq->filename);
+      if (wreq) {
+          SD_LOCK();
+          File wf = FSYS.open(wreq->filename, FILE_APPEND);
+          if (wf) {
+              if (wf.size() == 0 && wreq->ensureWigleHeader) {
+                  wf.println("WigleWifi-1.4,appRelease=M5Gotchi,model=M5Gotchi,release=1.0,device=M5Gotchi,display=M5Gotchi,board=ESP32,brand=M5Stack");
+                  wf.println("MAC,SSID,AuthMode,FirstSeen,Channel,Frequency,RSSI,CurrentLatitude,CurrentLongitude,AltitudeMeters,AccuracyMeters,Type");
+              }
+              wf.print(wreq->body);
+              wf.close();
+              fLogMessage("Wardrive: saved %s (len=%u)", wreq->filename, (unsigned)wreq->body.length());
+          } else {
+              fLogMessage("Wardrive: cannot open for append: %s", wreq->filename);
+          }
+          SD_UNLOCK();
+          delete wreq;
       }
-      SD_UNLOCK();
-      delete wreq;
-    }
   }
 
   FileWriteRequest* writeReq = nullptr;

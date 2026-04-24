@@ -14,39 +14,43 @@
 #include "freertos/semphr.h"
 
 
-static const int GPS_RX_PIN = 15; // AT6H TX -> ESP RX
-static const int GPS_TX_PIN = 13; // AT6H RX <- ESP TX
+static const int GPS_RX_PIN = 15;
+static const int GPS_TX_PIN = 13;
 static const int GPS_BAUD_DEFAULT = 115200;
 int tot_observed_networks = 0;
 
-// Flag for achievement unlock - set when wardrive succeeds with GPS lock
-// UI main loop checks this when auto mode is active
 bool wardrive_achievement_flag = false;
 
-// Mutex for thread-safe wardrive operations
 SemaphoreHandle_t wardriveMutex = nullptr;
-// Queue for delegating wardrive CSV saves to UI core (core 0)
 QueueHandle_t wardriveSaveQueue = nullptr;
 
-// Session filename state
 static String currentWardrivePath = "/M5Gotchi/wardriving/first_seen.csv";
-static bool filenameLocked = false; // once set by startWardriveSession, stays until explicitly changed
+static bool filenameLocked = false;
 
-// First-seen map (persistent on SD)
 static const char* FIRST_SEEN_PATH = "/M5Gotchi/wardriving/first_seen.csv";
 
-// Internal representation of a parsed fix
+// WiGLE CSV header lines - exact format required by WiGLE
+static const char* WIGLE_META_HEADER   = "WigleWifi-1.4,appRelease=M5Gotchi,model=M5Gotchi,release=1.0,device=M5Gotchi,display=M5Gotchi,board=ESP32,brand=M5Stack";
+static const char* WIGLE_COLUMN_HEADER = "MAC,SSID,AuthMode,FirstSeen,Channel,Frequency,RSSI,CurrentLatitude,CurrentLongitude,AltitudeMeters,AccuracyMeters,Type";
+
 struct GpsFix {
     bool valid = false;
     double lat = 0.0;
     double lon = 0.0;
     double hdop = 0.0;
     double alt = 0.0;
-    String timeIso; // ISO timestamp if available (UTC)
-    String fixType; // "GPRMC" or "GPGGA"
+    String timeIso;
+    String fixType;
 };
 
-// ---- helpers (unchanged, lightly adjusted) ----
+// Convert ISO timestamp "YYYY-MM-DDTHH:MM:SSZ" to WiGLE format "YYYY-MM-DD HH:MM:SS"
+static String isoToWigleTimestamp(const String& iso) {
+    String ts = iso;
+    ts.replace("T", " ");
+    if (ts.endsWith("Z")) ts = ts.substring(0, ts.length() - 1);
+    return ts;
+}
+
 static double nmeaToDecimal(const String& field, char dir) {
     if (field.length() < 4) return NAN;
     double val = field.toFloat();
@@ -148,24 +152,22 @@ static void parseNmeaLine(const String& line, GpsFix& fix) {
             }
         }
     } else if (line.startsWith("$GNZDA")) {
-        if (true) {
-            String timeStr = fields[1];
-            String dayStr = fields[2];
-            String monthStr = fields[3];
-            String yearStr = fields[4];
+        String timeStr = fields[1];
+        String dayStr = fields[2];
+        String monthStr = fields[3];
+        String yearStr = fields[4];
 
-            if (timeStr.length() >= 6 && dayStr.length() >= 1 && monthStr.length() >= 1 && yearStr.length() >= 4) {
-                int day = dayStr.toInt();
-                int month = monthStr.toInt();
-                int year = yearStr.toInt();
-                int hour = timeStr.substring(0,2).toInt();
-                int minute = timeStr.substring(2,4).toInt();
-                int second = timeStr.substring(4,6).toInt();
+        if (timeStr.length() >= 6 && dayStr.length() >= 1 && monthStr.length() >= 1 && yearStr.length() >= 4) {
+            int day = dayStr.toInt();
+            int month = monthStr.toInt();
+            int year = yearStr.toInt();
+            int hour = timeStr.substring(0,2).toInt();
+            int minute = timeStr.substring(2,4).toInt();
+            int second = timeStr.substring(4,6).toInt();
 
-                char buf[64];
-                snprintf(buf, sizeof(buf), "%04d-%02d-%02dT%02d:%02d:%02dZ", year, month, day, hour, minute, second);
-                fix.timeIso = String(buf);
-            }
+            char buf[64];
+            snprintf(buf, sizeof(buf), "%04d-%02d-%02dT%02d:%02d:%02dZ", year, month, day, hour, minute, second);
+            fix.timeIso = String(buf);
         }
     }
 }
@@ -179,21 +181,63 @@ static String bssidToString(const uint8_t bssid[6]) {
 
 static int channelToFrequency(int ch) {
     if (ch <= 0) return 0;
-    if (ch <= 14) return 2407 + ch * 5; // 2.4GHz
-    return 5000 + ch * 5; // rough 5GHz mapping (approx)
+    if (ch <= 14) return 2407 + ch * 5;
+    return 5000 + ch * 5;
+}
+
+// Build a single WiGLE CSV data row from a network + GPS fix.
+// Returned string does NOT include a trailing newline.
+static String buildWigleRow(const wifiSpeedScan& net, const GpsFix& fix) {
+    String macStr = bssidToString(net.bssid);
+
+    String ssidEsc = net.ssid;
+    ssidEsc.replace("\"", "\"\"");
+
+    String caps = "[ESS]";
+    if (net.secure) caps = "[WPA2-PSK-CCMP][ESS]";
+
+    int ch   = net.channel;
+    int freq = channelToFrequency(ch);
+    int rssi = net.rssi;
+
+    // Timestamp must be "YYYY-MM-DD HH:MM:SS" for WiGLE
+    String firstSeen = isoToWigleTimestamp(fix.timeIso);
+
+    String latStr = String(fix.lat, 6);
+    String lonStr = String(fix.lon, 6);
+    String altStr = (fix.alt != 0.0) ? String(fix.alt, 2) : "";
+    String accStr = (fix.hdop > 0)   ? String(fix.hdop, 2) : "";
+
+    // WiGLE column order: MAC,SSID,AuthMode,FirstSeen,Channel,Frequency,RSSI,
+    //                     CurrentLatitude,CurrentLongitude,AltitudeMeters,AccuracyMeters,Type
+    char buf[1024];
+    snprintf(buf, sizeof(buf),
+             "%s,\"%s\",%s,%s,%d,%d,%d,%s,%s,%s,%s,WIFI",
+             macStr.c_str(),
+             ssidEsc.c_str(),
+             caps.c_str(),
+             firstSeen.c_str(),
+             ch,
+             freq,
+             rssi,
+             latStr.c_str(),
+             lonStr.c_str(),
+             altStr.c_str(),
+             accStr.c_str());
+
+    return String(buf);
 }
 
 void startWardriveSession(unsigned long gpsTimeoutMs) {
-    // attempt quick GPS read to get ISO timestamp
-    if(!useCustomGPSPins){
+    if (!useCustomGPSPins)
         Serial2.begin(gpsBaudRate, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
-    }
-    else{
+    else
         Serial2.begin(gpsBaudRate, SERIAL_8N1, gpsRx, gpsTx);
-    }
+
     GpsFix bestFix;
     unsigned long start = millis();
     String lineBuf;
+
     while (millis() - start < gpsTimeoutMs) {
         while (Serial2.available()) {
             char c = (char)Serial2.read();
@@ -206,7 +250,6 @@ void startWardriveSession(unsigned long gpsTimeoutMs) {
                     parseNmeaLine(line, temp);
                     if (temp.valid) {
                         bestFix = temp;
-                        // if we have a full ISO date/time, we can break early
                         if (bestFix.timeIso.length() >= 20) break;
                     }
                 }
@@ -221,20 +264,14 @@ void startWardriveSession(unsigned long gpsTimeoutMs) {
 
     String fname;
     if (bestFix.valid && bestFix.timeIso.length() >= 10) {
-        // construct YYYYMMDD_HHMMSS
-        String ts = bestFix.timeIso; // maybe "YYYY-MM-DDTHH:MM:SSZ" or "T..." fallback
-        // try to extract date/time components
-        int year = 1970, month = 1, day = 1, hour = 0, min = 0, sec = 0;
-        if (ts.startsWith("T")) {
-            // no date, fallback to millis-based name
-        } else {
-            // parse "YYYY-MM-DDTHH:MM:SSZ"
-            year = ts.substring(0,4).toInt();
-            month = ts.substring(5,7).toInt();
-            day = ts.substring(8,10).toInt();
-            hour = ts.substring(11,13).toInt();
-            min = ts.substring(14,16).toInt();
-            sec = ts.substring(17,19).toInt();
+        String ts = bestFix.timeIso;
+        if (!ts.startsWith("T")) {
+            int year  = ts.substring(0,4).toInt();
+            int month = ts.substring(5,7).toInt();
+            int day   = ts.substring(8,10).toInt();
+            int hour  = ts.substring(11,13).toInt();
+            int min   = ts.substring(14,16).toInt();
+            int sec   = ts.substring(17,19).toInt();
             char buf[64];
             snprintf(buf, sizeof(buf), "wardriving/wardrive_%04d%02d%02d_%02d%02d%02d.csv",
                      year, month, day, hour, min, sec);
@@ -242,27 +279,23 @@ void startWardriveSession(unsigned long gpsTimeoutMs) {
         }
     }
     if (fname.length() == 0) {
-        // fallback: use millis timestamp
-        unsigned long t = millis();
         char buf[64];
-        snprintf(buf, sizeof(buf), "wardriving/wardrive_millis_%lu.csv", t);
+        snprintf(buf, sizeof(buf), "wardriving/wardrive_millis_%lu.csv", millis());
         fname = String(buf);
     }
-    currentWardrivePath = "/M5Gotchi/" + fname; // ensure leading slash
-    filenameLocked = true;
 
+    currentWardrivePath = "/M5Gotchi/" + fname;
+    filenameLocked = true;
     fLogMessage("Wardrive session file set to: %s", currentWardrivePath.c_str());
 }
 
-void waitUntillLock(){
-    if(!useCustomGPSPins){
+void waitUntillLock() {
+    if (!useCustomGPSPins)
         Serial2.begin(gpsBaudRate, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
-    }
-    else{
+    else
         Serial2.begin(gpsBaudRate, SERIAL_8N1, gpsRx, gpsTx);
-    }
+
     GpsFix bestFix;
-    unsigned long start = millis();
     String lineBuf;
     while (true) {
         while (Serial2.available()) {
@@ -276,7 +309,6 @@ void waitUntillLock(){
                     parseNmeaLine(line, temp);
                     if (temp.valid) {
                         bestFix = temp;
-                        // if we have a full ISO date/time, we can break early
                         if (bestFix.timeIso.length() >= 20) break;
                     }
                 }
@@ -290,11 +322,12 @@ void waitUntillLock(){
     }
 }
 
-bool waitForGpsLock(int rxPin, int txPin, unsigned long timeoutMs){
+bool waitForGpsLock(int rxPin, int txPin, unsigned long timeoutMs) {
     Serial2.begin(gpsBaudRate, SERIAL_8N1, rxPin, txPin);
     GpsFix bestFix;
     unsigned long start = millis();
     String lineBuf;
+
     while (millis() - start < timeoutMs) {
         while (Serial2.available()) {
             char c = (char)Serial2.read();
@@ -307,7 +340,6 @@ bool waitForGpsLock(int rxPin, int txPin, unsigned long timeoutMs){
                     parseNmeaLine(line, temp);
                     if (temp.valid) {
                         bestFix = temp;
-                        // if we have a full ISO date/time, we can break early
                         if (bestFix.timeIso.length() >= 20) return true;
                     }
                 }
@@ -341,9 +373,7 @@ bool uploadToWigle(const String& encodedToken, const char* csvPath, int* outHttp
     WiFiClientSecure client;
     client.setInsecure();
 
-    const char* uploadUrl = "https://api.wigle.net/api/v2/file/upload";
     const char* host = "api.wigle.net";
-
     if (!client.connect(host, 443)) {
         fLogMessage("uploadToWigle: connection failed");
         if (outHttpCode) *outHttpCode = 0;
@@ -351,14 +381,13 @@ bool uploadToWigle(const String& encodedToken, const char* csvPath, int* outHttp
         return false;
     }
 
-    // Use multipart/form-data with a boundary so the Wigle API accepts the upload
     String filename = csvPath;
     int lastSlash = filename.lastIndexOf('/');
     if (lastSlash >= 0) filename = filename.substring(lastSlash + 1);
 
     String boundary = "----WiGLEBoundary" + String(millis());
 
-    String preamble = String("--") + boundary + "\r\n";
+    String preamble  = String("--") + boundary + "\r\n";
     preamble += String("Content-Disposition: form-data; name=\"file\"; filename=\"") + filename + "\"\r\n";
     preamble += "Content-Type: text/csv\r\n\r\n";
 
@@ -366,15 +395,15 @@ bool uploadToWigle(const String& encodedToken, const char* csvPath, int* outHttp
 
     size_t contentLength = preamble.length() + (size_t)fileSize + closing.length();
 
-    client.print(String("POST /api/v2/file/upload HTTP/1.1\r\n"));
+    client.print("POST /api/v2/file/upload HTTP/1.1\r\n");
     client.print(String("Host: ") + host + "\r\n");
+
     String authHeaderB64;
     String key = encodedToken;
     key.trim();
     if (key.length() == 0) {
         fLogMessage("uploadToWigle: warning: empty Wigle API key provided");
     }
-    // If it contains a colon, treat as plain name:token and base64-encode
     if (key.indexOf(':') >= 0) {
         std::vector<uint8_t> bytes;
         bytes.reserve(key.length());
@@ -382,30 +411,26 @@ bool uploadToWigle(const String& encodedToken, const char* csvPath, int* outHttp
         authHeaderB64 = pwngrid::crypto::base64Encode(bytes);
         fLogMessage("uploadToWigle: encoded plain name:token into base64 credential");
     } else {
-        // Try to base64-decode and check if it yields a name:token; if so, assume it's valid
         auto dec = pwngrid::crypto::base64Decode(key);
         bool dec_has_colon = false;
         for (auto b : dec) if (b == (uint8_t)':') { dec_has_colon = true; break; }
         if (dec_has_colon) {
-            authHeaderB64 = key; // already proper base64-encoded credential
+            authHeaderB64 = key;
             fLogMessage("uploadToWigle: using provided base64-encoded credential");
         } else {
-            // Ambiguous: user provided token only (no colon, not decodable to name:token)
-            // Send it as-is but log a warning suggesting correct formats.
             authHeaderB64 = key;
             fLogMessage("uploadToWigle: warning: API key appears to be a bare token; consider using 'name:token' or the encoded credential from https://wigle.net/account");
         }
     }
+
     client.print(String("Authorization: Basic ") + authHeaderB64 + "\r\n");
-    client.print("User-Agent: M5Gotchi-ESPBlaster/1.0\r\n");
+    client.print("User-Agent: M5Gotchi/1.0\r\n");
     client.print(String("Content-Type: multipart/form-data; boundary=") + boundary + "\r\n");
     client.print("Connection: close\r\n");
     client.print(String("Content-Length: ") + contentLength + "\r\n\r\n");
 
-    // Send preamble
     client.print(preamble);
 
-    // Stream the file body
     const size_t bufSize = 2048;
     uint8_t buf[bufSize];
     while (true) {
@@ -414,14 +439,11 @@ bool uploadToWigle(const String& encodedToken, const char* csvPath, int* outHttp
         client.write(buf, r);
     }
 
-    // Send closing boundary
     client.print(closing);
     f.close();
 
-    // Read response headers
     String line;
     int httpCode = 0;
-
     unsigned long timeout = millis() + 8000;
     while (millis() < timeout) {
         if (client.available()) {
@@ -436,13 +458,11 @@ bool uploadToWigle(const String& encodedToken, const char* csvPath, int* outHttp
     if (outHttpCode) *outHttpCode = httpCode;
     fLogMessage("uploadToWigle: HTTP %d", httpCode);
 
-    // Read response body (if any) for debugging and log a short snippet
     String respBody;
     unsigned long bodyTimeout = millis() + 3000;
     while (millis() < bodyTimeout) {
         while (client.available()) {
             respBody += client.readString();
-            // prevent unbounded growth
             if (respBody.length() > 2048) {
                 respBody = respBody.substring(0, 2048);
                 break;
@@ -451,60 +471,43 @@ bool uploadToWigle(const String& encodedToken, const char* csvPath, int* outHttp
         if (!client.connected()) break;
     }
     if (respBody.length()) {
-        // Log only beginning to avoid huge logs
         String snippet = respBody;
         if (snippet.length() > 512) snippet = snippet.substring(0, 512);
         fLogMessage("uploadToWigle: response body: %s", snippet.c_str());
     }
 
     bool success = (httpCode >= 200 && httpCode < 300);
-    if (success) {
-        drawNewAchUnlock(ACH_WIGLE_NET);
-    }
+    if (success) drawNewAchUnlock(ACH_WIGLE_NET);
     return success;
 }
 
 #include "ui.h"
 
-// ---- main wardrive function (signature changed: no filename param) ----
-// - networks: vector of wifiSpeedScan seen at this moment
-// - timeoutMs: how long to wait for a valid GPS fix (reads Serial2)
-// Returns wardriveStatus as before (keeps same struct contents)
 wardriveStatus wardrive(const std::vector<wifiSpeedScan>& networks, unsigned long timeoutMs) {
-    // Initialize mutex if not already done
     if (wardriveMutex == nullptr) {
         wardriveMutex = xSemaphoreCreateMutex();
     }
-    // Take mutex to serialize wardrive operations
     if (wardriveMutex == nullptr) {
         fLogMessage("wardrive: mutex creation failed");
         return {false, false, 0.0, 0.0, 0.0, 0.0, String(), 0, 0};
     }
-    
     if (xSemaphoreTake(wardriveMutex, portMAX_DELAY) != pdTRUE) {
         fLogMessage("wardrive: failed to acquire mutex");
         return {false, false, 0.0, 0.0, 0.0, 0.0, String(), 0, 0};
     }
 
-    // Mutex is now held - enclosed logic:
     if (networks.empty()) {
         xSemaphoreGive(wardriveMutex);
         return {false, false, 0.0, 0.0, 0.0, 0.0, String(), 0, 0};
     }
 
-    //chack if serial2 already initialized - if not, initialize with appropriate pins and baudrate
-    if(Serial2) {
-        // Serial2 already initialized, do nothing
-    }
-    else if(!useCustomGPSPins){
+    if (Serial2) {
+        // already initialized
+    } else if (!useCustomGPSPins) {
         Serial2.begin(gpsBaudRate, SERIAL_8N1, GPS_RX_PIN, GPS_TX_PIN);
-    }
-    else{
+    } else {
         Serial2.begin(gpsBaudRate, SERIAL_8N1, gpsRx, gpsTx);
     }
-
-
-    
 
     GpsFix bestFix;
     unsigned long start = millis();
@@ -527,8 +530,8 @@ wardriveStatus wardrive(const std::vector<wifiSpeedScan>& networks, unsigned lon
                             if (temp.fixType == "GPGGA" || (temp.hdop > 0 && bestFix.hdop == 0)) {
                                 bestFix = temp;
                             } else {
-                                bestFix.lat = temp.lat;
-                                bestFix.lon = temp.lon;
+                                bestFix.lat    = temp.lat;
+                                bestFix.lon    = temp.lon;
                                 bestFix.timeIso = temp.timeIso;
                             }
                         }
@@ -543,74 +546,23 @@ wardriveStatus wardrive(const std::vector<wifiSpeedScan>& networks, unsigned lon
     }
 
     fLogMessage("Best GPS fix: valid=%d lat=%.6f lon=%.6f hdop=%.2f alt=%.2f time=%s",
-               bestFix.valid, bestFix.lat, bestFix.lon, bestFix.hdop, bestFix.alt, bestFix.timeIso.c_str());
+                bestFix.valid, bestFix.lat, bestFix.lon, bestFix.hdop, bestFix.alt, bestFix.timeIso.c_str());
 
     uint8_t written = 0;
 
-    // If auto mode (pwnagothi) is active, delegate file writes to the UI core (updateUi)
-    
     if (pwnagotchiTaskHandle != nullptr) {
         logMessage("Task save on");
         String body;
+
         for (const auto& net : networks) {
             if (!bestFix.valid) {
                 fLogMessage("No valid GPS fix; skipping network logging for SSID: %s", net.ssid.c_str());
                 continue;
             }
-
-            String macStr = bssidToString(net.bssid);
-            String ssidEsc = net.ssid;
-            ssidEsc.replace("\"", "\"\"");
-
-            String caps = "[ESS]";
-            if (net.secure) caps = "[WPA2-PSK-CCMP][ESS]";
-            int ch = net.channel;
-            int freq = channelToFrequency(ch);
-            int rssi = net.rssi;
-
-            WigleEntry entry;
-            entry.bssid = macStr;
-            entry.ssid = ssidEsc;
-            entry.capabilities = caps;
-            entry.channel = ch;
-            entry.frequency = freq;
-            entry.rssi = rssi;
-            entry.lat = bestFix.lat;
-            entry.lon = bestFix.lon;
-            entry.alt = bestFix.alt;
-            entry.accuracy = bestFix.hdop;
-            entry.rcois = "";
-            entry.mfgid = "";
-            entry.type = "WIFI";
-
-            entry.firstSeen = bestFix.timeIso;
-
-            String latStr = String(bestFix.lat, 6);
-            String lonStr = String(bestFix.lon, 6);
-            String altStr = (bestFix.alt != 0.0) ? String(bestFix.alt, 2) : "";
-            String accStr = (bestFix.hdop > 0) ? String(bestFix.hdop, 2) : "";
-
-            char buf[1024];
-            snprintf(buf, sizeof(buf),
-                     "\"%s\",\"%s\",\"%s\",\"%s\",%d,%d,%d,%s,%s,%s,%s,,\"%s\"",
-                     macStr.c_str(),
-                     ssidEsc.c_str(),
-                     caps.c_str(),
-                     entry.firstSeen.c_str(),
-                     ch,
-                     freq,
-                     rssi,
-                     latStr.c_str(),
-                     lonStr.c_str(),
-                     altStr.c_str(),
-                     accStr.c_str(),
-                     "WIFI");
-
-            body += String(buf) + "\n";
+            body += buildWigleRow(net, bestFix) + "\n";
             written++;
         }
 
-        // Ensure queue exists (lazy create)
         if (wardriveSaveQueue == nullptr) {
             wardriveSaveQueue = xQueueCreate(5, sizeof(WardriveSaveRequest*));
             if (!wardriveSaveQueue) {
@@ -619,7 +571,7 @@ wardriveStatus wardrive(const std::vector<wifiSpeedScan>& networks, unsigned lon
         }
 
         if (written > 0 && wardriveSaveQueue) {
-            WardriveSaveRequest *req = new WardriveSaveRequest();
+            WardriveSaveRequest* req = new WardriveSaveRequest();
             if (!req) {
                 fLogMessage("ERR: alloc WardriveSaveRequest failed");
                 xSemaphoreGive(wardriveMutex);
@@ -639,94 +591,38 @@ wardriveStatus wardrive(const std::vector<wifiSpeedScan>& networks, unsigned lon
 
         tot_observed_networks += written;
         xSemaphoreGive(wardriveMutex);
-        return {written > 0, bestFix.valid, bestFix.lat, bestFix.lon, bestFix.hdop, bestFix.alt, bestFix.timeIso, tot_observed_networks, (uint8_t)written};
+        return {written > 0, bestFix.valid, bestFix.lat, bestFix.lon, bestFix.hdop, bestFix.alt, bestFix.timeIso, tot_observed_networks, written};
     }
-    else
-    {    // Fallback: UI not handling writes, perform direct SD append (legacy behavior)
-        // Open session file for append (create with wigle header if new)
-        File f = FSYS.open(currentWardrivePath.c_str(), FILE_APPEND);
-        if (!f) {
-            fLogMessage("Cannot open wardrive file: %s", currentWardrivePath.c_str());
-            xSemaphoreGive(wardriveMutex);
-            return {false, bestFix.valid, bestFix.lat, bestFix.lon, bestFix.hdop, bestFix.alt, bestFix.timeIso, 0, 0};
-        }
 
-        if (f.size() == 0) {
-            // Wigle CSV header (matching the template in the screenshot)
-            // Columns: BSSID,SSID,Capabilities,First timestamp seen,Channel,Frequency,RSSI,Latitude,Longitude,Altitude,Accuracy,RCOIs,MfgId,Type
-            f.println("WigleWifi-1.4,appRelease=M5Gotchi,model=M5Gotchi,release=1");
-            f.println("\"BSSID\",\"SSID\",\"Capabilities\",\"First timestamp seen\",\"Channel\",\"Frequency\",\"RSSI\",\"Latitude\",\"Longitude\",\"Altitude\",\"Accuracy\",\"RCOIs\",\"MfgId\",\"Type\"");
-        }
-
-        for (const auto& net : networks) {
-            if (!bestFix.valid) {
-                fLogMessage("No valid GPS fix; skipping network logging for SSID: %s", net.ssid.c_str());
-                continue;
-            }
-
-            String macStr = bssidToString(net.bssid);
-            String ssidEsc = net.ssid;
-            ssidEsc.replace("\"", "\"\"");
-
-            String caps = "[ESS]";
-            if (net.secure) caps = "[WPA2-PSK-CCMP][ESS]";
-            int ch = net.channel;
-            int freq = channelToFrequency(ch);
-            int rssi = net.rssi;
-
-            WigleEntry entry;
-            entry.bssid = macStr;
-            entry.ssid = ssidEsc;
-            entry.capabilities = caps;
-            entry.channel = ch;
-            entry.frequency = freq;
-            entry.rssi = rssi;
-            entry.lat = bestFix.lat;
-            entry.lon = bestFix.lon;
-            entry.alt = bestFix.alt;
-            entry.accuracy = bestFix.hdop;
-            entry.rcois = "";
-            entry.mfgid = "";
-            entry.type = "WIFI";
-
-            entry.firstSeen = bestFix.timeIso;
-
-            String latStr = String(bestFix.lat, 6);
-            String lonStr = String(bestFix.lon, 6);
-            String altStr = (bestFix.alt != 0.0) ? String(bestFix.alt, 2) : "";
-            String accStr = (bestFix.hdop > 0) ? String(bestFix.hdop, 2) : "";
-
-            char buf[1024];
-            snprintf(buf, sizeof(buf),
-                    "\"%s\",\"%s\",\"%s\",\"%s\",%d,%d,%d,%s,%s,%s,%s,,\"%s\"",
-                    macStr.c_str(),
-                    ssidEsc.c_str(),
-                    caps.c_str(),
-                    entry.firstSeen.c_str(),
-                    ch,
-                    freq,
-                    rssi,
-                    latStr.c_str(),
-                    lonStr.c_str(),
-                    altStr.c_str(),
-                    accStr.c_str(),
-                    "WIFI");
-
-            f.println(buf);
-            written++;
-        }
-
-        f.close();
-        tot_observed_networks += written;
-
-        // Release mutex before returning
+    // ---- Fallback / direct SD write path ----
+    File f = FSYS.open(currentWardrivePath.c_str(), FILE_APPEND);
+    if (!f) {
+        fLogMessage("Cannot open wardrive file: %s", currentWardrivePath.c_str());
         xSemaphoreGive(wardriveMutex);
+        return {false, bestFix.valid, bestFix.lat, bestFix.lon, bestFix.hdop, bestFix.alt, bestFix.timeIso, 0, 0};
+    }
 
-        // Set flag if wardrive was successful with GPS lock
-        // UI main loop will check this flag when auto mode is active
-        if (written > 0 && bestFix.valid) {
-          wardrive_achievement_flag = true;
+    if (f.size() == 0) {
+        f.println(WIGLE_META_HEADER);
+        f.println(WIGLE_COLUMN_HEADER);
+    }
+
+    for (const auto& net : networks) {
+        if (!bestFix.valid) {
+            fLogMessage("No valid GPS fix; skipping network logging for SSID: %s", net.ssid.c_str());
+            continue;
         }
+        f.println(buildWigleRow(net, bestFix));
+        written++;
+    }
 
-        return {written > 0, bestFix.valid, bestFix.lat, bestFix.lon, bestFix.hdop, bestFix.alt, bestFix.timeIso, tot_observed_networks, (uint8_t)written};}
+    f.close();
+    tot_observed_networks += written;
+    xSemaphoreGive(wardriveMutex);
+
+    if (written > 0 && bestFix.valid) {
+        wardrive_achievement_flag = true;
+    }
+
+    return {written > 0, bestFix.valid, bestFix.lat, bestFix.lon, bestFix.hdop, bestFix.alt, bestFix.timeIso, tot_observed_networks, written};
 }
