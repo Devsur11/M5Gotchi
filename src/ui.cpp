@@ -843,6 +843,7 @@ void drawMood(String face, String phrase) {
     canvas_main.setTextSize(1);
     canvas_main.setTextDatum(top_left);
     canvas_main.setCursor(3, 5);
+    canvas_main.drawString(String(halfScore), 230, 100);
 
     constexpr float XP_SCALE = 5.0f;
     constexpr float XP_EXPONENT = 0.75f;

@@ -813,6 +813,7 @@ void task(void *parameter) {
             std::vector<wifiRTResults> localResults = g_wifiRTResults;
             xSemaphoreGive(wifiResultsMutex);
             tot_happy_epochs += localResults.size() / 2;
+            attackTask(nullptr);
 
             if (wifiMutex) {
                 if (millis() - lastHopTime > CHANEL_HOP_INTERVAL_MS)
@@ -843,10 +844,9 @@ static String sanitizeSsid(const String &ssid) {
 
 void attackTask(void *parameter) {
     if(std::find(pwnedAPs.begin(), pwnedAPs.end(), ap.ssid) != pwnedAPs.end()){
-        logMessage("AP " + ap.ssid + " already in pwned list, skipping scoring.");
-        vTaskDelete(NULL);
         return;
     }
+    logMessage("Scoring AP: " + ap.ssid);
     if(random(0,100)<30){
         setMoodApSelected(ap.ssid);
     }
@@ -867,6 +867,7 @@ void attackTask(void *parameter) {
     else{
         pwned_ap++;
         sessionCaptures++;
+        setMoodToNewHandshake(1);
         halfScore = 0;
         pwnedAPs.push_back(ap.ssid);
         logMessage("AP " + ap.ssid + " fully pwned! Total pwned APs: " + String(pwned_ap));
