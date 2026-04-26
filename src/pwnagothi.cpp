@@ -575,7 +575,7 @@ bool pwn::begin() {
     }
     #endif
     drawInfoBox("GPS locking", "Waiting for GPS lock...", "This may take a while.", false, false); 
-    //waitUntillLock();
+    waitUntillLock();
     pwn::beginWardriving();
     logMessage("Pwnagothi auto mode init!");
     pwnagothiMode = true;
