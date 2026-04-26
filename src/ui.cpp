@@ -2175,7 +2175,6 @@ void runApp(uint8_t appID){
       identity_canvas.pushSprite(110, 35);
       while(true){
         M5.update();
-        M5.update();
 #ifdef BUTTON_ONLY_INPUT
         inputManager::update();
         if (isOkPressed() || toggleMenuBtnPressed()){
@@ -2184,6 +2183,7 @@ void runApp(uint8_t appID){
           return;
         }
 #else
+        M5Cardputer.update();
         auto keysState = M5Cardputer.Keyboard.keysState();
         if(keysState.enter){
           M5.Display.setBrightness(brightness);
@@ -7275,7 +7275,6 @@ void drawMenuList(menu toDraw[], uint8_t menuIDPriv, uint8_t menu_size) {
   menu_len = menu_size;
 
   M5.update();
-  M5.update();
 
   canvas_main.fillSprite(bg_color_rgb565);
   canvas_main.setTextColor(tx_color_rgb565);
@@ -7290,18 +7289,9 @@ void drawMenuList(menu toDraw[], uint8_t menuIDPriv, uint8_t menu_size) {
   static int marqueeOffset = 0;
   const uint32_t MARQUEE_DELAY_MS = 300; // speed of marquee
 
-  // ============================================================
-  // Simplified menu rendering: avoid heap allocations by not building
-  // a wrapped string vector. Each menu entry is treated as a single
-  // logical line to minimize dynamic String usage.
-  // ============================================================
   int selectedLineIndex = menu_current_opt;
   int totalLines = menu_len;
   int linesPerPage = maxH / lineH;
-
-  // ============================================================
-  // figure out scrolling of page
-  // ============================================================
   static int targetScroll = 0;
   static int currentScroll = 0;
 
@@ -7322,9 +7312,6 @@ void drawMenuList(menu toDraw[], uint8_t menuIDPriv, uint8_t menu_size) {
 
   int yOffset = -(currentScroll * lineH);
 
-  // ============================================================
-  // draw lines + real selected item
-  // ============================================================
   for (int i = 0; i < totalLines; i++) {
     int y = yOffset + i * lineH;
     if (y < -lineH || y > maxH) continue;
@@ -7335,9 +7322,6 @@ void drawMenuList(menu toDraw[], uint8_t menuIDPriv, uint8_t menu_size) {
       continue;
     }
 
-    // ====================================================
-    // selected item special drawing (marquee)
-    // ====================================================
     String full = toDraw[menu_current_opt].name;
 
     // draw cursor permanently on the left
@@ -7391,9 +7375,6 @@ void drawMenuList(menu toDraw[], uint8_t menuIDPriv, uint8_t menu_size) {
     }
   }
 
-  // ============================================================
-  // Scrollbar
-  // ============================================================
   int sbX = canvas_main.width() - 6;
   int sbH = canvas_main.height();
   int scrollMax = max(totalLines - linesPerPage, 1);
@@ -7409,9 +7390,6 @@ void drawMenuList(menu toDraw[], uint8_t menuIDPriv, uint8_t menu_size) {
   canvas_main.fillRect(sbX, barY, 6, barH, tx_color_rgb565);
   pushAll();
 
-  // ============================================================
-  // input handling
-  // ============================================================
   #ifdef BUTTON_ONLY_INPUT
   inputManager::update();
   
@@ -7423,6 +7401,7 @@ void drawMenuList(menu toDraw[], uint8_t menuIDPriv, uint8_t menu_size) {
   }
   if (isNextPressed()) {
     if (toggleMenuBtnPressed()) {
+      back = true;
       return;
     }
     menu_current_opt = (menu_current_opt + 1) % menu_len;
