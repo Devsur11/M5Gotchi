@@ -703,6 +703,9 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
       redrawUi(show_toolbars);
       lastRedrawTime = currentTime;
       needsUiRedraw = false;
+      if(pwnagotchiTaskHandle != nullptr && redrawUi){
+        saveSettings();
+      }
     }
   }
 
@@ -712,6 +715,7 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
     menu_current_page = 1;
     needsUiRedraw = true;
   }
+
   
   M5.Display.startWrite();
   if (show_toolbars) {
@@ -733,7 +737,6 @@ void setToMainMenu(){
 }
 
 void redrawUi(bool show_toolbars) {
-  saveSettings();
   String mood_face = getCurrentMoodFace();
   String mood_phrase = getCurrentMoodPhrase();
   drawMood(mood_face, mood_phrase);
@@ -843,7 +846,6 @@ void drawMood(String face, String phrase) {
     canvas_main.setTextSize(1);
     canvas_main.setTextDatum(top_left);
     canvas_main.setCursor(3, 5);
-    canvas_main.drawString(String(halfScore), 230, 100);
 
     constexpr float XP_SCALE = 5.0f;
     constexpr float XP_EXPONENT = 0.75f;
