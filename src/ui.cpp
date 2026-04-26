@@ -2008,7 +2008,6 @@ void runApp(uint8_t appID){
       identity_canvas.pushSprite(110, 35);
       while(true){
         M5.update();
-        M5.update();
 #ifdef BUTTON_ONLY_INPUT
         inputManager::update();
         if (isOkPressed() || toggleMenuBtnPressed()){
@@ -2017,6 +2016,7 @@ void runApp(uint8_t appID){
           return;
         }
 #else
+        M5Cardputer.update();
         auto keysState = M5Cardputer.Keyboard.keysState();
         if(keysState.enter){
           M5.Display.setBrightness(brightness);

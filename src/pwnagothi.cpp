@@ -575,7 +575,7 @@ bool pwn::begin() {
     }
     #endif
     drawInfoBox("GPS locking", "Waiting for GPS lock...", "This may take a while.", false, false); 
-    waitUntillLock();
+    //waitUntillLock();
     pwn::beginWardriving();
     logMessage("Pwnagothi auto mode init!");
     pwnagothiMode = true;
@@ -813,7 +813,10 @@ void task(void *parameter) {
             std::vector<wifiRTResults> localResults = g_wifiRTResults;
             xSemaphoreGive(wifiResultsMutex);
             tot_happy_epochs += localResults.size() / 2;
-            attackTask(nullptr);
+            for(const auto &result : localResults) {
+                ap = result;
+                attackTask(nullptr);
+            }
 
             if (wifiMutex) {
                 if (millis() - lastHopTime > CHANEL_HOP_INTERVAL_MS)
