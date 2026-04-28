@@ -123,6 +123,7 @@ uint lastSessionDeauths = 0;
 uint lastSessionCaptures = 0;
 long lastSessionTime = 0;
 uint8_t lastSessionPeers = 0;
+uint8_t holdAButtonAction = 0; // 0 = Dim, 1 = Toggle Auto Mode, 2 = Secret Terminal, 3 = Dev Mode Menu
 uint32_t allTimeDeauths = 0;
 uint32_t allTimeEpochs = 0;
 uint16_t allTimePeers = 0;
@@ -702,6 +703,9 @@ bool initVars() {
         if(config["sync_pwned_on_boot"].is<bool>()) sync_pwned_on_boot = config["sync_pwned_on_boot"].as<bool>();
         else configChanged = true;
 
+        if(config["holdAButtonAction"].is<uint8_t>()) holdAButtonAction = config["holdAButtonAction"].as<uint8_t>();
+        else configChanged = true;
+
         if(config["menu_display_mode"].is<uint8_t>()) menu_display_mode = config["menu_display_mode"].as<uint8_t>();
         else configChanged = true;
 
@@ -909,6 +913,7 @@ bool initVars() {
     config["allSessionTime"] = encryptStatsValue(allSessionTime, originalMacAddress);
     config["prev_level"] = prev_level;
     config["randomise_mac_at_boot"] = randomise_mac_at_boot;
+    config["holdAButtonAction"] = holdAButtonAction;
     config["add_new_units_to_friends"] = add_new_units_to_friends;
     config["check_inbox_at_startup"] = check_inbox_at_startup;
     config["sync_pwned_on_boot"] = sync_pwned_on_boot;
@@ -975,6 +980,7 @@ bool saveSettings(){
     config["add_new_units_to_friends"] = add_new_units_to_friends;
     config["check_inbox_at_startup"] = check_inbox_at_startup;
     config["sync_pwned_on_boot"] = sync_pwned_on_boot;
+    config["holdAButtonAction"] = holdAButtonAction;
     config["menu_display_mode"] = menu_display_mode;
     config["system_stats_menu_mode"] = 1;
     config["auto_mode_and_wardrive"] = auto_mode_and_wardrive;

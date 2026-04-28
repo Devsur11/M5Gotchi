@@ -1129,6 +1129,7 @@ bool pwn::end() {
     }
     saveSettings();
     logMessage("Pwnagotchi/Wardriving fully stopped and all memory released.");
+    pwnagothiMode = false;
     return true;
 }
 

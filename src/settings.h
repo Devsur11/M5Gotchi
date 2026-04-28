@@ -200,6 +200,7 @@ extern uint lastSessionDeauths;
 extern uint lastSessionCaptures;
 extern long lastSessionTime;
 extern uint8_t lastSessionPeers;
+extern uint8_t holdAButtonAction;
 uint16_t tot_happy_epochs;
 uint16_t tot_sad_epochs;
 extern uint32_t allTimeDeauths;

@@ -353,13 +353,11 @@ void autoDimTask(void *param) {
         }
       } else {
         if (M5.Display.getBrightness() < brightness ) {
-          #ifndef BUTTON_ONLY_INPUT
           if(M5.Display.getBrightness() == 0){
             while(M5.Display.getBrightness() == 0){
               delay(1000);
             }
           }
-          #endif
           uint8_t currentBrightness = M5.Display.getBrightness();
           uint8_t newBrightness = (currentBrightness < brightness - 5) ? currentBrightness + 5 : brightness;
           M5.Display.setBrightness(newBrightness);
@@ -578,6 +576,10 @@ bool isNextPressed() {
   return inputManager::isButtonBPressed(); // Button B is Next/Down navigation
 }
 
+bool isGoActionPressed() {
+  return inputManager::isButtonALongPressed(); // Long press Button A on main screen
+}
+
 bool isPrevPressed() {
   return false; // Single button for navigation, no prev
 }
@@ -599,6 +601,64 @@ bool isPrevPressed() {
 }
 
 #endif
+
+void runSecretTerminal() {
+  String out = userInput("???", "??????????????????", 20);
+  drawNewAchUnlock(ACH_TERMINAL);
+  uint32_t outHash = simpleHash(out);
+  if (outHash == 2088325554UL) {
+    achievements_register(ACH_PAPIEZOWO);
+    drawNewAchUnlock(ACH_PAPIEZOWO);
+    drawInfoBox("Easter Egg", "Pan, kiedyś stanął nad brzegiem...", "", true, false);
+  } else if (outHash == 5861746UL) {
+    achievements_register(ACH_CHILD);
+    drawNewAchUnlock(ACH_CHILD);
+    drawInfoBox("Easter Egg", "YOU KNOW WHAT YOU DID!", "", true, false);
+  } else if (out.length() > 40) {
+    achievements_register(ACH_CHEATER);
+    drawNewAchUnlock(ACH_CHEATER);
+    drawInfoBox("Cheater", "You unlocked an achievement!", "", true, false);
+  }
+}
+
+void executeHoldAAction() {
+  switch (holdAButtonAction) {
+    case 0:
+      // Dim screen - set brightness to minimum temporarily
+      if(M5.Display.getBrightness() == 0){
+        M5.Display.setBrightness(brightness);
+      }
+      else{
+        M5.Display.setBrightness(0);
+      }
+      delay(100);
+      break;
+    case 1:
+      // Toggle auto mode
+      if(pwnagotchiTaskHandle != nullptr || (pwnagothiMode && stealth_mode)){
+        runApp(126);
+        menuID = 0;
+        prevMID = 1;
+        break;
+      }
+      runApp(14);
+      break;
+    case 2:
+      // Secret terminal
+      runSecretTerminal();
+      break;
+    case 3:
+      // Dev mode menu (only if dev version)
+      if (CURRENT_VERSION == "dev") {
+        drawInfoBox("Dev Mode", "Opening developer tools...", "", false, false);
+        delay(200);
+        runApp(99);
+      }
+      break;
+    default:
+      break;
+  }
+}
 
 bool needsUiRedraw = true;
 static unsigned long lastRedrawTime = 0;
@@ -662,6 +722,8 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
   keyboard_changed = M5Cardputer.Keyboard.isChange();
   M5Cardputer.update();
   if(keyboard_changed){Sound(10000, 100, sound);}
+#else
+  inputManager::update();
 #endif
   if (toggleMenuBtnPressed()) {
     debounceDelay();
@@ -696,25 +758,15 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
     redrawUi(show_toolbars);
   }
   
-  if (menuID == 0 && isOkPressed()) {
-    debounceDelay();
-    String out = userInput("???", "??????????????????", 20);
-    drawNewAchUnlock(ACH_TERMINAL);
-    uint32_t outHash = simpleHash(out);
-    if (outHash == 2088325554UL) {
-      achievements_register(ACH_PAPIEZOWO);
-      drawNewAchUnlock(ACH_PAPIEZOWO);
-      drawInfoBox("Easter Egg", "Pan, kiedyś stanął nad brzegiem...", "", true, false);
-    } else if (outHash == 5861746UL) {
-      achievements_register(ACH_CHILD);
-      drawNewAchUnlock(ACH_CHILD);
-      drawInfoBox("Easter Egg", "YOU KNOW WHAT YOU DID!", "", true, false);
-    } else if (out.length() > 40) {
-      achievements_register(ACH_CHEATER);
-      drawNewAchUnlock(ACH_CHEATER);
-      drawInfoBox("Cheater", "You unlocked an achievement!", "", true, false);
-    }
+#ifdef BUTTON_ONLY_INPUT
+  if (menuID == 0 && isGoActionPressed()) {
+    executeHoldAAction();
   }
+#else
+  if (menuID == 0 && isOkPressed()) {
+    runSecretTerminal();
+  }
+#endif
   if(show_toolbars){
     drawTopCanvas();
     drawBottomCanvas();
@@ -5810,11 +5862,6 @@ void runApp(uint16_t appID){
       return;
     }
     if(appID == 59){
-      #ifdef M5STICKS3_ENV
-        drawInfoBox("Error", "GPIO0 toggle not supported on M5StickS3", "", true, false);
-        menuID = 6;
-        return;
-      #endif
       String menuu[] = {"Dim screen", "Toggle auto mode", "Back"};
       int8_t choice = drawMultiChoice("On tap action", menuu, 3, 6, 0);
       if(choice == 0){
@@ -6149,12 +6196,21 @@ void runApp(uint16_t appID){
       snprintf(val_10, sizeof(val_10), "Auto-Add Friends [%s]", 
                add_new_units_to_friends ? "ON" : "OFF");
       
+      #ifdef BUTTON_ONLY_INPUT
+      menu user_device_menu_dynamic[] = {
+        {"Device Name", 40},
+        {"Button A Hold Action", 167},
+        {val_10, 35},
+        {"Back", 255}
+      };
+      #else
       menu user_device_menu_dynamic[] = {
         {"Device Name", 40},
         {"GO Button Action", 59},
         {val_10, 35},
         {"Back", 255}
       };
+      #endif
       while(!back){
       drawMenuList(user_device_menu_dynamic, 6, 4);
       }
@@ -6251,6 +6307,34 @@ void runApp(uint16_t appID){
       menuID = 6;
       return;
     }
+    // Hold Button A Action settings (AppID 167) - M5StickS3 only
+    #ifdef BUTTON_ONLY_INPUT
+    if(appID == 167){
+      debounceDelay();
+      
+      String actionOptions[4];
+      actionOptions[0] = "Dim screen";
+      actionOptions[1] = "Toggle auto mode";
+      actionOptions[2] = "???";
+      uint8_t optionsCount = 3;
+      
+      // Only add dev mode option if in dev version
+      if (CURRENT_VERSION == "dev") {
+        actionOptions[optionsCount++] = "Dev Mode Menu";
+      }
+      
+      int8_t choice = drawMultiChoice("Button A Hold Action", actionOptions, optionsCount, 0, holdAButtonAction);
+      
+      if (choice >= 0) {
+        holdAButtonAction = (uint8_t)choice;
+        saveSettings();
+        drawInfoBox("Settings", "Action updated!", "", true, false);
+      }
+      
+      menuID = 6;
+      return;
+    }
+    #endif
     else if (appID == 125){
       if(pwn::begin()){
         menuID = 0;
@@ -7602,6 +7686,11 @@ void drawMenuList(menu toDraw[], uint8_t menuIDPriv, uint8_t menu_size) {
     marqueeOffset = 0;
     marqueeTick = millis();
     debounceDelay();
+    return;
+  }
+  if(inputManager::isButtonBLongPressed()){
+    debounceDelay();
+    back = true;
     return;
   }
   
