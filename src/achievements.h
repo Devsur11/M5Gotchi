@@ -65,35 +65,35 @@ struct AchievementState {
 };
 
 const AchievementData ACHIEVEMENTS[ACH_COUNT] = {
-    {ACH_FIRST_PWN, "First Pwn", "Get your first pwn", false},//d
-    {ACH_1ST_LVL, "Level 1", "Reach level 1", false},//d
-    {ACH_10_LVL, "Level 10", "Reach level 10", false},//d
-    {ACH_50_LVL, "Level 50", "Reach level 50", false},//d
-    {ACH_100_LVL, "Level 100", "Reach level 100", false},//d
-    {ACH_NAME_CHANGE, "Identity Crisis", "Change your name", false},//d
-    {ACH_SECRET_NAME, "Just like the god intended", "Change your name to Pwnagotchi", true}, //d
+    {ACH_FIRST_PWN, "First Pwn", "Get your first pwn", false},
+    {ACH_1ST_LVL, "Level 1", "Reach level 1", false},
+    {ACH_10_LVL, "Level 10", "Reach level 10", false},
+    {ACH_50_LVL, "Level 50", "Reach level 50", false},
+    {ACH_100_LVL, "Level 100", "Reach level 100", false},
+    {ACH_NAME_CHANGE, "Identity Crisis", "Change your name", false},
+    {ACH_SECRET_NAME, "Just like the god intended", "Change your name to Pwnagotchi", true},
     {ACH_PERSONALITY_CHANGE, "Personality Crisis", "Change your personality settings", false},
-    {ACH_ENROLL_PWNGRID, "PwnGrid Enroller", "Enroll in PwnGrid", false},//d
-    {ACH_FIRST_MEETING, "First Meeting", "Meet another Pwnagotchi", false},//d
-    {ACH_FAMILY, "Family Reunion", "Meet 5 different Pwnagotchis in single run", false},//d
-    {ACH_FRIENDS, "Making Friends", "Add any unit to friends list", false},//d
-    {ACH_DEV_MODE, "D3V?", "Enable developer mode", true},//d
+    {ACH_ENROLL_PWNGRID, "PwnGrid Enroller", "Enroll in PwnGrid", false},
+    {ACH_FIRST_MEETING, "First Meeting", "Meet another Pwnagotchi", false},
+    {ACH_FAMILY, "Family Reunion", "Meet 5 different Pwnagotchis in single run", false},
+    {ACH_FRIENDS, "Making Friends", "Add any unit to friends list", false},
+    {ACH_DEV_MODE, "D3V?", "Enable developer mode", true},
     {ACH_PWNADISE, "Pwnadise Found", "Discover Pwnadise", true}, // still dont know what this will be :/ can't be obtained
-    {ACH_DEV_VER, "Helping hands", "Run a developer version of the firmware", true},//d
+    {ACH_DEV_VER, "Helping hands", "Run a developer version of the firmware", true},
     {ACH_SKILL_ISSUE, "Skill Issue", "Fail an attack", true},
     {ACH_WARDRIVE, "Wardriver", "Capture GPS coordinates with a handshake", false},
     {ACH_WIGLE_NET, "WiGLE.net", "Upload a capture to WiGLE.net", false},
     {ACH_PMKID_GRABBER, "PMKID Grabber", "Capture a PMKID", false},
-    {ACH_TERMINAL, "Terminal Master", "Find the terminal", true},//d
+    {ACH_TERMINAL, "Terminal Master", "Find the terminal", true},
     {ACH_WPA_SEC_API, "WPA SEC API", "Use the WPA-SEC", false},
     {ACH_MANUAL_GRAB, "Manual Grab", "Manually capture a handshake using the EAPOL sniffer", false},
     {ACH_TEST, "Test Achievement", "This is a test achievement - I don't know how did you get it", true},
     {ACH_HAVE_YOU_TRIED_TURNING_IT_OFF_ON_AGAIN, "Have you tried turning it off and on again?", "Fix the pwngrid by restarting", true},
     {ACH_CHEATER, "Cheater", "Unlock an achievement using a cheat code", true},
-    {ACH_PAPIEZOWO, "Papieżowo", "Pan, kiedyś stanął nad brzegiem...", true}, // note for design - draw piece of cake here - unlocks when typed 2137 into secret terminal
+    {ACH_PAPIEZOWO, "Papieżowo", "Pan, kiedyś stanął nad brzegiem...", true}, 
     {ACH_GOT_MAIL, "You've got mail!", "Receive a message in the inbox", false},
     {ACH_CUSTOMIZATION_GOD, "Customization God", "Change splash texts", false},
-    {ACH_DAVE, "I'm sorry Dave", "Try to delete system folder", true}, //d
+    {ACH_DAVE, "I'm sorry Dave", "Try to delete system folder", true},
     {ACH_100_EPOCH, "Century Club", "Complete 100 epochs", false},
     {ACH_1000_EPOCH, "Millennium Club", "Complete 1000 epochs", false},
     {ACH_10000_EPOCH, "Decamillennium Club", "Complete 10000 epochs", false},
@@ -104,8 +104,8 @@ const AchievementData ACHIEVEMENTS[ACH_COUNT] = {
     {ACH_100_PEERS, "Traveller", "Discover 100 peers",false},
     {ACH_1_HOUR_SESSION, "One Hour Wonder", "Have a single session that lasts 1 hour", false},
     {ACH_6_HOUR_SESSION, "Endurance Runner", "Have a single session that lasts 6 hours", false},
-    {ACH_CHILD, "Child", "YOU KNOW WHAT YOU DID!", true}, //- unlocks when typed 67 into secret terminal
-    {ACH_SKID, "Skid", "Master of nothing, god of chatGPT", true} //can't be obtained
+    {ACH_CHILD, "Child", "YOU KNOW WHAT YOU DID!", true},
+    {ACH_SKID, "Skid", "Master of nothing, god of chatGPT", true}
 };
 
 bool achievements_register(AchievementID id);

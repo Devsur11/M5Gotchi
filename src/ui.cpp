@@ -146,6 +146,7 @@ menu main_menu[] = {
     {"Pwngrid", 7},               // Pwngrid companion
     {"Wardriving", 8},            // Wardriving companion
     {"Files", 70},                // File manager
+    {"Tools", 250},               // Arbitrary PCAP handshake tools
     {"Statistics", 5},            // Stats
     {"Achievements", 200},
     {"Settings", 6},               // Config
@@ -179,7 +180,7 @@ menu wpasec_setup_menu[] = {
 
 // menuID 5
 menu pwngotchi_menu[] = {
-  {"Enable Auto Mode", 125},      
+  {"Enable Auto Mode", 14},      
   {"Auto + Wardriving", 128},     
   {"Debug views", 92},
   {"Whitelist", 38},             
@@ -207,6 +208,12 @@ menu settings_menu[] = {
   {"Back", 255}
 };
 
+menu tools_menu[] = {
+  {"Handshake Info", 260},
+  {"Convert to Hashcat Format", 261},
+  {"Crack w/ Wordlist", 262},
+  {"Back", 255}
+};
 
 menu gps_pins_menu[] = {
   {"Default Pins", 30},
@@ -230,7 +237,7 @@ menu pwngrid_menu_to_send[] = {
   {"Units Met", 16},                      
   {"Inbox", 10},                          
   {"Quick Message", 11},                  
-  {"Friends", 17},                        
+  {"Friends", 17},           
   {"Send pwn data", 26},
   {"Identity", 13},                       
   {"Reset Identity", 15},                 
@@ -689,7 +696,6 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
     redrawUi(show_toolbars);
   }
   
-  // Secret terminal hook: ENTER in mood view opens secret terminal
   if (menuID == 0 && isOkPressed()) {
     debounceDelay();
     String out = userInput("???", "??????????????????", 20);
@@ -709,20 +715,13 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
       drawInfoBox("Cheater", "You unlocked an achievement!", "", true, false);
     }
   }
-  if(show_toolbars)
-  {
+  if(show_toolbars){
     drawTopCanvas();
     drawBottomCanvas();
   }
   
-  
-
   if (menuID == 1) {
-    #ifdef M5STICKS3_ENV
-    drawMenuList(main_menu, 1, 11);
-    #else
-    drawMenuList(main_menu, 1, 10);
-    #endif
+    drawMenuList(main_menu, 1, 12);
     prevMID = 1;
   } 
   else if (menuID == 2){
@@ -763,6 +762,10 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
   else if (menuID == 10){
     drawMenuList(auto_menu, 10, 3);
     prevMID = 10;
+  }
+  else if (menuID == 11){
+    drawMenuList(tools_menu, 11, 4);
+    prevMID = 11;
   }
   else if (menuID == 99) {
     if(dev_mode){
@@ -1942,9 +1945,70 @@ bool addUnitToAddressBook(const unit u) {
     logMessage("Added unit to address book: " + u.name);
     return true;
 }
+
+static String selectPcapFileForTools() {
+  drawInfoBox("Select PCAP", "Choose a .pcap file", "", false, false);
+  delay(1000);
+  String filePath = sdmanager::selectFile(".pcap");
+  if (filePath.length() == 0) {
+    drawInfoBox("Cancelled", "No file selected", "", true, false);
+  }
+  return filePath;
+}
+
+static void showHandshakeInfoScreen(const HandshakeInfo &info, const String &filename) {
+  debounceDelay();
+  while (true) {
+    drawTopCanvas();
+    drawBottomCanvas();
+    canvas_main.fillSprite(bg_color_rgb565);
+    canvas_main.setTextColor(tx_color_rgb565);
+    canvas_main.setTextSize(1);
+    canvas_main.setTextDatum(middle_center);
+    canvas_main.drawString(filename, canvas_center_x, 15);
+
+    canvas_main.setTextSize(1);
+    canvas_main.setTextDatum(top_left);
+    canvas_main.setCursor(0, 35);
+    canvas_main.println("Status: " + String(info.valid ? "VALID" : "INVALID"));
+    canvas_main.println("SSID: " + info.ssid);
+    char mac[18];
+    sprintf(mac, "%02X:%02X:%02X:%02X:%02X:%02X", info.bssid[0], info.bssid[1], info.bssid[2], info.bssid[3], info.bssid[4], info.bssid[5]);
+    canvas_main.println("BSSID: " + String(mac));
+    canvas_main.println("Packets: " + String(info.packetCount));
+    if (info.fileSize > 0) {
+      canvas_main.println("Size: " + String(info.fileSize / 1024.0, 2) + " KB");
+    }
+
+    canvas_main.setTextDatum(middle_center);
+    #ifdef BUTTON_ONLY_INPUT
+    canvas_main.drawString("A: back", canvas_center_x, canvas_h - 10);
+    #else
+    canvas_main.drawString("[ENTER] back", canvas_center_x, canvas_h - 10);
+    #endif
+    pushAll();
+
+    M5.update();
+    #ifdef BUTTON_ONLY_INPUT
+    inputManager::update();
+    if (inputManager::isButtonAPressed()) {
+      debounceDelay();
+      break;
+    }
+    #else
+    M5Cardputer.update();
+    if (M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER)) {
+      debounceDelay();
+      break;
+    }
+    #endif
+    delay(100);
+  }
+}
+
 bool back = false;
 
-void runApp(uint8_t appID){
+void runApp(uint16_t appID){
   logMessage("App started running, ID:"+ String(appID));
   menu_current_opt = 0;
   menu_current_page = 1;
@@ -2282,19 +2346,12 @@ void runApp(uint8_t appID){
           drawInfoBox("INITIALIZING", "Pwnagothi mode initialization", "please wait...", false, false);
           menuID = 5;
           if(pwn::begin()){
-            auto_mode_and_wardrive = true;
             pwnagothiMode = true;
-            // Start wardriving task when auto mode + wardrive requested
-            if (!pwn::beginWardriving()) {
-              logMessage("Warning: failed to start Wardriving task in auto mode");
-            } else {
-              logMessage("Wardriving task started in auto mode");
-            }
             menuID = 0;
             return;
           }
           else{
-            drawInfoBox("ERROR", "Pwnagothi init failed!", "", true, false);
+            drawInfoBox("ERROR", "Pwnagothi init failed!", "Check logs.", true, false);
             pwnagothiMode = false;
           }
           menuID = 5;
@@ -2530,17 +2587,17 @@ void runApp(uint8_t appID){
     if(appID == 17){
       debounceDelay();
 
-        SD_LOCK();
-        File contacts = FSYS.open(ADDRES_BOOK_FILE, FILE_READ, true);
-        if (!contacts) { SD_UNLOCK(); logMessage("Failed to open contacts file"); menuID = 8; return; }
+      SD_LOCK();
+      File contacts = FSYS.open(ADDRES_BOOK_FILE, FILE_READ, true);
+      if (!contacts) { SD_UNLOCK(); logMessage("Failed to open contacts file"); menuID = 8; return; }
 
-        // one single fixed allocation instead of heap soup
-        StaticJsonDocument<16384> contacts_json;
-        DeserializationError err = deserializeJson(contacts_json, contacts);
-        contacts.close();
-        SD_UNLOCK();
+      // one single fixed allocation instead of heap soup
+      StaticJsonDocument<16384> contacts_json;
+      DeserializationError err = deserializeJson(contacts_json, contacts);
+      contacts.close();
+      SD_UNLOCK();
 
-        if (err) { logMessage("Failed to parse contacts: " + String(err.c_str())); menuID = 8; return; }
+      if (err) { logMessage("Failed to parse contacts: " + String(err.c_str())); menuID = 8; return; }
 
       JsonArray contacts_arr = contacts_json.as<JsonArray>();
       uint16_t arrSize = contacts_arr.size();
@@ -2556,11 +2613,6 @@ void runApp(uint8_t appID){
           logMessage("Name: " + name + ", Fingerprint: " + fingerprint);
           contacts_vector.push_back({name, fingerprint});
       }
-
-      // if (contacts_vector.empty()) {
-      //     drawInfoBox("Info", "No frends found", "Adding one now", false, false);
-      //     delay(5000);
-      // }
 
       // build names safely on heap
       std::vector<String> names;
@@ -3424,6 +3476,11 @@ void runApp(uint8_t appID){
         }
         else{
           String uinput = userInput("SSID?", "Enter wifi name for ap.", 30);
+          if(uinput.equals("")){
+            drawInfoBox("Error", "SSID cannot be empty", "Try again", true, false);
+            menuID = 2;
+            return;
+          }
           startPortal(uinput);
         }
         debounceDelay();
@@ -3431,12 +3488,12 @@ void runApp(uint8_t appID){
         while(true){
           updatePortal();
           M5.update();
-          M5.update();
 #ifndef BUTTON_ONLY_INPUT
           M5Cardputer.update();
           Keyboard_Class::KeysState status = M5Cardputer.Keyboard.keysState();
           if(!loginCaptured.equals("") && !passCaptured.equals("")){
             drawInfoBox("New victim!", loginCaptured, passCaptured, false, false);
+            drawNewAchUnlock(ACH_SKID);
           }
           else{
             drawInfoBox("Evil portal", "Evli portal active...", "Enter to exit", false, false);
@@ -3456,6 +3513,7 @@ void runApp(uint8_t appID){
           inputManager::update();
           if(!loginCaptured.equals("") && !passCaptured.equals("")){
             drawInfoBox("New victim!", loginCaptured, passCaptured, false, false);
+            drawNewAchUnlock(ACH_SKID);
           }
           else{
             drawInfoBox("Evil portal", "Evli portal active...", "Enter to exit", false, false);
@@ -3474,7 +3532,6 @@ void runApp(uint8_t appID){
       }
       if(tempChoice == 1){
         String ssidMenu[] = {"Funny SSID", "Broken SSID", "Rick Roll", "Make your own :)"};
-        M5.update();
         M5.update();
         debounceDelay();
         uint8_t ssidChoice = drawMultiChoice("Select list", ssidMenu, 4 , 2 , 2);
@@ -3670,11 +3727,6 @@ void runApp(uint8_t appID){
       return;
     }
     if(appID == 61){
-      if(!dev_mode){
-        drawInfoBox("ERROR", "Experimental app!", "Enable dev mode to use", true, false);
-        menuID = 2;
-        return;
-      }
       // PMKID Grabber app - uses wifiChoice if available
       if(wifiChoice.equals("")){
         drawInfoBox("Error", "No wifi selected", "Use 'Select Networks' first", true, false);
@@ -4788,6 +4840,141 @@ void runApp(uint8_t appID){
       }
       
       menuID = 5;
+      return;
+    }
+    if(appID == 250){
+      menuID = 11;
+      menu_current_opt = 0;
+      menu_current_page = 1;
+      return;
+    }
+    if(appID == 260){
+      String pcapPath = selectPcapFileForTools();
+      if (pcapPath.length() == 0) {
+        menuID = 11;
+        return;
+      }
+      HandshakeInfo info = validateHandshake(pcapPath);
+      String title = pcapPath;
+      int lastSlash = title.lastIndexOf('/');
+      if (lastSlash >= 0) title = title.substring(lastSlash + 1);
+      showHandshakeInfoScreen(info, title);
+      menuID = 11;
+      return;
+    }
+    if(appID == 261){
+      String pcapPath = selectPcapFileForTools();
+      if (pcapPath.length() == 0) {
+        menuID = 11;
+        return;
+      }
+      String outputPath = pcapPath.substring(0, pcapPath.lastIndexOf('.')) + ".hc22000";
+      String hashcatInfo = convertToHashcatFormat(pcapPath, outputPath);
+      debounceDelay();
+      while (true) {
+        drawTopCanvas();
+        drawBottomCanvas();
+        canvas_main.fillSprite(bg_color_rgb565);
+        canvas_main.setTextColor(tx_color_rgb565);
+        canvas_main.setTextSize(1);
+        canvas_main.setTextDatum(top_left);
+        canvas_main.setCursor(2, 5);
+        canvas_main.println("Hashcat Format:");
+        canvas_main.println("");
+        canvas_main.println(hashcatInfo);
+        canvas_main.setTextDatum(middle_center);
+        #ifdef BUTTON_ONLY_INPUT
+        canvas_main.drawString("A: back", canvas_center_x, canvas_h - 10);
+        #else
+        canvas_main.drawString("[ENTER] or [`] back", canvas_center_x, canvas_h - 10);
+        #endif
+        pushAll();
+
+        M5.update();
+        #ifdef BUTTON_ONLY_INPUT
+        inputManager::update();
+        if (inputManager::isButtonAPressed()) {
+          debounceDelay();
+          break;
+        }
+        #else
+        M5Cardputer.update();
+        if (M5Cardputer.Keyboard.isKeyPressed(KEY_ENTER)) {
+          debounceDelay();
+          break;
+        }
+        bool backSelected = false;
+        auto keys_status = M5Cardputer.Keyboard.keysState();
+        for (auto c : keys_status.word) {
+          if (c == '`') {
+            debounceDelay();
+            backSelected = true;
+            break;
+          }
+        }
+        if (backSelected) {
+          break;
+        }
+        #endif
+        delay(100);
+      }
+      menuID = 11;
+      return;
+    }
+    if(appID == 262){
+      String pcapPath = selectPcapFileForTools();
+      if (pcapPath.length() == 0) {
+        menuID = 11;
+        return;
+      }
+      HandshakeInfo info = validateHandshake(pcapPath);
+      drawInfoBox("Select Wordlist", "Choose a .txt file", "", false, false);
+      delay(200);
+      String wordlistPath = sdmanager::selectFile(".txt");
+      if (wordlistPath.length() == 0) {
+        menuID = 11;
+        return;
+      }
+      drawInfoBox("Initialization...", "Starting crack task...", "", false, false);
+      delay(1000);
+      if (!startCrackTask(info, wordlistPath)) {
+        drawInfoBox("Error", "Failed to start crack task", "Check file format", true, false);
+        menuID = 11;
+        return;
+      }
+      debounceDelay();
+      while (true) {
+        CrackStatus st = getCrackStatus();
+        char status[128];
+        sprintf(status, "%.1f t/s | %lu/%lu\nLast: %s", st.triesPerSecond, st.attemptsDone, st.totalCandidates, st.lastTested.c_str());
+        M5.update();
+        #ifdef BUTTON_ONLY_INPUT
+        drawInfoBox("Cracking", status, "B long: stop", false, false);
+        inputManager::update();
+        if (inputManager::isButtonBLongPressed()) {
+          debounceDelay();
+          stopCrackTask();
+          break;
+        }
+        #else
+        drawInfoBox("Cracking", status, "Press [`] to stop", false, false);
+        M5Cardputer.update();
+        auto keys_status = M5Cardputer.Keyboard.keysState();
+        for (auto c : keys_status.word) {
+          if (c == '`') {
+            debounceDelay();
+            stopCrackTask();
+            break;
+          }
+        }
+        #endif
+        delay(150);
+        if (!isCrackRunning()) break;
+      }
+      CrackStatus st = getCrackStatus();
+      String resultMsg = st.foundPassword.length() ? "Password: " + st.foundPassword : "Password not found";
+      drawInfoBox("Finished", "Crack task ended", resultMsg, true, false);
+      menuID = 11;
       return;
     }
     if(appID == 40){
@@ -8460,10 +8647,12 @@ const uint8_t* getMenuIconBitmap(uint8_t menuIndex) {
       case 3: return ICON_PWNGRID_BITMAP;          // Pwngrid
       case 4: return ICON_WARDRIVING_BITMAP;       // Wardriving
       case 5: return ICON_FILES_BITMAP;            // Files
-      case 6: return ICON_STATISTICS_BITMAP;       // Statistics
-      case 7: return ICON_SETTINGS_BITMAP;         // Settings
-      case 8: return ICON_WEB_MANAGER_BITMAP;      // Web file manager
-      case 9: return ICON_BACK_BITMAP;             // Back
+      case 6: return ICON_TOOLS_BITMAP;            // Tools
+      case 7: return ICON_STATISTICS_BITMAP;       // Statistics
+      case 8: return ICON_ACHIVEMENTS_BITMAP;      // Achievements
+      case 9: return ICON_SETTINGS_BITMAP;         // Settings
+      case 10: return ICON_WEB_MANAGER_BITMAP;      // Web file manager
+      case 11: return ICON_BACK_BITMAP;             // Back
       default: return nullptr;
     }
   }
@@ -8688,9 +8877,6 @@ void drawMenuListGrid(menu toDraw[], uint8_t menuIDPriv, uint8_t menu_size) {
     const uint8_t* bitmapData = getMenuIconBitmap(i);
     canvas_main.drawBitmap(x + (cellW - 80) / 2, y + (cellH - 29) / 2, bitmapData, 80, 29, 
                             isSelected ? bg_color_rgb565 : tx_color_rgb565);
-    // if (bitmapData) {
-    //   drawBitmap32(x, y, bitmapData, isSelected ? bg_color_rgb565 : tx_color_rgb565, canvas_main);
-    // }
   }
 
   // Draw page indicator at bottom

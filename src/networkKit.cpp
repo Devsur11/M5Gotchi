@@ -91,9 +91,7 @@ void broadcastFakeSSIDs(String ssidList[], int ssidCount, bool sound) {
 
   // Begin setup: Serial communication, set Wi-Fi mode, randomize MAC, etc.
   logMessage("Hello, NodeMCU! Broadcasting fake SSIDs...");
-
-  wifion(); // Set to station mode
-
+  
   // Set initial Wi-Fi channel
   xSemaphoreTake(wifiMutex, portMAX_DELAY);
   esp_wifi_set_channel(channels[0], WIFI_SECOND_CHAN_NONE);
@@ -222,18 +220,20 @@ void broadcastFakeSSIDs(const char * const ssidList[], int ssidCount, bool sound
   auto randomMac = [&macAddr]() {
     for (int i = 0; i < 6; i++) macAddr[i] = random(256);
   };
-  xSemaphoreTake(wifiMutex, portMAX_DELAY);
+  
   auto nextChannel = [&wifi_channel, &channelIndex, &channels]() {
     if (sizeof(channels) > 1) {
       uint8_t ch = channels[channelIndex];
       channelIndex = (channelIndex + 1) % (sizeof(channels));
       wifi_channel = ch;
+      xSemaphoreTake(wifiMutex, portMAX_DELAY);
       esp_wifi_set_channel(wifi_channel, WIFI_SECOND_CHAN_NONE);
+      xSemaphoreGive(wifiMutex);
     }
   };
 
   logMessage("Hello, NodeMCU! Broadcasting fake SSIDs... (C-list)");
-  wifion();
+  xSemaphoreTake(wifiMutex, portMAX_DELAY);
   esp_wifi_set_channel(channels[0], WIFI_SECOND_CHAN_NONE);
   xSemaphoreGive(wifiMutex);
 

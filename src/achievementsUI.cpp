@@ -204,9 +204,6 @@ void drawAchievements() {
                 }
                 debounceDelay();
             }
-// #ifdef BUTTON_ONLY_INPUT
-//         }
-// #endif
         }
         
         delay(10);
