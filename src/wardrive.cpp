@@ -24,14 +24,13 @@ bool wardrive_achievement_flag = false;
 SemaphoreHandle_t wardriveMutex = nullptr;
 QueueHandle_t wardriveSaveQueue = nullptr;
 
-static String currentWardrivePath = "/M5Gotchi/wardriving/first_seen.csv";
+static String currentWardrivePath = "/M5Gotchi/wardriving/wardrive.csv";
 static bool filenameLocked = false;
 
-static const char* FIRST_SEEN_PATH = "/M5Gotchi/wardriving/first_seen.csv";
 
 // WiGLE CSV header lines - exact format required by WiGLE
 static const char* WIGLE_META_HEADER   = "WigleWifi-1.4,appRelease=M5Gotchi,model=M5Gotchi,release=1.0,device=M5Gotchi,display=M5Gotchi,board=ESP32,brand=M5Stack";
-static const char* WIGLE_COLUMN_HEADER = "MAC,SSID,AuthMode,FirstSeen,Channel,Frequency,RSSI,CurrentLatitude,CurrentLongitude,AltitudeMeters,AccuracyMeters,Type";
+static const char* WIGLE_COLUMN_HEADER = "MAC,SSID,AuthMode,FirstSeen,Channel,Frequency,RSSI,CurrentLatitude,CurrentLongitude,AltitudeMeters,AccuracyMeters,RCOIs,MfgrId,Type";
 
 struct GpsFix {
     bool valid = false;
@@ -208,11 +207,9 @@ static String buildWigleRow(const wifiSpeedScan& net, const GpsFix& fix) {
     String altStr = (fix.alt != 0.0) ? String(fix.alt, 2) : "";
     String accStr = (fix.hdop > 0)   ? String(fix.hdop, 2) : "";
 
-    // WiGLE column order: MAC,SSID,AuthMode,FirstSeen,Channel,Frequency,RSSI,
-    //                     CurrentLatitude,CurrentLongitude,AltitudeMeters,AccuracyMeters,Type
     char buf[1024];
     snprintf(buf, sizeof(buf),
-             "%s,\"%s\",%s,%s,%d,%d,%d,%s,%s,%s,%s,WIFI",
+             "%s,\"%s\",%s,%s,%d,%d,%d,%s,%s,%s,%s,0, ,WIFI",
              macStr.c_str(),
              ssidEsc.c_str(),
              caps.c_str(),
@@ -564,7 +561,7 @@ wardriveStatus wardrive(const std::vector<wifiSpeedScan>& networks, unsigned lon
         }
 
         if (wardriveSaveQueue == nullptr) {
-            wardriveSaveQueue = xQueueCreate(5, sizeof(WardriveSaveRequest*));
+            wardriveSaveQueue = xQueueCreate(10, sizeof(WardriveSaveRequest*));
             if (!wardriveSaveQueue) {
                 fLogMessage("wardrive: failed to create wardriveSaveQueue");
             }
@@ -595,16 +592,19 @@ wardriveStatus wardrive(const std::vector<wifiSpeedScan>& networks, unsigned lon
     }
 
     // ---- Fallback / direct SD write path ----
-    File f = FSYS.open(currentWardrivePath.c_str(), FILE_APPEND);
+    File f;
+    if(!FSYS.open(currentWardrivePath.c_str(), FILE_READ)){
+        //file not found, create it
+        f = FSYS.open(currentWardrivePath.c_str(), FILE_APPEND, true);
+        f.println(WIGLE_META_HEADER);
+        f.println(WIGLE_COLUMN_HEADER);
+    }
+    else f = FSYS.open(currentWardrivePath.c_str(), FILE_APPEND);
+
     if (!f) {
         fLogMessage("Cannot open wardrive file: %s", currentWardrivePath.c_str());
         xSemaphoreGive(wardriveMutex);
         return {false, bestFix.valid, bestFix.lat, bestFix.lon, bestFix.hdop, bestFix.alt, bestFix.timeIso, 0, 0};
-    }
-
-    if (f.size() == 0) {
-        f.println(WIGLE_META_HEADER);
-        f.println(WIGLE_COLUMN_HEADER);
     }
 
     for (const auto& net : networks) {

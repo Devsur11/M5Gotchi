@@ -180,11 +180,11 @@ menu wpasec_setup_menu[] = {
 
 // menuID 5
 menu pwngotchi_menu[] = {
-  {"Enable Auto Mode", 14},      
-  {"Auto + Wardriving", 128},     
+  {"Enable Auto Mode", 14},
+  {"Auto + Wardriving", 128},
   {"Debug views", 92},
-  {"Whitelist", 38},             
-  {"Handshakes", 39},            
+  {"Whitelist", 38},
+  {"Handshakes", 39},
   {"Back", 255}
 };
 
@@ -670,12 +670,14 @@ void updateUi(bool show_toolbars, bool triggerPwnagothi, bool overrideDelay) {
   if (wardriveSaveQueue && xQueueReceive(wardriveSaveQueue, &wreq, 0) == pdTRUE) {
       if (wreq) {
           SD_LOCK();
-          File wf = FSYS.open(wreq->filename, FILE_APPEND);
+          File wf;
+          if(!FSYS.open(wreq->filename, FILE_READ)){
+              wf = FSYS.open(wreq->filename, FILE_APPEND, true);
+              wf.println("WigleWifi-1.4,appRelease=M5Gotchi,model=M5Gotchi,release=1.0,device=M5Gotchi,display=M5Gotchi,board=ESP32,brand=M5Stack");
+              wf.println("MAC,SSID,AuthMode,FirstSeen,Channel,Frequency,RSSI,CurrentLatitude,CurrentLongitude,AltitudeMeters,AccuracyMeters,RCOIs,MfgrId,Type");
+          }
+          else wf = FSYS.open(wreq->filename, FILE_APPEND);
           if (wf) {
-              if (wf.size() == 0 && wreq->ensureWigleHeader) {
-                  wf.println("WigleWifi-1.4,appRelease=M5Gotchi,model=M5Gotchi,release=1.0,device=M5Gotchi,display=M5Gotchi,board=ESP32,brand=M5Stack");
-                  wf.println("MAC,SSID,AuthMode,FirstSeen,Channel,Frequency,RSSI,CurrentLatitude,CurrentLongitude,AltitudeMeters,AccuracyMeters,Type");
-              }
               wf.print(wreq->body);
               wf.close();
               fLogMessage("Wardrive: saved %s (len=%u)", wreq->filename, (unsigned)wreq->body.length());
@@ -4027,6 +4029,7 @@ void runApp(uint16_t appID){
       return;
     }
     if(appID == 25){
+      drawInfoBox("INFO", "Please enter kay from \"Encoded for use\" field from acc page.", "", true, false);
       String new_wiggle_api_key = "";
       String mmenu[] = {"With keyboard", "Via PC/Phone", "Back"};
       uint8_t answerrr = drawMultiChoice("Set new key:", mmenu, 3, 2, 2);
@@ -4054,7 +4057,7 @@ void runApp(uint16_t appID){
       }
       else{
         drawInfoBox("ERROR", "Save setting failed!", "Check SD Card", true, false);
-        menuID =9;
+        menuID = 9;
         return;
       }
       menuID = 9;
