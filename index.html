@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ESPBlaster · M5Gotchi</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800&family=JetBrains+Mono:wght@300;400;600&display=swap" rel="stylesheet">
+<script type="importmap">
+{
+  "imports": {
+    "esptool-js": "https://cdn.jsdelivr.net/npm/esptool-js@4/+esm"
+  }
+}
+</script>
+<style>
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg-1: #080810;
+  --bg-2: #0c0c1a;
+  --bg-3: #111122;
+  --card: rgba(16, 16, 36, 0.75);
+  --card-border: rgba(0, 220, 255, 0.12);
+  --cyan: #00dcff;
+  --cyan-dim: rgba(0, 220, 255, 0.08);
+  --green: #00ff95;
+  --green-dim: rgba(0, 255, 149, 0.08);
+  --text: #d0d0e0;
+  --text-dim: #707090;
+  --text-muted: #505068;
+  --radius: 12px;
+  --glow: 0 0 30px rgba(0, 220, 255, 0.05);
+  --font-display: 'Orbitron', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: var(--bg-1);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1.6;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% -20%, rgba(0, 220, 255, 0.03) 0%, transparent 70%),
+    radial-gradient(ellipse 60% 50% at 80% 80%, rgba(0, 255, 149, 0.02) 0%, transparent 60%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.top-bar {
+  height: 3px;
+  background: linear-gradient(90deg, transparent, var(--cyan), var(--green), transparent);
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 100;
+  box-shadow: 0 0 40px rgba(0, 220, 255, 0.15);
+}
+
+.container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 24px;
+  position: relative;
+  z-index: 1;
+}
+
+section { padding: 48px 0; }
+section + section { border-top: 1px solid rgba(255,255,255,0.03); }
+
+/* ── Header ── */
+.hero {
+  padding: 80px 0 48px;
+  text-align: center;
+}
+
+.hero-badge {
+  display: inline-flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.hero-badge span {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  padding: 4px 14px;
+  border-radius: 100px;
+  border: 1px solid rgba(255,255,255,0.06);
+  background: rgba(255,255,255,0.03);
+  color: var(--text-dim);
+}
+
+.hero h1 {
+  font-family: var(--font-display);
+  font-size: clamp(28px, 5vw, 48px);
+  font-weight: 800;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+
+.hero h1 span { color: var(--cyan); }
+
+.hero .divider {
+  width: 60px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--cyan), var(--green));
+  margin: 16px auto;
+  border-radius: 2px;
+}
+
+.hero .tagline {
+  font-size: 15px;
+  color: var(--text-dim);
+  max-width: 520px;
+  margin: 0 auto;
+  letter-spacing: 0.3px;
+}
+
+/* ── Device Cards ── */
+.device-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 600px) {
+  .device-grid { grid-template-columns: 1fr; }
+}
+
+.device-card {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  padding: 28px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.device-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, var(--cyan-dim) 0%, transparent 50%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.device-card:hover {
+  border-color: rgba(0, 220, 255, 0.25);
+  transform: translateY(-2px);
+}
+
+.device-card:hover::before { opacity: 1; }
+
+.device-card.selected {
+  border-color: var(--cyan);
+  box-shadow: 0 0 30px rgba(0, 220, 255, 0.08);
+}
+
+.device-card.selected::before { opacity: 1; }
+
+.device-card .indicator {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  display: inline-block;
+  transition: all 0.3s ease;
+}
+
+.device-card.selected .indicator { background: var(--cyan); box-shadow: 0 0 12px rgba(0, 220, 255, 0.5); }
+
+.device-card h3 {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  margin-top: 12px;
+  margin-bottom: 4px;
+}
+
+.device-card .subtitle {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 16px;
+}
+
+.device-card .specs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.device-card .specs span {
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.05);
+  color: var(--text-dim);
+}
+
+/* ── Section Headers ── */
+.section-label {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.section-label .icon {
+  font-size: 18px;
+  opacity: 0.6;
+}
+
+.section-label h2 {
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.section-label .line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255,255,255,0.06), transparent);
+}
+
+/* ── Flasher ── */
+.flasher-card {
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  padding: 28px;
+}
+
+.flasher-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.flasher-controls select {
+  background: var(--bg-2);
+  color: var(--text);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  cursor: pointer;
+  outline: none;
+  min-width: 160px;
+}
+
+.flasher-controls select:focus { border-color: var(--cyan); }
+
+.btn {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  padding: 8px 20px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.08);
+  background: var(--bg-2);
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.04);
+}
+
+.btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+.btn-cyan {
+  border-color: var(--cyan);
+  color: var(--cyan);
+  background: rgba(0, 220, 255, 0.06);
+}
+
+.btn-cyan:hover:not(:disabled) {
+  background: rgba(0, 220, 255, 0.12);
+  box-shadow: 0 0 20px rgba(0, 220, 255, 0.08);
+}
+
+.btn-green {
+  border-color: var(--green);
+  color: var(--green);
+  background: rgba(0, 255, 149, 0.06);
+}
+
+.btn-green:hover:not(:disabled) {
+  background: rgba(0, 255, 149, 0.12);
+  box-shadow: 0 0 20px rgba(0, 255, 149, 0.08);
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-left: auto;
+}
+
+.status .dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  transition: all 0.3s ease;
+}
+
+.status .dot.connected { background: var(--green); box-shadow: 0 0 10px rgba(0, 255, 149, 0.5); }
+
+.status .dot.busy { background: #ffa500; box-shadow: 0 0 10px rgba(255, 165, 0, 0.5); animation: pulse 1s ease infinite; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ── Console ── */
+.console {
+  background: var(--bg-1);
+  border: 1px solid rgba(255,255,255,0.04);
+  border-radius: 8px;
+  padding: 16px;
+  min-height: 200px;
+  max-height: 320px;
+  overflow-y: auto;
+  font-size: 12px;
+  line-height: 1.7;
+  margin-bottom: 16px;
+}
+
+.console::-webkit-scrollbar { width: 4px; }
+.console::-webkit-scrollbar-track { background: transparent; }
+.console::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.05); border-radius: 2px; }
+
+.console .line {
+  color: var(--text-dim);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.console .line.info { color: var(--text); }
+.console .line.ok { color: var(--green); }
+.console .line.err { color: #ff4444; }
+.console .line.highlight { color: var(--cyan); }
+
+.console .prompt { color: var(--text-muted); }
+
+.progress-wrap {
+  height: 4px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progress-bar {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--cyan), var(--green));
+  border-radius: 2px;
+  transition: width 0.2s ease;
+}
+
+/* ── About / Features ── */
+.about-text {
+  font-size: 13px;
+  color: var(--text-dim);
+  max-width: 640px;
+  margin-bottom: 28px;
+  line-height: 1.8;
+}
+
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 8px;
+}
+
+.feature-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-dim);
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.03);
+}
+
+.feature-item .mark { color: var(--cyan); font-size: 14px; }
+
+/* ── Install Help ── */
+.install-step {
+  display: flex;
+  gap: 14px;
+  padding: 14px 18px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.03);
+  border-radius: 8px;
+  margin-bottom: 10px;
+  font-size: 13px;
+}
+
+.install-step .num {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cyan);
+  min-width: 24px;
+}
+
+.install-step .text { color: var(--text-dim); }
+.install-step .text strong { color: var(--text); }
+
+/* ── Footer ── */
+footer {
+  padding: 32px 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+footer a {
+  color: var(--text-dim);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+footer a:hover { color: var(--cyan); }
+
+footer .links {
+  display: flex;
+  justify-content: center;
+  gap: 20px;
+  margin-bottom: 12px;
+}
+
+/* ── Responsive ── */
+@media (max-width: 600px) {
+  .container { padding: 0 16px; }
+  section { padding: 32px 0; }
+  .hero { padding: 60px 0 32px; }
+  .flasher-controls { flex-direction: column; align-items: stretch; }
+  .flasher-controls select { width: 100%; }
+  .status { margin-left: 0; }
+  .feature-grid { grid-template-columns: 1fr 1fr; }
+}
+
+/* ── Animations ── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+section { animation: fadeIn 0.5s ease both; }
+section:nth-child(2) { animation-delay: 0.1s; }
+section:nth-child(3) { animation-delay: 0.2s; }
+section:nth-child(4) { animation-delay: 0.3s; }
+</style>
+</head>
+<body>
+
+<div class="top-bar"></div>
+
+<!-- ═══ HERO ═══ -->
+<section class="hero">
+  <div class="container">
+    <div class="hero-badge">
+      <span>v0.7</span>
+      <span>ESP32-S3</span>
+      <span>MIT</span>
+    </div>
+    <h1>ESP<span>Blaster</span> / M5Gotchi</h1>
+    <div class="divider"></div>
+    <p class="tagline">
+      A full <strong>Pwnagotchi</strong> port for the M5Stack platform &mdash;
+      Wi-Fi handshake capture, PMKID attack, and PWNGrid mesh networking,
+      reimagined with a keyboard-driven UI.
+    </p>
+  </div>
+</section>
+
+<!-- ═══ DEVICES ═══ -->
+<section>
+  <div class="container">
+    <div class="section-label">
+      <span class="icon">◈</span>
+      <h2>Target Devices</h2>
+      <span class="line"></span>
+    </div>
+    <div class="device-grid" id="deviceGrid">
+      <div class="device-card selected" data-device="cardputer" data-bin="cardputer.bin">
+        <span class="indicator"></span>
+        <h3>M5Cardputer</h3>
+        <p class="subtitle">Primary target &middot; Integrated keyboard</p>
+        <div class="specs">
+          <span>ESP32-S3</span>
+          <span>8MB Flash</span>
+          <span>SD Card</span>
+          <span>Keyboard</span>
+          <span>1.14" LCD</span>
+        </div>
+      </div>
+      <div class="device-card" data-device="m5sticks3" data-bin="m5stick.bin">
+        <span class="indicator"></span>
+        <h3>M5StickS3</h3>
+        <p class="subtitle">Compact &middot; 2-button input</p>
+        <div class="specs">
+          <span>ESP32-S3</span>
+          <span>8MB Flash</span>
+          <span>LittleFS</span>
+          <span>2 Buttons</span>
+          <span>0.96" LCD</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ FLASHER ═══ -->
+<section>
+  <div class="container">
+    <div class="section-label">
+      <span class="icon">⚡</span>
+      <h2>Web Flasher</h2>
+      <span class="line"></span>
+    </div>
+    <div class="flasher-card">
+      <div class="flasher-controls">
+        <select id="deviceSelect">
+          <option value="cardputer">M5Cardputer</option>
+          <option value="m5sticks3">M5StickS3</option>
+        </select>
+        <button class="btn btn-cyan" id="connectBtn">🔌 Connect</button>
+        <button class="btn btn-green" id="flashBtn" disabled>⚡ Flash</button>
+        <span class="status" id="status">
+          <span class="dot" id="statusDot"></span>
+          <span id="statusText">Disconnected</span>
+        </span>
+      </div>
+      <div class="console" id="console">
+        <div class="line prompt">▸ Select a device and click Connect to begin.</div>
+      </div>
+      <div class="progress-wrap">
+        <div class="progress-bar" id="progressBar"></div>
+      </div>
+      <div style="margin-top: 14px; font-size: 11px; color: var(--text-muted);">
+        Flash offset: <strong style="color:var(--cyan)">0x0000</strong> (merged firmware)
+        &middot; Ensure device is in <strong>download mode</strong> (hold BOOT, press RST, release BOOT)
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ ABOUT ═══ -->
+<section>
+  <div class="container">
+    <div class="section-label">
+      <span class="icon">◈</span>
+      <h2>About</h2>
+      <span class="line"></span>
+    </div>
+    <p class="about-text">
+      <strong>ESPBlaster / M5Gotchi</strong> is a port of
+      <a href="https://github.com/evilsocket/pwnagotchi" style="color:var(--cyan);text-decoration:none;">Pwnagotchi</a>
+      to ESP32-S3 based M5Stack devices. It captures WPA/WPA2 handshakes,
+      performs PMKID attacks, runs evil portals, and connects to the
+      <strong>PWNGrid</strong> peer-to-peer mesh network &mdash; all from a
+      pocket-sized device with a keyboard or button-driven UI.
+    </p>
+    <div class="feature-grid">
+      <div class="feature-item"><span class="mark">▸</span> Handshake capture</div>
+      <div class="feature-item"><span class="mark">▸</span> PMKID attack</div>
+      <div class="feature-item"><span class="mark">▸</span> Evil portal</div>
+      <div class="feature-item"><span class="mark">▸</span> PWNGrid mesh</div>
+      <div class="feature-item"><span class="mark">▸</span> Wardriving + GPS</div>
+      <div class="feature-item"><span class="mark">▸</span> wpa-sec upload</div>
+      <div class="feature-item"><span class="mark">▸</span> OTA updates</div>
+      <div class="feature-item"><span class="mark">▸</span> File manager</div>
+      <div class="feature-item"><span class="mark">▸</span> Auto / Manual mode</div>
+      <div class="feature-item"><span class="mark">▸</span> Achievements</div>
+      <div class="feature-item"><span class="mark">▸</span> Mood system</div>
+      <div class="feature-item"><span class="mark">▸</span> Core dump MQTT</div>
+      <div class="feature-item"><span class="mark">▸</span> Deauth detection</div>
+      <div class="feature-item"><span class="mark">▸</span> WiGLE integration</div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ HOW TO FLASH ═══ -->
+<section>
+  <div class="container">
+    <div class="section-label">
+      <span class="icon">◈</span>
+      <h2>Manual Flash</h2>
+      <span class="line"></span>
+    </div>
+    <div class="install-step">
+      <span class="num">01</span>
+      <span class="text"><strong>Put device in download mode</strong> &mdash; hold the BOOT button, press and release RST, then release BOOT.</span>
+    </div>
+    <div class="install-step">
+      <span class="num">02</span>
+      <span class="text"><strong>Connect</strong> the device via USB and select it in the browser popup.</span>
+    </div>
+    <div class="install-step">
+      <span class="num">03</span>
+      <span class="text">Click <strong>Flash</strong> &mdash; the merged firmware will be written at <code style="color:var(--cyan)">0x0000</code>.</span>
+    </div>
+    <div class="install-step">
+      <span class="num">04</span>
+      <span class="text"><strong>Power cycle</strong> the device after flashing completes.</span>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ FOOTER ═══ -->
+<footer>
+  <div class="container">
+    <div class="links">
+      <a href="https://github.com/Devsur11/ESPBlaster" target="_blank">GitHub</a>
+      <a href="https://discord.gg/2TZFcndkhB" target="_blank">Discord</a>
+      <a href="https://github.com/evilsocket/pwnagotchi" target="_blank">Pwnagotchi</a>
+    </div>
+    <p>MIT License &middot; Research &amp; Educational Use Only</p>
+    <p style="margin-top:4px;">Built with esptool-js &middot; Web Serial API</p>
+  </div>
+</footer>
+
+<script type="module">
+let ESPLoader;
+try {
+  const mod = await import('esptool-js');
+  ESPLoader = mod.ESPLoader;
+} catch (e) {
+  console.warn('esptool-js load failed:', e);
+}
+
+/* ── DOM refs ── */
+const consoleEl = document.getElementById('console');
+const statusDot = document.getElementById('statusDot');
+const statusText = document.getElementById('statusText');
+const connectBtn = document.getElementById('connectBtn');
+const flashBtn = document.getElementById('flashBtn');
+const deviceSelect = document.getElementById('deviceSelect');
+const progressBar = document.getElementById('progressBar');
+const deviceCards = document.querySelectorAll('.device-card');
+
+/* ── State ── */
+let port = null;
+let loader = null;
+let isConnected = false;
+let isFlashing = false;
+
+/* ── Helpers ── */
+function log(msg, cls = '') {
+  const line = document.createElement('div');
+  line.className = `line ${cls}`;
+  line.textContent = msg;
+  consoleEl.appendChild(line);
+  consoleEl.scrollTop = consoleEl.scrollHeight;
+}
+
+function setStatus(text, state) {
+  statusText.textContent = text;
+  statusDot.className = 'dot' + (state ? ` ${state}` : '');
+}
+
+function setProgress(pct) {
+  progressBar.style.width = `${Math.round(pct)}%`;
+}
+
+function getDeviceConfig() {
+  const val = deviceSelect.value;
+  const card = document.querySelector(`.device-card[data-device="${val}"]`);
+  return {
+    name: card ? card.querySelector('h3').textContent : val,
+    bin: card ? card.dataset.bin : (val === 'cardputer' ? 'cardputer.bin' : 'm5stick.bin'),
+  };
+}
+
+/* ── Device selection sync ── */
+deviceCards.forEach(card => {
+  card.addEventListener('click', () => {
+    deviceCards.forEach(c => c.classList.remove('selected'));
+    card.classList.add('selected');
+    deviceSelect.value = card.dataset.device;
+  });
+});
+
+deviceSelect.addEventListener('change', () => {
+  deviceCards.forEach(c => c.classList.remove('selected'));
+  const match = document.querySelector(`.device-card[data-device="${deviceSelect.value}"]`);
+  if (match) match.classList.add('selected');
+});
+
+/* ── Connect ── */
+connectBtn.addEventListener('click', async () => {
+  if (isConnected) {
+    await disconnect();
+    return;
+  }
+  try {
+    if (!navigator.serial) {
+      log('Web Serial API not available. Use Chrome/Edge 89+.', 'err');
+      return;
+    }
+    if (!ESPLoader) {
+      log('esptool-js library failed to load. Check internet connection.', 'err');
+      return;
+    }
+
+    port = await navigator.serial.requestPort();
+    log('Port selected. Connecting...', 'info');
+    setStatus('Connecting...', 'busy');
+    connectBtn.disabled = true;
+
+    try {
+      loader = new ESPLoader({ port, baudrate: 921600, romBaudrate: 115200 });
+    } catch {
+      loader = new ESPLoader(port, 921600);
+    }
+    await loader.connect();
+
+    isConnected = true;
+    setStatus('Connected', 'connected');
+    log(`Connected — ${loader.chip?.CHIP_NAME || 'ESP32-S3'}`, 'ok');
+    flashBtn.disabled = false;
+    connectBtn.innerHTML = '🔌 Disconnect';
+
+  } catch (e) {
+    log(`Connection failed: ${e.message || e}`, 'err');
+    setStatus('Error', '');
+    disconnectCleanup();
+  } finally {
+    connectBtn.disabled = false;
+  }
+});
+
+async function disconnect() {
+  try { if (loader) await loader.disconnect(); } catch {}
+  try { if (port) await port.close(); } catch {}
+  disconnectCleanup();
+}
+
+function disconnectCleanup() {
+  isConnected = false;
+  port = null;
+  loader = null;
+  flashBtn.disabled = true;
+  connectBtn.innerHTML = '🔌 Connect';
+  setStatus('Disconnected', '');
+}
+
+/* ── Flash ── */
+flashBtn.addEventListener('click', async () => {
+  if (isFlashing || !isConnected || !loader) return;
+
+  isFlashing = true;
+  flashBtn.disabled = true;
+  connectBtn.disabled = true;
+
+  const cfg = getDeviceConfig();
+  log(`Preparing to flash ${cfg.name}...`, 'highlight');
+  log(`Firmware: ${cfg.bin} @ 0x0000`, 'info');
+
+  try {
+    const resp = await fetch(cfg.bin);
+    if (!resp.ok) throw new Error(`Failed to fetch ${cfg.bin} (${resp.status})`);
+    const raw = await resp.arrayBuffer();
+    const data = new Uint8Array(raw);
+    log(`Loaded ${(raw.byteLength / 1024).toFixed(0)} KB`, 'info');
+
+    setStatus('Flashing...', 'busy');
+    setProgress(0);
+    log('Erasing & writing flash...', 'info');
+
+    const flashCfg = {
+      address: 0x0,
+      data,
+      erase: true,
+      onProgress: ({ percentage }) => {
+        const pct = percentage;
+        setProgress(pct);
+      },
+      progress: (pct) => {
+        setProgress(typeof pct === 'number' ? pct : pct * 100);
+      },
+    };
+
+    try {
+      const flash = await getFlashInstance(loader);
+      if (flash && typeof flash.writeFlash === 'function') {
+        await flash.writeFlash(flashCfg);
+      } else if (typeof loader.flashData === 'function') {
+        await loader.flashData(data, 0x0, (p) => setProgress(p * 100));
+      } else if (typeof loader.writeFlash === 'function') {
+        await loader.writeFlash(flashCfg);
+      } else {
+        throw new Error('No compatible flash method');
+      }
+    } catch (flashErr) {
+      log(`Flash error: ${flashErr.message || flashErr}`, 'err');
+      throw flashErr;
+    }
+
+    setProgress(100);
+    log('Flash complete!', 'ok');
+    log('Power cycle the device to boot the new firmware.', 'highlight');
+    try { await loader.hardReset?.(); } catch {}
+    setStatus('Complete', 'connected');
+  } catch (e) {
+    log(`Failed: ${e.message || e}`, 'err');
+    setStatus('Error', '');
+  } finally {
+    isFlashing = false;
+    flashBtn.disabled = !isConnected;
+    connectBtn.disabled = false;
+  }
+});
+
+async function getFlashInstance(ldr) {
+  if (ldr.flash) {
+    if (typeof ldr.flash === 'function') return ldr.flash();
+    return ldr.flash;
+  }
+  return null;
+}
+
+/* ── Boot message ── */
+log('Web flasher ready.', 'info');
+log('Connect your device and select firmware to flash.', '');
+</script>
+
+</body>
+</html>
