@@ -6,13 +6,6 @@
 <title>M5Gotchi</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800&family=JetBrains+Mono:wght@300;400;600&display=swap" rel="stylesheet">
-<script type="importmap">
-{
-  "imports": {
-    "esptool-js": "https://cdn.jsdelivr.net/npm/esptool-js@4/+esm"
-  }
-}
-</script>
 <style>
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -30,7 +23,6 @@
   --text-dim: #707090;
   --text-muted: #505068;
   --radius: 12px;
-  --glow: 0 0 30px rgba(0, 220, 255, 0.05);
   --font-display: 'Orbitron', sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 }
@@ -78,28 +70,10 @@ body::before {
 section { padding: 48px 0; }
 section + section { border-top: 1px solid rgba(255,255,255,0.03); }
 
-/* ── Header ── */
+/* ── Hero ── */
 .hero {
   padding: 80px 0 48px;
   text-align: center;
-}
-
-.hero-badge {
-  display: inline-flex;
-  gap: 8px;
-  margin-bottom: 20px;
-}
-
-.hero-badge span {
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-  padding: 4px 14px;
-  border-radius: 100px;
-  border: 1px solid rgba(255,255,255,0.06);
-  background: rgba(255,255,255,0.03);
-  color: var(--text-dim);
 }
 
 .hero h1 {
@@ -109,6 +83,98 @@ section + section { border-top: 1px solid rgba(255,255,255,0.03); }
   letter-spacing: 2px;
   text-transform: uppercase;
   margin-bottom: 12px;
+}
+
+.hero h1#gotchiFace {
+  font-family: var(--font-mono);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  transition: opacity 0.22s ease, transform 0.22s ease;
+  margin-bottom: 0;
+}
+
+#gotchiMood {
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  height: 16px;
+  transition: opacity 0.4s;
+}
+
+/* ── Gotchi wrapper: face + bubble side-by-side ── */
+.gotchi-wrapper {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-bottom: 6px;
+  position: relative;
+}
+
+/* ── Speech bubble ── */
+.speech-bubble {
+  position: relative;
+  background: var(--bg-3);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  padding: 8px 14px;
+  max-width: 260px;
+  min-width: 100px;
+  text-align: left;
+  opacity: 0;
+  transform: translateX(6px) scale(0.95);
+  transform-origin: left center;
+  transition: opacity 0.35s ease, transform 0.35s ease;
+  pointer-events: none;
+}
+
+.speech-bubble.visible {
+  opacity: 1;
+  transform: translateX(0) scale(1);
+}
+
+/* left-pointing tail */
+.speech-bubble::before {
+  content: '';
+  position: absolute;
+  left: -8px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 7px solid transparent;
+  border-right-color: var(--card-border);
+}
+
+.speech-bubble::after {
+  content: '';
+  position: absolute;
+  left: -6px;
+  top: 50%;
+  transform: translateY(-50%);
+  border: 6px solid transparent;
+  border-right-color: var(--bg-3);
+}
+
+#speechText {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.5;
+  display: block;
+}
+
+/* typing cursor blink */
+#speechText.typing::after {
+  content: '|';
+  color: var(--cyan);
+  animation: cursorBlink 0.7s step-end infinite;
+}
+
+@keyframes cursorBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
 }
 
 .hero h1 span { color: var(--cyan); }
@@ -160,11 +226,7 @@ section + section { border-top: 1px solid rgba(255,255,255,0.03); }
   transition: opacity 0.3s ease;
 }
 
-.device-card:hover {
-  border-color: rgba(0, 220, 255, 0.25);
-  transform: translateY(-2px);
-}
-
+.device-card:hover { border-color: rgba(0, 220, 255, 0.25); transform: translateY(-2px); }
 .device-card:hover::before { opacity: 1; }
 
 .device-card.selected {
@@ -175,15 +237,17 @@ section + section { border-top: 1px solid rgba(255,255,255,0.03); }
 .device-card.selected::before { opacity: 1; }
 
 .device-card .indicator {
-  width: 8px;
-  height: 8px;
+  width: 8px; height: 8px;
   border-radius: 50%;
   background: var(--text-muted);
   display: inline-block;
   transition: all 0.3s ease;
 }
 
-.device-card.selected .indicator { background: var(--cyan); box-shadow: 0 0 12px rgba(0, 220, 255, 0.5); }
+.device-card.selected .indicator {
+  background: var(--cyan);
+  box-shadow: 0 0 12px rgba(0, 220, 255, 0.5);
+}
 
 .device-card h3 {
   font-family: var(--font-display);
@@ -194,17 +258,9 @@ section + section { border-top: 1px solid rgba(255,255,255,0.03); }
   margin-bottom: 4px;
 }
 
-.device-card .subtitle {
-  font-size: 12px;
-  color: var(--text-dim);
-  margin-bottom: 16px;
-}
+.device-card .subtitle { font-size: 12px; color: var(--text-dim); margin-bottom: 16px; }
 
-.device-card .specs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
+.device-card .specs { display: flex; flex-wrap: wrap; gap: 6px; }
 
 .device-card .specs span {
   font-size: 11px;
@@ -223,10 +279,7 @@ section + section { border-top: 1px solid rgba(255,255,255,0.03); }
   margin-bottom: 24px;
 }
 
-.section-label .icon {
-  font-size: 18px;
-  opacity: 0.6;
-}
+.section-label .icon { font-size: 18px; opacity: 0.6; }
 
 .section-label h2 {
   font-family: var(--font-display);
@@ -258,21 +311,6 @@ section + section { border-top: 1px solid rgba(255,255,255,0.03); }
   align-items: center;
   margin-bottom: 20px;
 }
-
-.flasher-controls select {
-  background: var(--bg-2);
-  color: var(--text);
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 6px;
-  padding: 8px 14px;
-  font-family: var(--font-mono);
-  font-size: 13px;
-  cursor: pointer;
-  outline: none;
-  min-width: 160px;
-}
-
-.flasher-controls select:focus { border-color: var(--cyan); }
 
 .btn {
   font-family: var(--font-mono);
@@ -320,6 +358,16 @@ section + section { border-top: 1px solid rgba(255,255,255,0.03); }
   box-shadow: 0 0 20px rgba(0, 255, 149, 0.08);
 }
 
+.btn-red {
+  border-color: #ff4455;
+  color: #ff4455;
+  background: rgba(255, 68, 85, 0.06);
+}
+
+.btn-red:hover:not(:disabled) {
+  background: rgba(255, 68, 85, 0.12);
+}
+
 .status {
   display: inline-flex;
   align-items: center;
@@ -337,8 +385,8 @@ section + section { border-top: 1px solid rgba(255,255,255,0.03); }
 }
 
 .status .dot.connected { background: var(--green); box-shadow: 0 0 10px rgba(0, 255, 149, 0.5); }
-
 .status .dot.busy { background: #ffa500; box-shadow: 0 0 10px rgba(255, 165, 0, 0.5); animation: pulse 1s ease infinite; }
+.status .dot.error { background: #ff4455; box-shadow: 0 0 10px rgba(255, 68, 85, 0.5); }
 
 @keyframes pulse {
   0%, 100% { opacity: 1; }
@@ -363,19 +411,14 @@ section + section { border-top: 1px solid rgba(255,255,255,0.03); }
 .console::-webkit-scrollbar-track { background: transparent; }
 .console::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.05); border-radius: 2px; }
 
-.console .line {
-  color: var(--text-dim);
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-
+.console .line { color: var(--text-dim); white-space: pre-wrap; word-break: break-all; }
 .console .line.info { color: var(--text); }
 .console .line.ok { color: var(--green); }
-.console .line.err { color: #ff4444; }
+.console .line.err { color: #ff4455; }
 .console .line.highlight { color: var(--cyan); }
-
 .console .prompt { color: var(--text-muted); }
 
+/* ── Progress ── */
 .progress-wrap {
   height: 4px;
   background: rgba(255,255,255,0.04);
@@ -443,6 +486,18 @@ section + section { border-top: 1px solid rgba(255,255,255,0.03); }
 .install-step .text { color: var(--text-dim); }
 .install-step .text strong { color: var(--text); }
 
+/* ── Chip badge ── */
+.chip-badge {
+  display: inline-block;
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(0,220,255,0.3);
+  color: var(--cyan);
+  background: rgba(0,220,255,0.06);
+  margin-top: 6px;
+}
+
 /* ── Footer ── */
 footer {
   padding: 32px 0;
@@ -451,12 +506,7 @@ footer {
   color: var(--text-muted);
 }
 
-footer a {
-  color: var(--text-dim);
-  text-decoration: none;
-  transition: color 0.2s;
-}
-
+footer a { color: var(--text-dim); text-decoration: none; transition: color 0.2s; }
 footer a:hover { color: var(--cyan); }
 
 footer .links {
@@ -472,12 +522,44 @@ footer .links {
   section { padding: 32px 0; }
   .hero { padding: 60px 0 32px; }
   .flasher-controls { flex-direction: column; align-items: stretch; }
-  .flasher-controls select { width: 100%; }
   .status { margin-left: 0; }
   .feature-grid { grid-template-columns: 1fr 1fr; }
 }
 
-/* ── Animations ── */
+/* ── Face animation ── */
+#gotchiFace {
+  display: inline-block;
+  font-size: clamp(28px, 5vw, 48px);
+  font-family: var(--font-mono);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  cursor: default;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  user-select: none;
+}
+
+#gotchiFace.blink {
+  animation: faceBlink 0.15s ease;
+}
+
+#gotchiFace.bounce {
+  animation: faceBounce 0.4s ease;
+}
+
+@keyframes faceBlink {
+  0%   { opacity: 1; }
+  40%  { opacity: 0; transform: scaleY(0.85); }
+  100% { opacity: 1; transform: scaleY(1); }
+}
+
+@keyframes faceBounce {
+  0%   { transform: translateY(0); }
+  30%  { transform: translateY(-6px); }
+  60%  { transform: translateY(2px); }
+  100% { transform: translateY(0); }
+}
+
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
@@ -496,90 +578,20 @@ section:nth-child(4) { animation-delay: 0.3s; }
 <!-- ═══ HERO ═══ -->
 <section class="hero">
   <div class="container">
-    <div class="hero-badge">
-      <span>v0.7</span>
-      <span>ESP32-S3</span>
-      <span>MIT</span>
+    <div class="gotchi-wrapper">
+      <h1 id="gotchiFace">(⌐■_■)</h1>
+      <div class="speech-bubble" id="speechBubble">
+        <span id="speechText">Hi, I'm M5Gotchi! </span>
+      </div>
     </div>
-    <h1>M5Gotchi</h1>
+    <p id="gotchiMood"></p>
+    <h1>M5<span>Gotchi</span></h1>
     <div class="divider"></div>
     <p class="tagline">
-      A full <strong>Pwnagotchi</strong> port for the M5Stack platform &mdash;
+      A <strong>Pwnagotchi</strong> port for M5Stack devices -
       Wi-Fi handshake capture, PMKID attack, and PWNGrid mesh networking,
       reimagined with a keyboard-driven UI.
     </p>
-  </div>
-</section>
-
-<!-- ═══ DEVICES ═══ -->
-<section>
-  <div class="container">
-    <div class="section-label">
-      <span class="icon">◈</span>
-      <h2>Target Devices</h2>
-      <span class="line"></span>
-    </div>
-    <div class="device-grid" id="deviceGrid">
-      <div class="device-card selected" data-device="cardputer" data-bin="cardputer.bin">
-        <span class="indicator"></span>
-        <h3>M5Cardputer</h3>
-        <p class="subtitle">Primary target &middot; Integrated keyboard</p>
-        <div class="specs">
-          <span>ESP32-S3</span>
-          <span>8MB Flash</span>
-          <span>SD Card</span>
-          <span>Keyboard</span>
-          <span>1.14" LCD</span>
-        </div>
-      </div>
-      <div class="device-card" data-device="m5sticks3" data-bin="m5stick.bin">
-        <span class="indicator"></span>
-        <h3>M5StickS3</h3>
-        <p class="subtitle">Compact &middot; 2-button input</p>
-        <div class="specs">
-          <span>ESP32-S3</span>
-          <span>8MB Flash</span>
-          <span>LittleFS</span>
-          <span>2 Buttons</span>
-          <span>0.96" LCD</span>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ═══ FLASHER ═══ -->
-<section>
-  <div class="container">
-    <div class="section-label">
-      <span class="icon">⚡</span>
-      <h2>Web Flasher</h2>
-      <span class="line"></span>
-    </div>
-    <div class="flasher-card">
-      <div class="flasher-controls">
-        <select id="deviceSelect">
-          <option value="cardputer">M5Cardputer</option>
-          <option value="m5sticks3">M5StickS3</option>
-        </select>
-        <button class="btn btn-cyan" id="connectBtn">🔌 Connect</button>
-        <button class="btn btn-green" id="flashBtn" disabled>⚡ Flash</button>
-        <span class="status" id="status">
-          <span class="dot" id="statusDot"></span>
-          <span id="statusText">Disconnected</span>
-        </span>
-      </div>
-      <div class="console" id="console">
-        <div class="line prompt">▸ Select a device and click Connect to begin.</div>
-      </div>
-      <div class="progress-wrap">
-        <div class="progress-bar" id="progressBar"></div>
-      </div>
-      <div style="margin-top: 14px; font-size: 11px; color: var(--text-muted);">
-        Flash offset: <strong style="color:var(--cyan)">0x0000</strong> (merged firmware)
-        &middot; Ensure device is in <strong>download mode</strong> (hold BOOT, press RST, release BOOT)
-      </div>
-    </div>
   </div>
 </section>
 
@@ -587,7 +599,7 @@ section:nth-child(4) { animation-delay: 0.3s; }
 <section>
   <div class="container">
     <div class="section-label">
-      <span class="icon">◈</span>
+      <span class="icon"></span>
       <h2>About</h2>
       <span class="line"></span>
     </div>
@@ -596,7 +608,7 @@ section:nth-child(4) { animation-delay: 0.3s; }
       <a href="https://github.com/evilsocket/pwnagotchi" style="color:var(--cyan);text-decoration:none;">Pwnagotchi</a>
       to ESP32-S3 based M5Stack devices. It captures WPA/WPA2 handshakes,
       performs PMKID attacks, runs evil portals, and connects to the
-      <strong>PWNGrid</strong> peer-to-peer mesh network &mdash; all from a
+      <strong>PWNGrid</strong> peer-to-peer mesh network - all from a
       pocket-sized device with a keyboard or button-driven UI.
     </p>
     <div class="feature-grid">
@@ -605,16 +617,102 @@ section:nth-child(4) { animation-delay: 0.3s; }
       <div class="feature-item"><span class="mark">▸</span> Evil portal</div>
       <div class="feature-item"><span class="mark">▸</span> PWNGrid mesh</div>
       <div class="feature-item"><span class="mark">▸</span> Wardriving + GPS</div>
-      <div class="feature-item"><span class="mark">▸</span> wpa-sec upload</div>
+      <div class="feature-item"><span class="mark">▸</span> Wpa-Sec upload</div>
       <div class="feature-item"><span class="mark">▸</span> OTA updates</div>
       <div class="feature-item"><span class="mark">▸</span> File manager</div>
       <div class="feature-item"><span class="mark">▸</span> Auto / Manual mode</div>
       <div class="feature-item"><span class="mark">▸</span> Achievements</div>
       <div class="feature-item"><span class="mark">▸</span> Mood system</div>
-      <div class="feature-item"><span class="mark">▸</span> Core dump MQTT</div>
-      <div class="feature-item"><span class="mark">▸</span> Deauth detection</div>
+      <div class="feature-item"><span class="mark">▸</span> Handshake cracking</div>
+      <div class="feature-item"><span class="mark">▸</span> Handshake integrity check</div>
+      <div class="feature-item"><span class="mark">▸</span> Splash texts editor</div>
+      <div class="feature-item"><span class="mark">▸</span> AP spam</div>
+      <div class="feature-item"><span class="mark">▸</span> Personality customization</div>
+      <div class="feature-item"><span class="mark">▸</span> Levels</div>
       <div class="feature-item"><span class="mark">▸</span> WiGLE integration</div>
+      <div class="feature-item"><span class="mark">▸</span> Statisticks page</div>
+      <div class="feature-item"><span class="mark">▸</span> Pwnagotchi detection</div>
     </div>
+  </div>
+</section>
+
+<!-- ═══ DEVICES + FLASHER ═══ -->
+<section>
+  <div class="container">
+
+    <div class="section-label">
+      <span class="icon"></span>
+      <h2>Select Device</h2>
+      <span class="line"></span>
+    </div>
+
+    <div class="device-grid" id="deviceGrid">
+      <div class="device-card selected" data-device="cardputer" data-bin="cardputer.bin">
+        <span class="indicator"></span>
+        <h3>M5Cardputer</h3>
+        <p class="subtitle">Primary target · Integrated keyboard</p>
+        <div class="specs">
+          <span>ESP32-S3</span>
+          <span>8MB Flash</span>
+          <span>512KB SRAM</span>
+          <span>SD Card</span>
+          <span>Keyboard</span>
+          <span>1.14" LCD</span>
+        </div>
+      </div>
+      <div class="device-card" data-device="m5sticks3" data-bin="m5stick.bin">
+        <span class="indicator"></span>
+        <h3>M5StickS3</h3>
+        <p class="subtitle">Compact · 2-button input</p>
+        <div class="specs">
+          <span>ESP32-S3</span>
+          <span>8MB Flash</span>
+          <span>8MB PSRAM</span>
+          <span>LittleFS</span>
+          <span>2 Buttons</span>
+          <span>1.14" LCD</span>
+        </div>
+      </div>
+    </div>
+
+    <br>
+
+    <div class="section-label">
+      <span class="icon"></span>
+      <h2>Flash Console</h2>
+      <span class="line"></span>
+    </div>
+
+    <div class="flasher-card">
+      <div class="flasher-controls">
+        <button class="btn btn-cyan" id="connectBtn">Connect</button>
+        <button class="btn btn-green" id="flashBtn" disabled>Flash</button>
+        <button class="btn" id="clearBtn">Clear</button>
+        <span class="status" id="statusEl">
+          <span class="dot" id="statusDot"></span>
+          <span id="statusText">Disconnected</span>
+        </span>
+      </div>
+
+      <div class="console" id="console">
+        <div class="line prompt">▸ Select a device above and click Connect.</div>
+      </div>
+
+      <div class="progress-wrap">
+        <div class="progress-bar" id="progressBar"></div>
+      </div>
+
+      <!-- Chip info injected here after connect -->
+      <div id="chipInfo" style="margin-top:12px; font-size:11px; color:var(--text-muted); display:none;">
+        Detected: <span class="chip-badge" id="chipName">-</span>
+      </div>
+
+      <div style="margin-top: 14px; font-size: 11px; color: var(--text-muted);">
+        Flash offset: <strong style="color:var(--cyan)">0x0000</strong> (merged firmware)
+        · Ensure device is in <strong>download mode</strong>
+      </div>
+    </div>
+
   </div>
 </section>
 
@@ -622,13 +720,13 @@ section:nth-child(4) { animation-delay: 0.3s; }
 <section>
   <div class="container">
     <div class="section-label">
-      <span class="icon">◈</span>
+      <span class="icon"></span>
       <h2>Manual Flash</h2>
       <span class="line"></span>
     </div>
     <div class="install-step">
       <span class="num">01</span>
-      <span class="text"><strong>Put device in download mode</strong> &mdash; hold the BOOT button, press and release RST, then release BOOT.</span>
+      <span class="text"><strong>Put device in download mode</strong> - hold the BOOT button, press and release RST, then release BOOT. On StickS3 hold power button and wait for LED to blink.</span>
     </div>
     <div class="install-step">
       <span class="num">02</span>
@@ -636,7 +734,7 @@ section:nth-child(4) { animation-delay: 0.3s; }
     </div>
     <div class="install-step">
       <span class="num">03</span>
-      <span class="text">Click <strong>Flash</strong> &mdash; the merged firmware will be written at <code style="color:var(--cyan)">0x0000</code>.</span>
+      <span class="text">Click <strong>Flash</strong> - the merged firmware will be written at <code style="color:var(--cyan)">0x0000</code>.</span>
     </div>
     <div class="install-step">
       <span class="num">04</span>
@@ -653,196 +751,267 @@ section:nth-child(4) { animation-delay: 0.3s; }
       <a href="https://discord.gg/2TZFcndkhB" target="_blank">Discord</a>
       <a href="https://github.com/evilsocket/pwnagotchi" target="_blank">Pwnagotchi</a>
     </div>
-    <p>MIT License &middot; Research &amp; Educational Use Only</p>
-    <p style="margin-top:4px;">Built with esptool-js &middot; Web Serial API</p>
+    <p>MIT License · Research &amp; Educational Use Only</p>
+    <p style="margin-top:4px;">Built with esptool-js · Web Serial API</p>
   </div>
 </footer>
 
 <script type="module">
-let ESPLoader;
+// ── Load esptool-js v4 via CDN ──
+// ESPLoader v4 API: new ESPLoader({ port, baudrate, romBaudrate, terminal })
+// loader.main() to connect (not loader.connect())
+// loader.writeFlash({ fileArray, flashSize, flashMode, flashFreq, eraseAll, compress, reportProgress, calculateMD5Hash })
+let ESPLoader, Transport;
 try {
-  const mod = await import('esptool-js');
+  const mod = await import('https://cdn.jsdelivr.net/npm/esptool-js@0.4.3/lib/index.js');
   ESPLoader = mod.ESPLoader;
+  Transport = mod.Transport;
 } catch (e) {
-  console.warn('esptool-js load failed:', e);
+  console.warn('esptool-js primary load failed, trying fallback:', e);
+  try {
+    // Fallback: unpkg
+    const mod = await import('https://unpkg.com/esptool-js@0.4.3/lib/index.js');
+    ESPLoader = mod.ESPLoader;
+    Transport = mod.Transport;
+  } catch (e2) {
+    console.error('esptool-js failed to load from both CDNs:', e2);
+  }
 }
 
 /* ── DOM refs ── */
-const consoleEl = document.getElementById('console');
-const statusDot = document.getElementById('statusDot');
+const consoleEl  = document.getElementById('console');
+const statusDot  = document.getElementById('statusDot');
 const statusText = document.getElementById('statusText');
 const connectBtn = document.getElementById('connectBtn');
-const flashBtn = document.getElementById('flashBtn');
-const deviceSelect = document.getElementById('deviceSelect');
+const flashBtn   = document.getElementById('flashBtn');
+const clearBtn   = document.getElementById('clearBtn');
 const progressBar = document.getElementById('progressBar');
+const chipInfo   = document.getElementById('chipInfo');
+const chipName   = document.getElementById('chipName');
 const deviceCards = document.querySelectorAll('.device-card');
 
 /* ── State ── */
-let port = null;
-let loader = null;
+let port       = null;
+let transport  = null;
+let loader     = null;
 let isConnected = false;
-let isFlashing = false;
+let isFlashing  = false;
 
 /* ── Helpers ── */
+function timestamp() {
+  return new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
 function log(msg, cls = '') {
   const line = document.createElement('div');
   line.className = `line ${cls}`;
-  line.textContent = msg;
+  line.textContent = `[${timestamp()}] ${msg}`;
   consoleEl.appendChild(line);
   consoleEl.scrollTop = consoleEl.scrollHeight;
 }
 
-function setStatus(text, state) {
+function setStatus(text, state = '') {
   statusText.textContent = text;
   statusDot.className = 'dot' + (state ? ` ${state}` : '');
 }
 
 function setProgress(pct) {
-  progressBar.style.width = `${Math.round(pct)}%`;
+  progressBar.style.width = `${Math.min(100, Math.round(pct))}%`;
 }
 
-function getDeviceConfig() {
-  const val = deviceSelect.value;
-  const card = document.querySelector(`.device-card[data-device="${val}"]`);
+/** Read the currently-selected device from the highlighted card */
+function getSelectedDevice() {
+  const card = document.querySelector('.device-card.selected');
+  if (!card) throw new Error('No device selected.');
   return {
-    name: card ? card.querySelector('h3').textContent : val,
-    bin: card ? card.dataset.bin : (val === 'cardputer' ? 'cardputer.bin' : 'm5stick.bin'),
+    name: card.querySelector('h3').textContent.trim(),
+    bin:  card.dataset.bin,
   };
 }
 
-/* ── Device selection sync ── */
+/* ── Device card selection ── */
 deviceCards.forEach(card => {
   card.addEventListener('click', () => {
+    if (isConnected || isFlashing) return; // lock selection while active
     deviceCards.forEach(c => c.classList.remove('selected'));
     card.classList.add('selected');
-    deviceSelect.value = card.dataset.device;
   });
 });
 
-deviceSelect.addEventListener('change', () => {
-  deviceCards.forEach(c => c.classList.remove('selected'));
-  const match = document.querySelector(`.device-card[data-device="${deviceSelect.value}"]`);
-  if (match) match.classList.add('selected');
+/* ── Clear console ── */
+clearBtn.addEventListener('click', () => {
+  consoleEl.innerHTML = '';
+  setProgress(0);
 });
 
-/* ── Connect ── */
+/* ── Connect / Disconnect toggle ── */
 connectBtn.addEventListener('click', async () => {
   if (isConnected) {
-    await disconnect();
+    await doDisconnect();
     return;
   }
+  await doConnect();
+});
+
+async function doConnect() {
+  if (!navigator.serial) {
+    log('Web Serial API not available. Use Chrome or Edge 89+.', 'err');
+    return;
+  }
+  if (!ESPLoader) {
+    log('esptool-js failed to load. Check your internet connection and reload.', 'err');
+    return;
+  }
+
   try {
-    if (!navigator.serial) {
-      log('Web Serial API not available. Use Chrome/Edge 89+.', 'err');
-      return;
-    }
-    if (!ESPLoader) {
-      log('esptool-js library failed to load. Check internet connection.', 'err');
-      return;
-    }
-
+    // Prompt the browser port picker
     port = await navigator.serial.requestPort();
-    log('Port selected. Connecting...', 'info');
-    setStatus('Connecting...', 'busy');
-    connectBtn.disabled = true;
+  } catch (e) {
+    // User cancelled the picker - not an error worth logging loudly
+    if (e.name !== 'NotFoundError') log(`Port selection cancelled: ${e.message}`, 'err');
+    return;
+  }
 
-    try {
-      loader = new ESPLoader({ port, baudrate: 921600, romBaudrate: 115200 });
-    } catch {
-      loader = new ESPLoader(port, 921600);
-    }
-    await loader.connect();
+  connectBtn.disabled = true;
+  setStatus('Connecting…', 'busy');
+  log('Port selected. Connecting at 115200 baud…', 'info');
+
+  try {
+    // esptool-js v0.4.x uses a Transport wrapper around the serial port
+    transport = new Transport(port, true);
+
+    // Terminal object - pipes chip output into our console
+    const terminal = {
+      clean() {},
+      writeLine: (data) => log(data, ''),
+      write:     (data) => log(data, ''),
+    };
+
+    loader = new ESPLoader({
+      transport,
+      baudrate:    921600,
+      romBaudrate: 115200,
+      terminal,
+    });
+
+    // main() runs the ROM bootloader handshake (replaces old connect())
+    const chipDesc = await loader.main();
 
     isConnected = true;
     setStatus('Connected', 'connected');
-    log(`Connected — ${loader.chip?.CHIP_NAME || 'ESP32-S3'}`, 'ok');
+    log(`Chip detected: ${chipDesc}`, 'ok');
+
+    // Show chip badge
+    chipName.textContent = chipDesc || 'ESP32-S3';
+    chipInfo.style.display = 'block';
+
     flashBtn.disabled = false;
-    connectBtn.innerHTML = '🔌 Disconnect';
+    connectBtn.textContent = 'Disconnect';
+    connectBtn.classList.replace('btn-cyan', 'btn-red');
 
   } catch (e) {
     log(`Connection failed: ${e.message || e}`, 'err');
-    setStatus('Error', '');
-    disconnectCleanup();
+    setStatus('Error', 'error');
+    cleanupState();
   } finally {
     connectBtn.disabled = false;
   }
-});
-
-async function disconnect() {
-  try { if (loader) await loader.disconnect(); } catch {}
-  try { if (port) await port.close(); } catch {}
-  disconnectCleanup();
 }
 
-function disconnectCleanup() {
+async function doDisconnect() {
+  log('Disconnecting…', 'info');
+  try { await transport?.disconnect(); } catch {}
+  try { await port?.close(); }           catch {}
+  cleanupState();
+  log('Disconnected.', '');
+}
+
+function cleanupState() {
   isConnected = false;
   port = null;
+  transport = null;
   loader = null;
   flashBtn.disabled = true;
-  connectBtn.innerHTML = '🔌 Connect';
+  connectBtn.disabled = false;
+  connectBtn.textContent = 'Connect';
+  connectBtn.classList.replace('btn-red', 'btn-cyan');
   setStatus('Disconnected', '');
+  chipInfo.style.display = 'none';
+  setProgress(0);
 }
 
 /* ── Flash ── */
 flashBtn.addEventListener('click', async () => {
   if (isFlashing || !isConnected || !loader) return;
 
+  let device;
+  try {
+    device = getSelectedDevice();
+  } catch (e) {
+    log(e.message, 'err');
+    return;
+  }
+
   isFlashing = true;
   flashBtn.disabled = true;
   connectBtn.disabled = true;
+  setProgress(0);
 
-  const cfg = getDeviceConfig();
-  log(`Preparing to flash ${cfg.name}...`, 'highlight');
-  log(`Firmware: ${cfg.bin} @ 0x0000`, 'info');
+  log(`Target: ${device.name}`, 'highlight');
+  log(`Fetching firmware: ${device.bin}…`, 'info');
 
   try {
-    const resp = await fetch(cfg.bin);
-    if (!resp.ok) throw new Error(`Failed to fetch ${cfg.bin} (${resp.status})`);
-    const raw = await resp.arrayBuffer();
-    const data = new Uint8Array(raw);
-    log(`Loaded ${(raw.byteLength / 1024).toFixed(0)} KB`, 'info');
+    // Fetch the binary from the same origin as the page
+    const resp = await fetch(device.bin);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status} fetching ${device.bin}`);
 
-    setStatus('Flashing...', 'busy');
-    setProgress(0);
-    log('Erasing & writing flash...', 'info');
+    const arrayBuf = await resp.arrayBuffer();
+    // esptool-js expects the data as a binary string, not Uint8Array
+    const binaryStr = Array.from(new Uint8Array(arrayBuf))
+      .map(b => String.fromCharCode(b))
+      .join('');
 
-    const flashCfg = {
-      address: 0x0,
-      data,
-      erase: true,
-      onProgress: ({ percentage }) => {
-        const pct = percentage;
+    log(`Loaded ${(arrayBuf.byteLength / 1024).toFixed(1)} KB`, 'info');
+    setStatus('Flashing…', 'busy');
+    log('Erasing and writing flash…', 'info');
+
+    await loader.writeFlash({
+      fileArray: [{ data: binaryStr, address: 0x0 }],
+      flashSize:  'keep',   // preserve existing flash size setting
+      flashMode:  'keep',   // preserve existing flash mode
+      flashFreq:  'keep',   // preserve existing flash frequency
+      eraseAll:   false,
+      compress:   true,
+      reportProgress(fileIndex, written, total) {
+        const pct = (written / total) * 100;
         setProgress(pct);
+        // Only log every ~10% to avoid console spam
+        if (written === total || Math.floor(pct) % 10 === 0) {
+          log(`Progress: ${pct.toFixed(0)}% (${(written / 1024).toFixed(0)} / ${(total / 1024).toFixed(0)} KB)`, '');
+        }
       },
-      progress: (pct) => {
-        setProgress(typeof pct === 'number' ? pct : pct * 100);
+      calculateMD5Hash: (image) => {
+        // MD5 verification - requires crypto-js or similar; skip gracefully if unavailable
+        return null;
       },
-    };
-
-    try {
-      const flash = await getFlashInstance(loader);
-      if (flash && typeof flash.writeFlash === 'function') {
-        await flash.writeFlash(flashCfg);
-      } else if (typeof loader.flashData === 'function') {
-        await loader.flashData(data, 0x0, (p) => setProgress(p * 100));
-      } else if (typeof loader.writeFlash === 'function') {
-        await loader.writeFlash(flashCfg);
-      } else {
-        throw new Error('No compatible flash method');
-      }
-    } catch (flashErr) {
-      log(`Flash error: ${flashErr.message || flashErr}`, 'err');
-      throw flashErr;
-    }
+    });
 
     setProgress(100);
-    log('Flash complete!', 'ok');
-    log('Power cycle the device to boot the new firmware.', 'highlight');
-    try { await loader.hardReset?.(); } catch {}
-    setStatus('Complete', 'connected');
+    log('✓ Flash complete!', 'ok');
+    log('Power-cycle the device to boot the new firmware.', 'highlight');
+    setStatus('Done', 'connected');
+
+    // Attempt a hard reset so the device boots automatically
+    try {
+      await loader.hardReset();
+      log('Device reset.', 'ok');
+    } catch {
+      log('Auto-reset not available - power-cycle manually.', '');
+    }
+
   } catch (e) {
-    log(`Failed: ${e.message || e}`, 'err');
-    setStatus('Error', '');
+    log(`Flash failed: ${e.message || e}`, 'err');
+    setStatus('Error', 'error');
   } finally {
     isFlashing = false;
     flashBtn.disabled = !isConnected;
@@ -850,18 +1019,365 @@ flashBtn.addEventListener('click', async () => {
   }
 });
 
-async function getFlashInstance(ldr) {
-  if (ldr.flash) {
-    if (typeof ldr.flash === 'function') return ldr.flash();
-    return ldr.flash;
-  }
-  return null;
+/* ── Boot message ── */
+log('Web flasher ready. Select a device and click Connect.', 'info');
+if (!navigator.serial) {
+  log('Web Serial API not detected - use Chrome or Edge 89+.', 'err');
+}
+if (!ESPLoader) {
+  log('esptool-js library could not be loaded.', 'err');
 }
 
-/* ── Boot message ── */
-log('Web flasher ready.', 'info');
-log('Connect your device and select firmware to flash.', '');
-</script>
+/* ═══════════════════════════════════════════
+   GOTCHI FACE ANIMATION ENGINE
+   Rules:
+   - Face only changes at most once per 10 s (FACE_COOLDOWN).
+     requestFace() queues; applyFace() commits.
+   - Speech runs on its own 12 s loop, independent of face changes.
+   - mousemove/scroll only queue a mood; they never call applyFace directly.
+   - No transition animation fires unless the mood actually changes.
+   ═══════════════════════════════════════════ */
+{
+  /* ── Data ── */
+  const FACES = {
+    sleeping: ["(⇀‿‿↼)", "(≖‿‿≖)"],
+    looking:  ["( ⚆_⚆)", "(☉_☉ )", "( ◕‿◕)", "(◕‿◕ )", "(◕‿‿◕)"],
+    happy:    ["(•‿‿•)", "(^‿‿^)", "(ᵔ◡◡ᵔ)", "(☼‿‿☼)"],
+    sad:      ["(╥☁╥ )", "(ب__ب)", "(☓‿‿☓)", "(-__-)", "(≖__≖)", "( -_-' )"],
+    excited:  ["(⌐■_■)", "(°▃▃°)", "(✜‿‿✜)", "(♥‿‿♥)", "(ᵔ◡◡ᵔ)"],
+  };
 
-</body>
-</html>
+  const SPEECH = {
+    startup: [
+      "Hi, I'm M5Gotchi! ",
+      "New day, new hunt, new pwns! ",
+      "I pwn therefore I am. ",
+      "My crime is that of curiosity ... ",
+      "Hack the Planet! "
+    ],
+    sad: [
+      "Shitty day :/",
+      "I'm extremely bored ...",
+      "I'm very sad ...",
+      "I'm sad",
+      "Leave me alone ...",
+      "I'm mad at you!",
+      "I'm bored ...",
+      "Nobody wants to play with me ...",
+      "I feel so alone ...",
+      "Where's everybody?!",
+      "Am I a joke to you?"
+    ],
+    happy: [
+      "Let's go for a walk!",
+      "This is the best day of my life!",
+      "I'm living the life!",
+      "So many networks!!!",
+      "I'm having so much fun!",
+      "Good friends are a blessing!",
+      "I love my friends!"
+    ],
+    sleeping: [
+      "Zzz...",
+      "Zzzzzz...",
+      "*snoring intensifies*",
+      "Zzz... pwning in my dreams..."
+    ],
+    looking: [
+      "Scanning the ether...",
+      "Monitoring 2.4GHz spectrum...",
+      "Waiting for beacon frames...",
+      "Sniffing for data...",
+      "Observing traffic patterns...",
+      "Listening to the noise..."
+    ],
+    excited: [
+      "Hack the Planet!",
+      "Injecting frames...",
+      "Target acquisition mode.",
+      "Power level rising!",
+      "Maximum bandwidth!"
+    ],
+  };
+
+  /* ── DOM ── */
+  const faceEl   = document.getElementById('gotchiFace');
+  const moodEl   = document.getElementById('gotchiMood');
+  const bubbleEl = document.getElementById('speechBubble');
+  const speechEl = document.getElementById('speechText');
+
+  /* ── State ── */
+  const FACE_COOLDOWN  = 10000; // ms between face changes
+  const SPEECH_INTERVAL = 12000; // ms between speech updates
+
+  let currentMood    = 'excited';
+  let queuedMood     = null;   // next mood to apply when cooldown lifts
+  let lastFaceChange = 0;
+  let cooldownTimer  = null;   // fires when cooldown expires to flush queue
+  let isFlashingFace = false;
+
+  let idleTimer      = null;
+  let blinkTimer     = null;
+  let speechLoopTimer = null;
+  let typingTimer    = null;
+
+  let lastMouseX = 0, lastMouseY = 0;
+  let prevScrollY = 0;
+  let moveThrottle = null;
+
+  function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+  /* ══════════════════════════
+     FACE - only applyFace()
+     causes a visual change.
+     requestFace() just queues.
+  ══════════════════════════ */
+
+  function applyFace(mood, bounce) {
+    /* No-op if already this mood - prevents flicker */
+    if (mood === currentMood) return;
+
+    currentMood    = mood;
+    lastFaceChange = Date.now();
+    queuedMood     = null;
+
+    /* Fade-transition */
+    faceEl.style.opacity   = '0';
+    faceEl.style.transform = 'translateY(4px)';
+    setTimeout(() => {
+      faceEl.textContent     = pick(FACES[mood]);
+      moodEl.textContent     = '';
+      faceEl.style.opacity   = '1';
+      faceEl.style.transform = 'translateY(0)';
+      if (bounce) {
+        faceEl.classList.remove('bounce');
+        void faceEl.offsetWidth;
+        faceEl.classList.add('bounce');
+        faceEl.addEventListener('animationend',
+          () => faceEl.classList.remove('bounce'), { once: true });
+      }
+    }, 220);
+  }
+
+  function requestFace(mood, { bounce = false, force = false } = {}) {
+    if (isFlashingFace && !force) return;
+    if (mood === currentMood) return; // already there, nothing to do
+
+    const elapsed = Date.now() - lastFaceChange;
+    if (force || elapsed >= FACE_COOLDOWN) {
+      /* Apply immediately */
+      clearTimeout(cooldownTimer);
+      applyFace(mood, bounce);
+    } else {
+      /* Queue it; overwrite any previous queue */
+      queuedMood = { mood, bounce };
+      /* Ensure we have a flush scheduled */
+      if (!cooldownTimer) {
+        cooldownTimer = setTimeout(() => {
+          cooldownTimer = null;
+          if (queuedMood) {
+            const q = queuedMood;
+            queuedMood = null;
+            applyFace(q.mood, q.bounce);
+          }
+        }, FACE_COOLDOWN - elapsed + 50);
+      }
+    }
+  }
+
+  /* ══════════════════════════
+     SPEECH - own 12 s loop,
+     completely independent.
+  ══════════════════════════ */
+
+  function clearTyping() {
+    clearTimeout(typingTimer);
+    speechEl.classList.remove('typing');
+  }
+
+  function typeText(text, onDone) {
+    clearTyping();
+    speechEl.textContent = '';
+    speechEl.classList.add('typing');
+    let i = 0;
+    const step = () => {
+      if (i <= text.length) {
+        speechEl.textContent = text.slice(0, i++);
+        typingTimer = setTimeout(step, 25 + Math.random() * 20);
+      } else {
+        clearTyping();
+        if (onDone) onDone();
+      }
+    };
+    step();
+  }
+
+  function showSpeech(text) {
+    clearTyping();
+    bubbleEl.classList.add('visible');
+    typeText(text);
+  }
+
+  /* Picks a line from current mood's pool and shows it.
+     Called on a repeating timer - always fires regardless of
+     whether the mood changed. */
+  function speechTick() {
+    const pool = SPEECH[currentMood] || SPEECH.looking;
+    showSpeech(pick(pool));
+    speechLoopTimer = setTimeout(speechTick, SPEECH_INTERVAL);
+  }
+
+  /* ══════════════════════════
+     BLINK - purely cosmetic,
+     never changes mood.
+  ══════════════════════════ */
+
+  function scheduleBlink() {
+    blinkTimer = setTimeout(() => {
+      faceEl.classList.remove('blink');
+      void faceEl.offsetWidth;
+      faceEl.classList.add('blink');
+      faceEl.addEventListener('animationend',
+        () => faceEl.classList.remove('blink'), { once: true });
+      scheduleBlink();
+    }, 2500 + Math.random() * 4000);
+  }
+  scheduleBlink();
+
+  /* ══════════════════════════
+     IDLE
+  ══════════════════════════ */
+
+  function resetIdle() {
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => {
+      requestFace('sleeping');
+      /* After sleeping a while, wake and look around */
+      idleTimer = setTimeout(() => {
+        requestFace('looking', { bounce: true });
+      }, 15000 + Math.random() * 10000);
+    }, 8000);
+  }
+
+  /* ══════════════════════════
+     SECTION MOOD (scroll/page)
+  ══════════════════════════ */
+
+  function getSectionMood() {
+    const mid = window.scrollY + window.innerHeight / 2;
+    const sections = [...document.querySelectorAll('section')];
+    for (let i = 0; i < sections.length; i++) {
+      const { offsetTop: top, offsetHeight: h } = sections[i];
+      if (mid >= top && mid < top + h) {
+        return [0].includes(i) ? 'excited' : [2].includes(i) ? 'looking' : 'happy';
+      }
+    }
+    return 'happy';
+  }
+
+  /* ══════════════════════════
+     EVENT LISTENERS
+     - requestFace only, never
+       applyFace directly.
+  ══════════════════════════ */
+
+  /* Scroll: only request if velocity is notable */
+  window.addEventListener('scroll', () => {
+    const dy = Math.abs(window.scrollY - prevScrollY);
+    prevScrollY = window.scrollY;
+    resetIdle();
+    if (dy > 40) requestFace('excited');
+    else if (dy > 12) requestFace('happy');
+  }, { passive: true });
+
+  /* Mouse move: very coarse throttle (1 s), only speed > threshold matters */
+  document.addEventListener('mousemove', (e) => {
+    resetIdle();
+    if (moveThrottle) return;
+    moveThrottle = setTimeout(() => { moveThrottle = null; }, 1000);
+
+    if (isFlashingFace) return;
+    const dx = Math.abs(e.clientX - lastMouseX);
+    const dy = Math.abs(e.clientY - lastMouseY);
+    lastMouseX = e.clientX; lastMouseY = e.clientY;
+    const speed = dx + dy;
+    if (speed > 200) requestFace('excited');
+    /* Below 200 we do nothing - no constant mood spam */
+  }, { passive: true });
+
+  /* Leave / enter page */
+  document.addEventListener('mouseleave', () => {
+    clearTimeout(idleTimer);
+    requestFace('sad', { force: true });
+  });
+  document.addEventListener('mouseenter', () => {
+    resetIdle();
+    requestFace('looking', { bounce: true, force: true });
+  });
+
+  /* Click */
+  document.addEventListener('click', () => {
+    resetIdle();
+    requestFace('excited', { bounce: true });
+  });
+
+  /* Connect / Flash */
+  connectBtn.addEventListener('click', () => {
+    requestFace(isConnected ? 'sad' : 'looking', { bounce: true, force: true });
+  });
+
+  flashBtn.addEventListener('click', () => {
+    isFlashingFace = true;
+    requestFace('excited', { bounce: true, force: true });
+    /* When flash finishes, isFlashing goes false in the main script.
+       Poll every second; exit after 120 s max. */
+    let ticks = 0;
+    const poll = setInterval(() => {
+      ticks++;
+      if (!isFlashing || ticks > 120) {
+        clearInterval(poll);
+        isFlashingFace = false;
+        requestFace('happy', { bounce: true, force: true });
+      }
+    }, 1000);
+  });
+
+  /* Device card hover */
+  deviceCards.forEach(card => {
+    card.addEventListener('mouseenter', () => requestFace('looking'));
+    card.addEventListener('mouseleave', () => requestFace(getSectionMood()));
+  });
+
+  /* Footer links */
+  document.querySelectorAll('footer a').forEach(a => {
+    a.addEventListener('mouseenter', () => requestFace('excited'));
+    a.addEventListener('mouseleave', () => requestFace('happy'));
+  });
+
+  /* Keyboard */
+  document.addEventListener('keydown', (e) => {
+    resetIdle();
+    requestFace(e.key === 'Enter' || e.key === ' ' ? 'excited' : 'looking', {
+      bounce: e.key === 'Enter'
+    });
+  });
+
+  /* ══════════════════════════
+     BOOT
+  ══════════════════════════ */
+
+  /* Set initial state directly - bypasses cooldown */
+  currentMood    = 'excited';
+  lastFaceChange = Date.now();
+  faceEl.textContent = pick(FACES.excited);
+  moodEl.textContent = '';
+
+  /* Show a startup line immediately */
+  showSpeech(pick(SPEECH.startup));
+
+  /* Then start the independent speech loop after first line finishes */
+  speechLoopTimer = setTimeout(speechTick, SPEECH_INTERVAL);
+
+  resetIdle();
+}
+</script>
