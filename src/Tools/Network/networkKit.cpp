@@ -378,8 +378,10 @@ void stopClientSniffing(){
   xSemaphoreTake(wifiMutex, portMAX_DELAY);
   clearClients();
   esp_wifi_set_promiscuous(false);
-  wifion();
   xSemaphoreGive(wifiMutex);
+  // wifion() calls initPwngrid(), which takes wifiMutex.
+  // Taking it here would deadlock the FreeRTOS mutex.
+  wifion();
 }
 
 void deauth_promiscuous_rx_cb(void* buf, wifi_promiscuous_pkt_type_t type) {
