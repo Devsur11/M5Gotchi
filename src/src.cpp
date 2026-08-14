@@ -34,6 +34,10 @@
 #include "inputManager.h"
 #endif
 
+// Default loopTask stack is 8 KiB. setup() nests UI init,
+// mbedtls decrypt, and JSON parse on the same task.
+SET_LOOP_TASK_STACK_SIZE(32768);
+
 bool firstSoundEnable;
 bool isSoundPlayed = false;
 

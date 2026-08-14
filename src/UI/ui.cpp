@@ -557,6 +557,10 @@ void initColorSettings(){
   tx_color_rgb565 = hexToRGB565(tx_color);
 }
 
+static const unsigned long TOP_BAR_REFRESH_MS = 1000;
+// Unsigned wrap makes the first refresh immediately due, without setup work.
+static unsigned long lastTopCanvasDrawMs = 0UL - TOP_BAR_REFRESH_MS;
+
 void initUi() {
   unitQueue = xQueueCreate(8, sizeof(unit_msg_t));
   xTaskCreatePinnedToCore(
@@ -1034,13 +1038,27 @@ void redrawUi(bool show_toolbars) {
 }
 
 void drawTopCanvas() {
+  // Status bar text only changes once a second (uptime, battery).
+  // Skipping fillSprite and the PMIC read on every frame
+  // saves work on the display and I2C bus.
+  const unsigned long elapsed =
+      millis() - lastTopCanvasDrawMs;
+  if (elapsed < TOP_BAR_REFRESH_MS) {
+    return;
+  }
+  lastTopCanvasDrawMs = millis();
+
   if (displayMutex) xSemaphoreTake(displayMutex, portMAX_DELAY);
   canvas_top.fillSprite(bg_color_rgb565);
   canvas_top.setTextSize(1);
   canvas_top.setTextColor(tx_color_rgb565);
   canvas_top.setColor(tx_color_rgb565);
   canvas_top.setTextDatum(top_left);
-  canvas_top.drawString("CH:" + String(WiFi.channel()) + " AP: " + String(WiFi.scanComplete()), 0, 3);
+  canvas_top.drawString(
+      "CH:" + String(WiFi.channel()) +
+          " AP: " + String(WiFi.scanComplete()),
+      0,
+      3);
   canvas_top.setTextDatum(top_right);
   unsigned long ms = millis();
 
@@ -1053,7 +1071,10 @@ void drawTopCanvas() {
 
   char buffer[9];
   sprintf(buffer, "%02u:%02u:%02lu", hours, minutes, seconds);
-  canvas_top.drawString("UPS " + String(M5.Power.getBatteryLevel()) + "%  UP:" + buffer , display_w, 3);
+  const uint8_t batteryPercent = M5.Power.getBatteryLevel();
+  const String upsLine =
+      "UPS " + String(batteryPercent) + "%  UP:" + buffer;
+  canvas_top.drawString(upsLine, display_w, 3);
   extern bool dev_mode;
   extern bool serial_overlay;
   extern bool coords_overlay;
@@ -9010,4 +9031,3 @@ void drawMenuListGrid(menu toDraw[], uint8_t menuIDPriv, uint8_t menu_size) {
 
   pushAll();
 }
-

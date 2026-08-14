@@ -62,10 +62,11 @@ bool achievements_load() {
         return false;
     }
 
-    // Parse JSON
+    // Parse JSON. JsonDocument allocates on the heap so this
+    // cannot overflow the Arduino loopTask stack.
     String json_str((const char*)decrypted.data(), decrypted.size());
-    
-    StaticJsonDocument<2048> doc;
+
+    JsonDocument doc;
     DeserializationError err = deserializeJson(doc, json_str);
     
     if (err) {
@@ -85,11 +86,11 @@ bool achievements_load() {
 }
 
 bool achievements_save() {
-    StaticJsonDocument<2048> doc;
+    JsonDocument doc;
     JsonArray arr = doc.to<JsonArray>();
 
     for (uint8_t i = 0; i < ACH_COUNT; i++) {
-        JsonObject obj = arr.createNestedObject();
+        JsonObject obj = arr.add<JsonObject>();
         obj["id"] = i;
         obj["unlocked"] = g_achievements[i].unlocked;
         obj["time"] = g_achievements[i].unlock_time;
